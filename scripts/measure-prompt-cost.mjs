@@ -1,4 +1,4 @@
-#!/usr/bin/env node
+﻿#!/usr/bin/env node
 /**
  * measure-prompt-cost —— 常驻 prompt 成本体检。
  *
@@ -8,9 +8,16 @@
  * 用法:  node node_modules/tsx/dist/cli.mjs scripts/measure-prompt-cost.mjs
  *        （或 npm run cost）
  *
- * 注意：唯一会抬高这个数字的动作是「注册新工具」或「把策略类工具的 schema
- * 打开」。文档、脚本、git 都不进 prompt，随便写。
+ * 三行分别对应三种"默认"，别混：
+ *   ① 配置默认值（Config({})，不含任何补丁层）
+ *   ② 出厂 bundle 层 —— 本包 cordis.patch.yml 里给 browser-tool 的配置，
+ *      也就是 profile 挂上这个 bundle 后真正生效的那份（本包当前把
+ *      allowEvaluate / allowCdp 都打开了）
+ *   ③ 全量注册（再加 registerDisabledTools: true）
+ *
+ * 注意：唯一会抬高这个数字的动作是「注册新工具」。文档、脚本、git 都不进 prompt。
  */
+import { readFileSync } from 'node:fs'
 import { Context } from '@deepseek-ai/cordis'
 import ToolRuntime from '@deepseek-ai/dsh-tools'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
@@ -38,6 +45,15 @@ const baseConfig = {
   registerDisabledTools: false,
   maxWaitMs: 60000,
   interactiveOnlyDefault: false,
+}
+
+/** Read the shipped bundle layer: what a deployment actually gets. */
+function bundleConfig() {
+  const yml = readFileSync(new URL('../cordis.patch.yml', import.meta.url), 'utf8')
+  const row = yml.split(/\n(?=\s*- id: )/).find((block) => block.includes('dsh-browser-playwright/tool')) ?? ''
+  const flag = (name) => new RegExp(name + ':\\s*(true|false)').exec(row)?.[1] === 'true'
+  if (row === '') throw new Error('cordis.patch.yml: no dsh-browser-playwright/tool row found')
+  return { allowEvaluate: flag('allowEvaluate'), allowCdp: flag('allowCdp') }
 }
 
 /** Assemble one tool surface and return its per-schema wire sizes. */
@@ -71,11 +87,27 @@ function report(label, { rows, total }) {
 }
 
 console.log('常驻 prompt 成本体检（工具 schema 每轮都在系统提示里）')
-const shipped = await surface(baseConfig)
-const t0 = report('① 出厂默认（evaluate / cdp / extract 未启用，故不注册）', shipped)
-const full = await surface({ ...baseConfig, allowEvaluate: true, allowCdp: true, registerDisabledTools: true })
-const t1 = report('② 全量打开（含被能力开关挡住的那三个）', full)
+const t0 = report('① 配置默认值 Config({})', await surface(baseConfig))
+const shipped = { ...baseConfig, ...bundleConfig() }
+const t1 = report(
+  '② 出厂 bundle 层（cordis.patch.yml：allowEvaluate=' +
+    shipped.allowEvaluate +
+    ', allowCdp=' +
+    shipped.allowCdp +
+    '）',
+  await surface(shipped),
+)
+const t2 = report(
+  '③ 全量注册（registerDisabledTools: true，再加 extract）',
+  await surface({ ...shipped, registerDisabledTools: true }),
+)
 
 console.log('')
-console.log('结论：默认省下 ' + (t1 - t0) + ' 字符 ≈ ' + Math.round((t1 - t0) / 3.6) + ' token/轮；')
-console.log('      要换成可发现性，把 registerDisabledTools / allowEvaluate / allowCdp 打开即可。')
+console.log(
+  '② → ③ 的差 = 被能力开关挡住却没关掉的那些 schema：' +
+    (t2 - t1) +
+    ' 字符 ≈ ' +
+    Math.round((t2 - t1) / 3.6) +
+    ' token/轮。',
+)
+console.log('想让这个数字更小，就在 cordis.patch.yml 里把用不上的能力关掉（关掉即不注册）。')

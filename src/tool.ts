@@ -404,7 +404,7 @@ export function apply(ctx: Context, config: ToolConfig): void {
   /** Register one gated tool only when this configuration keeps it live. */
   const registerMaybe = (suffix: ToolSuffix, definition: ToolDefinition): void => {
     if (registered.has(suffix)) ctx.tools.register(definition)
-  }  /** Resolve the calling session's browser owner key. */
+  } /** Resolve the calling session's browser owner key. */
   const ownerFor = (exec: ToolExecution): string => {
     const id = exec.agent?.session.id
     return id === undefined ? 'anonymous' : String(id)
@@ -862,7 +862,9 @@ export function apply(ctx: Context, config: ToolConfig): void {
       },
     }),
   )
-  registerMaybe('extract', defineTool({
+  registerMaybe(
+    'extract',
+    defineTool({
       name: p('extract'),
       description:
         'Extract structured data from the current page: describe what you want in plain language, ' +
@@ -924,7 +926,9 @@ export function apply(ctx: Context, config: ToolConfig): void {
       },
     }),
   )
-  registerMaybe('evaluate', defineTool({
+  registerMaybe(
+    'evaluate',
+    defineTool({
       name: p('evaluate'),
       description:
         'Evaluate one JavaScript expression in the page and return its JSON-serializable result. ' +
@@ -963,7 +967,9 @@ export function apply(ctx: Context, config: ToolConfig): void {
       },
     }),
   )
-  registerMaybe('cdp', defineTool({
+  registerMaybe(
+    'cdp',
+    defineTool({
       name: p('cdp'),
       description:
         'Send one raw CDP (Chrome DevTools Protocol) command on the current page and return its result. ' +

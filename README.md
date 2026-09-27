@@ -24,7 +24,7 @@ Or pin a binary: `launch.executablePath` / `launch.channel` in the plugin config
 
 ## Tools
 
-The default `toolPrefix` is `browser_`. Every action returns a fresh snapshot, so refs always come from the latest result. The default surface is 20 tools: `browser_evaluate`, `browser_cdp` and `browser_extract` register only when their capability is switched on (their schemas are resident in the system prompt on every turn, so a tool that can only return "disabled" would be pure prompt cost).
+The default `toolPrefix` is `browser_`. Every action returns a fresh snapshot, so refs always come from the latest result. The registered set is capability-gated: `browser_evaluate`, `browser_cdp` and `browser_extract` appear only when their capability is switched on (their schemas are resident in the system prompt on every turn, so a tool that could only answer "disabled" would be pure prompt cost). Count the live surface with `npm run cost` — this package ships `cordis.patch.yml` with `allowEvaluate: true` and `allowCdp: true`, so a profile mounting this bundle sees 22 tools (23 once `extract` is configured).
 
 | Tool | Purpose |
 |---|---|
@@ -110,7 +110,7 @@ All tunables are patchable through the profile's `cordis.patch.yml` (later layer
       maxOutputTokens: 2000
 ```
 
-`browser_extract` needs an auxiliary LLM route (`extract.provider` + `extract.model`); without one it fails with an actionable error. A gated tool is **not registered at all** while its capability is off, so its schema never reaches the system prompt; set `registerDisabledTools: true` to keep the whole surface discoverable (the tool then answers with the error naming the switch). `browser_evaluate` stays off until `allowEvaluate: true` because it executes arbitrary page JavaScript. `browser_cdp` stays off until `allowCdp: true`; even then only the allow-list in `lib/cdp-policy.js` passes — network, storage, cookie, security and arbitrary-JS (`Runtime.evaluate`) commands are rejected with `CDP_DENIED`.
+`browser_extract` needs an auxiliary LLM route (`extract.provider` + `extract.model`); without one it fails with an actionable error. A gated tool is **not registered at all** while its capability is off, so its schema never reaches the system prompt; set `registerDisabledTools: true` to keep the whole surface discoverable (the tool then answers with the error naming the switch). Note the shipped layer in [`cordis.patch.yml`](cordis.patch.yml) turns `allowEvaluate` and `allowCdp` **on** (user choice, 2026-09-04), which contradicts the `false` shown in the sample above — the sample documents the schema defaults, the shipped patch documents this deployment. `browser_evaluate` stays off until `allowEvaluate: true` because it executes arbitrary page JavaScript. `browser_cdp` stays off until `allowCdp: true`; even then only the allow-list in `lib/cdp-policy.js` passes — network, storage, cookie, security and arbitrary-JS (`Runtime.evaluate`) commands are rejected with `CDP_DENIED`.
 
 ## Architecture
 
@@ -170,10 +170,11 @@ Measured with ``npm run cost`` (per-turn, resident in the system prompt):
 
 | Surface | Tools | Schema characters | ≈ tokens/turn |
 |---|---|---|---|
-| Shipped default (evaluate/cdp/extract off) | 20 | 15,212 | ≈ 4,200 |
-| Everything registered (``registerDisabledTools: true``) | 23 | 18,065 | ≈ 5,000 |
+| Schema defaults (`Config({})`, no patch layer) | 20 | 15,212 | ≈ 4,226 |
+| Shipped bundle layer (this package's `cordis.patch.yml`: evaluate + cdp on) | 22 | 17,609 | ≈ 4,891 |
+| Everything registered (`registerDisabledTools: true`, plus `extract`) | 23 | 18,065 | ≈ 5,018 |
 
-Gating the three switchable tools saves ≈ 790 tokens per turn. The expensive descriptions are the click family — ``browser_click`` alone is 1,750 characters — so trimming those is the next lever if the budget matters.
+Gating every switchable tool saves at most ≈ 790 tokens per turn (schema defaults vs. everything registered); for this deployment, which has evaluate and cdp on, the switchable part is only `browser_extract` (≈ 127 tokens). The expensive descriptions are the click family — ``browser_click`` alone is 1,750 characters — so trimming those is the next lever if the budget matters.
 
 #### KV Cache effect
 

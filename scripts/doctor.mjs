@@ -82,7 +82,9 @@ for (const [pkg, names] of Object.entries(OPTIONAL)) {
   const { missing, fatal } = await probe(pkg, names)
   const version = versionOf(pkg)
   if (fatal !== undefined || missing.length > 0) {
-    console.log('⚠️  ' + pkg + ' ' + version + (fatal !== undefined ? ' —— 导入失败' : ' —— 缺少: ' + missing.join(', ')))
+    console.log(
+      '⚠️  ' + pkg + ' ' + version + (fatal !== undefined ? ' —— 导入失败' : ' —— 缺少: ' + missing.join(', ')),
+    )
     continue
   }
   console.log('✅ ' + pkg + ' ' + version)
