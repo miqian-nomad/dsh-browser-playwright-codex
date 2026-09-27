@@ -1,0 +1,41 @@
+# dsh-browser-playwright bundle layer: the browser seam, the Playwright
+# provider, and the model-facing tool family. Applied as one insert over the
+# profile's entry list; rows are patchable by id like every other plugin.
+- insert:
+    - id: browser
+      name: 'dsh-browser-playwright/service'
+      config:
+        provider: playwright
+    - id: browser-playwright
+      name: 'dsh-browser-playwright/playwright'
+      config:
+        launch:
+          # Visible profile-backed window (persistent mode): the agent drives a
+          # browser the user can watch and rescue. Set true for headless
+          # servers. profileDir defaults to ~/.dsh/browser-profiles/playwright.
+          headless: false
+          persistent: true
+          viewport:
+            width: 1280
+            height: 800
+          navigationTimeoutMs: 30000
+          ignoreHTTPSErrors: false
+        # Idle auto-close: ms of no agent activity before the window closes
+        # itself (login state is saved first, so it reopens logged-in). 0 =
+        # never auto-close; the window stays until the user closes it or DSH
+        # exits. User choice: never auto-close (2026-09-04).
+        idleTimeoutMs: 0
+        maxSessions: 8
+    - id: browser-tool
+      name: 'dsh-browser-playwright/tool'
+      config:
+        # Arbitrary page JavaScript (browser_evaluate) is a powerful backdoor:
+        # it can read anything in the page and act on the user's logged-in
+        # sites. Off by default; user explicitly enabled it (2026-09-04).
+        allowEvaluate: true
+        # Raw CDP inspection (browser_cdp) is a kernel-level remote control.
+        # Only inspection + input-simulation methods pass the allow-list
+        # (lib/cdp-policy.js); network/storage/cookie/security commands are
+        # blocked regardless. Off by default; user explicitly enabled it
+        # (2026-09-04). Requires a full DSH restart.
+        allowCdp: true

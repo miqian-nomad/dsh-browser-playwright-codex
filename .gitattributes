@@ -1,0 +1,3 @@
+﻿# This repo is LF throughout (established before version control); keep it that
+# way on checkout regardless of the machine's autocrlf default.
+* text=auto eol=lf

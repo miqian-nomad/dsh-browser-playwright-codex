@@ -1,0 +1,92 @@
+{
+  "name": "dsh-browser-playwright",
+  "version": "0.2.0",
+  "description": "Playwright-powered browser capability for DeepSeek Harness: accessibility-snapshot interaction with stable element refs, session-scoped browser sessions, screenshots as attachments.",
+  "license": "MIT",
+  "type": "module",
+  "main": "lib/index.js",
+  "types": "lib/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./lib/index.d.ts",
+      "default": "./lib/index.js"
+    },
+    "./service": {
+      "types": "./lib/service.d.ts",
+      "default": "./lib/service.js"
+    },
+    "./playwright": {
+      "types": "./lib/playwright.d.ts",
+      "default": "./lib/playwright.js"
+    },
+    "./tool": {
+      "types": "./lib/tool.d.ts",
+      "default": "./lib/tool.js"
+    },
+    "./runtime-state": {
+      "default": "./lib/runtime-state.js"
+    },
+    "./cordis.patch.yml": "./cordis.patch.yml",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "lib",
+    "scripts",
+    "cordis.patch.yml",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "node node_modules/typescript/bin/tsc -p tsconfig.json",
+    "prepare": "npm run build",
+    "test": "node node_modules/tsx/dist/cli.mjs --test \"tests/*.test.ts\"",
+    "test:scenarios": "node node_modules/tsx/dist/cli.mjs --test tests/scenarios.test.ts tests/tool-scenarios.test.ts",
+    "test:live": "node node_modules/tsx/dist/cli.mjs --test tests/live-smoke.test.ts",
+    "verify": "node scripts/dsh-browser-verify.mjs",
+    "verify:live": "node scripts/dsh-browser-verify.mjs --live",
+    "doctor": "node scripts/doctor.mjs",
+    "cost": "node node_modules/tsx/dist/cli.mjs scripts/measure-prompt-cost.mjs",
+    "format": "node node_modules/prettier/bin/prettier.cjs --write \"src/**/*.ts\" \"tests/**/*.ts\" \"scripts/**/*.mjs\"",
+    "format:check": "node node_modules/prettier/bin/prettier.cjs --check \"src/**/*.ts\" \"tests/**/*.ts\" \"scripts/**/*.mjs\""
+  },
+  "dependencies": {
+    "@deepseek-ai/schemastery": "*",
+    "playwright-core": "^1.61.0"
+  },
+  "peerDependencies": {
+    "@deepseek-ai/cordis": "*",
+    "@deepseek-ai/dsh-llm": "*",
+    "@deepseek-ai/dsh-tools": "*"
+  },
+  "devDependencies": {
+    "@deepseek-ai/cordis": "*",
+    "@deepseek-ai/dsh-agent": "*",
+    "@deepseek-ai/dsh-attachment": "*",
+    "@deepseek-ai/dsh-llm": "*",
+    "@deepseek-ai/dsh-session": "*",
+    "@deepseek-ai/dsh-system-prompt": "*",
+    "@deepseek-ai/dsh-tools": "*",
+    "@deepseek-ai/schemastery": "*",
+    "@types/node": "^24.13.3",
+    "prettier": "^3.9.9",
+    "tsx": "^4.20.0",
+    "typescript": "^5.9.0"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  },
+  "keywords": [
+    "deepseek-harness",
+    "dsh",
+    "dsh-plugin",
+    "browser",
+    "playwright",
+    "web-automation",
+    "agent"
+  ],
+  "engines": {
+    "node": "^22.19.0 || >=24.0.0"
+  },
+  "packageManager": "pnpm@10.31.0"
+}
