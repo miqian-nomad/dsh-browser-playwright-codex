@@ -193,7 +193,7 @@ The page state itself (DOM, cookies, storage) lives in the browser context and n
 - **Evaluate gate is config, not approval** — enabling `allowEvaluate` trusts the model with arbitrary page JavaScript; compose it with the harness approval/permission policy for stricter control.
 - **Chromium family only** — Firefox/WebKit channels are not probed; providers are swappable if another engine is needed.
 - **Extract needs a dedicated model route** — it does not reuse the main request's route; misconfiguration fails loudly at call time.
-- **JS-driven navigations are not statically checkable** — `allowedDomains` now covers `browser_navigate`, `browser_open_tab`, and link clicks, but a button whose handler runs `location.href = …` can still leave the allowed hosts; deploy an external network guard for hard isolation.
+- **JS-driven navigations are not statically checkable** — `allowedDomains` covers `browser_navigate`, `browser_open_tab`, every click path (`browser_click`, `browser_click_at` in both ref and raw-coordinate mode) and `browser_switch_tab`, but a button whose handler runs `location.href = …` can still leave the allowed hosts, and a tab that is already sitting on a disallowed host stays open (the agent simply refuses to drive it); deploy an external network guard for hard isolation.
 - **Stability waits are bounded by design** — a perpetually animating element falls back to a forced click on its current rect rather than stalling; a page that never settles is snapshotted after the cap. This is intentional: the agent must never hang.
 
 ### Ref and lifecycle safety (fixed)
@@ -201,7 +201,8 @@ The page state itself (DOM, cookies, storage) lives in the browser context and n
 The scenario suites originally surfaced four hazards, now fixed and regression-tested:
 
 - **Stale refs fail fast** — refs carry a per-snapshot nonce, so after a client-side re-render a stale ref matches nothing and `browser_click` fails with `REF_NOT_FOUND` instead of silently acting on a different element.
-- **Link clicks respect `allowedDomains`** — clicking an in-page link to a disallowed host is rejected with `URL_NOT_ALLOWED`.
+- **Link clicks respect `allowedDomains`** — every click path is checked before any input is delivered: `browser_click`, and `browser_click_at` in ref mode (the element's `href`) and raw-coordinate mode (the enclosing link found at the point). A disallowed host is rejected with `URL_NOT_ALLOWED`. `javascript:` links are exempt because they run in-page and navigate nowhere; other non-http(s) schemes stay refused.
+- **A page-opened tab outside `allowedDomains` cannot be driven** — a page can open a tab itself (`target="_blank"`, `window.open`) and the plugin never sees that navigation, so the policy is applied where it can be: `browser_switch_tab` refuses to enter such a tab (the current tab is kept, the tab itself stays open for the user).
 - **Idle disposal defers during operations** — a navigation slower than `idleTimeoutMs` completes normally; disposal only fires when the session is truly idle.
 - **Mid-navigation snapshots settle** — a `browser_snapshot` racing a JS navigation waits for the new document and retries instead of surfacing a raw "Execution context was destroyed" error.
 

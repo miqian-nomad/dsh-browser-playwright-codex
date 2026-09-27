@@ -28,7 +28,7 @@
 |---|---|---|---|
 | 接受原生弹窗 | 删数据 / 付款 / 提交 / 覆盖文件 | 接受能力**不在** click 上；只有存在"已上报过的待处理弹窗"时 `browser_dialog` 才可用，否则 `NO_DIALOG` | **机制** |
 | 接受原生弹窗 | 同上 | 必须先获用户授权、回复里说明 | 说明 |
-| 导航范围 | 浏览器去向 | `allowedDomains` 主机白名单 | **机制** |
+| 导航范围 | 浏览器去向 | `allowedDomains` 主机白名单，**投递前**校验：navigate / open_tab / browser_click / browser_click_at（ref 与裸坐标两种模式）/ browser_switch_tab | **机制**（例外：页面自身 `location.href=` 跳转、以及已经停在白名单外的主机不关只不驱动 → 见 README 已知限制） |
 | 页面 JS / 原始 CDP | 页面与浏览器控制 | 默认关闭 + CDP 命令白名单 | **机制** |
 | 敏感数据外发（填表即外发） | 隐私 | codex-rules 第三条 | 说明 ← **缺口** |
 | 破坏性点击（删除/付款/提交） | 数据 / 钱 | codex-rules 第四条 + 弹窗回显 | 说明 + 机制 |
