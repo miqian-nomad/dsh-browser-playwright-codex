@@ -658,3 +658,20 @@ function refFrom(
   })
   return found
 }
+
+// ---------------------------------------------------------------------------
+// State file: non-persistent mode must not resolve one (the empty-string trap)
+// ---------------------------------------------------------------------------
+
+test('state file: non-persistent mode has none, persistent mode has one under the profile', () => {
+  const legacy = new PlaywrightProvider(providerConfig({ launch: { persistent: false } }))
+  // An empty string here would defeat every `=== undefined` guard in the
+  // provider: `'' + '.tmp'` lands in the process working directory (cookie JSON
+  // in plain text) and the throttled export would re-run on every tool call.
+  assert.equal(legacy.stateFile, undefined)
+  const persistent = new PlaywrightProvider(providerConfig({ launch: { persistent: true } }))
+  assert.ok(
+    typeof persistent.stateFile === 'string' && persistent.stateFile.endsWith('dsh-storage-state.json'),
+    String(persistent.stateFile),
+  )
+})

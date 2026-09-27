@@ -462,6 +462,10 @@ async function handle(req: IncomingMessage, res: ServerResponse, orders: Map<str
     send(res, 200, HTML, pageShell('Docs', '<main><h1>Docs</h1><p>External documentation placeholder.</p></main>'))
     return
   }
+  if (path === '/dialog') {
+    send(res, 200, HTML, pageShell('Delete record — Acme Store', dialogPage()))
+    return
+  }
   if (path === '/') {
     const promo = url.searchParams.get('nopromo') !== '1'
     const signedOut = url.searchParams.get('signed_out') === '1'
@@ -991,6 +995,23 @@ function orderPage(id: string, total: number): string {
     '</strong></p>\n' +
     '<p><a href="/">Back to store</a></p>\n' +
     '</main>\n'
+  )
+}
+
+/** A page whose only action raises a native confirm: the parked-dialog fixture. */
+function dialogPage(): string {
+  return (
+    '<main>\n' +
+    '<h1>Delete record</h1>\n' +
+    '<p id="outcome">Untouched</p>\n' +
+    '<button id="delete-record">Delete record</button>\n' +
+    '</main>\n' +
+    '<script>\n' +
+    'document.getElementById("delete-record").addEventListener("click", function () {\n' +
+    '  const confirmed = window.confirm("Delete this record?")\n' +
+    '  document.getElementById("outcome").textContent = confirmed ? "deleted" : "kept"\n' +
+    '})\n' +
+    '</script>'
   )
 }
 

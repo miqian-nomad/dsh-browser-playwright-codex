@@ -8,10 +8,19 @@
  *   --live  额外在 news.baidu.com 上采样真实页面的统计（会联网）
  * 退出码 0 = 全绿；1 = 有失败项。
  *
- * 期望值不写死在这里：工具面从 lib/contract.js 推导，所以新增或调整工具时
+ * 期望值不写死在这里：工具面从 src/contract.ts 推导，所以新增或调整工具时
  * 只有 contract.ts 需要改，这份脚本不会因为"数字过期"而假报警。
+ *
+ * 读 lib/，但**必须先 build**：npm run verify 会先跑 npm run build，直接
+ * node scripts/... 跑则会撞上最后一组检查（lib/ 不旧于 src/）。
+ *
+ * 为什么不像测试那样用 tsx 直读 src/：tsx（esbuild keepNames）会把传给
+ * page.evaluate 的函数包成 __name(...)，而页面里没有这个符号 ——
+ * "ReferenceError: __name is not defined"，悬停/文字定位这类页面侧函数会全部
+ * 失效。lib/ 是编译产物，没有这层包裹，也正好是宿主真正加载的东西。
  */
 import http from 'node:http'
+import { readdirSync, statSync } from 'node:fs'
 import { Config as ConfigSchema, PlaywrightProvider } from '../lib/playwright.js'
 import { renderSnapshot } from '../lib/snapshot-render.js'
 
@@ -369,8 +378,31 @@ if (process.argv.includes('--live')) {
   }
 }
 
+console.log('[6] CDP：绑定调用真的能发出命令')
+// 这条用例是回归闸门：CDPSession.send 是原型方法，一旦被解绑成裸函数，
+// 整条 CDP 链路会以 "Cannot read properties of undefined (reading '_channel')" 失败。
+const cdpReply = await session
+  .cdp('DOM.getDocument', { depth: 1 }, undefined)
+  .then((reply) => (reply === null || typeof reply !== 'object' ? null : reply.root))
+  .catch(() => null)
+check('session.cdp 允许的方法可用（绑定调用）', cdpReply !== null && cdpReply.nodeName === '#document')
+
 await provider.dispose()
 server.close()
+
+// [7] lib/ 是宿主真正加载的产物：源码改完没 build，跑绿了也是白跑。
+console.log('[7] lib/ 与 src/ 同步（宿主加载 lib/）')
+const stale = []
+for (const file of readdirSync(new URL('../src', import.meta.url))) {
+  if (!file.endsWith('.ts') || file.endsWith('.d.ts')) continue
+  const src = statSync(new URL('../src/' + file, import.meta.url)).mtimeMs
+  const built = statSync(new URL('../lib/' + file.replace(/\.ts$/, '.js'), import.meta.url), {
+    throwIfNoEntry: false,
+  })
+  if (built === undefined || built.mtimeMs < src) stale.push(file.replace(/\.ts$/, '.js'))
+}
+check('lib/ 不旧于 src/（旧了就先 npm run build）', stale.length === 0, stale.join(', '))
+
 console.log('')
 console.log(
   failures.length === 0

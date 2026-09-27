@@ -117,7 +117,7 @@ All tunables are patchable through the profile's `cordis.patch.yml` (later layer
 A swappable capability seam, one package:
 
 - `service` — `ctx.browser`: the provider registry with configured-or-auto selection semantics (a configured id must exist; one usable provider auto-selects; several require an explicit choice).
-- `playwright` — the provider. **Persistent mode (default)**: one shared `launchPersistentContext` window on an independent profile directory (`~/.dsh/browser-profiles/playwright`), reused by every calling session — Codex-style personal browser. Login lives in the profile (durable cookies, localStorage) **plus** an exported state file (`dsh-storage-state.json`) that re-injects session cookies on relaunch (the browser drops those on close). The window auto-relaunches after an external close or crash, login intact. Set `launch.persistent: false` for the legacy shared-browser/per-owner-context mode. URL policy, idle disposal, and the injected snapshot engine apply to both.
+- `playwright` — the provider. **Persistent mode (default)**: one shared `launchPersistentContext` window on an independent profile directory (`~/.dsh/browser-profiles/playwright`), reused by every calling session — Codex-style personal browser. Login lives in the profile (durable cookies, localStorage) **plus** an exported state file (`dsh-storage-state.json`) that re-injects session cookies on relaunch (the browser drops those on close). The window auto-relaunches after an external close or crash, login intact. Set `launch.persistent: false` for the legacy shared-browser/per-owner-context mode — that mode writes **no** state file at all (the export is skipped rather than pointed at an empty path, which would have dropped cookie JSON into the process working directory). URL policy, idle disposal, and the injected snapshot engine apply to both.
 - `tool` — the consumer: `defineTool`-built tools whose canonical values are structured JSON and whose rendered text is the snapshot tree. Gated tools register only when their capability is on.
 - `contract` — the wire contract in one place: tool suffixes (and which are gated) plus every failure code. Registration, the load-time guard, the tests and the verify script all read it, so a renamed tool or changed code cannot drift apart silently.
 - `compat` — the boundary adapter for the harness packages: borrowed names (`ToolCallId`/`CallId` and friends, once per harness release) live here so a rename lands in one file instead of failing an import.
@@ -170,11 +170,11 @@ Measured with ``npm run cost`` (per-turn, resident in the system prompt):
 
 | Surface | Tools | Schema characters | ≈ tokens/turn |
 |---|---|---|---|
-| Schema defaults (`Config({})`, no patch layer) | 20 | 14,822 | ≈ 4,117 |
-| Shipped bundle layer (this package's `cordis.patch.yml`: evaluate + cdp on) | 22 | 17,219 | ≈ 4,783 |
-| Everything registered (`registerDisabledTools: true`, plus `extract`) | 23 | 17,675 | ≈ 4,910 |
+| Schema defaults (`Config({})`, no patch layer) | 20 | 15,033 | ≈ 4,176 |
+| Shipped bundle layer (this package's `cordis.patch.yml`: evaluate + cdp on) | 22 | 17,430 | ≈ 4,842 |
+| Everything registered (`registerDisabledTools: true`, plus `extract`) | 23 | 17,886 | ≈ 4,968 |
 
-Two levers were pulled here, and neither dropped a rule. A gated tool is registered only while its capability is live (`browser_extract` on this deployment: -456 characters ≈ 127 tokens/turn), and the click family was rewritten so each rule is stated once instead of three times (-390 characters ≈ 108 tokens/turn, with `browser_click` still the widest description at 1,597 characters). `tests/tool-descriptions.test.ts` pins every rule, example and rationale of that family, so a trim that eats one fails the build. Gating every switchable tool saves at most ≈ 793 tokens per turn (schema defaults vs. everything registered); what is left is per-tool prose rather than repetition, so a further cut trades away real guidance.
+Three things changed here, and only one of them was about size. (1) The click family was rewritten so each rule is stated once instead of three times: -390 characters, with every rule, example and rationale pinned by `tests/tool-descriptions.test.ts`, so a trim that eats one fails the build. (2) A gated tool is registered only while its capability is live — `browser_extract` on this deployment: -456 characters ≈ 127 tokens/turn. (3) Four descriptions were corrected to match the code they describe (dialog blocking, the gated diagnostics `browser_fill` points at, persistent-mode `browser_close`, and `browser_click_at`'s landing note), which added 211 characters back because the old wording promised behaviour the implementation did not have. Net: 18,065 → 17,886 characters with everything registered, and 17,609 → 17,430 in this deployment's configuration. What is left is per-tool prose rather than repetition, so a further cut trades away real guidance.
 
 #### KV Cache effect
 

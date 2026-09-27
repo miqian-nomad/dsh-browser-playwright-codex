@@ -476,3 +476,65 @@ test('extract tool: maxInputChars bounds the page data handed to the auxiliary m
   assert.ok(pageData.length < 400, 'page data must be bounded: got ' + String(pageData.length) + ' characters')
   assert.ok(promptSeen.includes('all book titles'), 'bounded input must still carry the instruction')
 })
+
+// ---------------------------------------------------------------------------
+// Scenario: browser_cdp against the live session (bound CDPSession method)
+// ---------------------------------------------------------------------------
+
+test('cdp tool: an allowed method round-trips on the live page', async () => {
+  const ctx = await assemble({ allowCdp: true })
+  const agentId = 'cdp-agent'
+  await call(ctx, 'browser_navigate', { url: store.base + '/dialog' }, agentId)
+
+  // DOM.getDocument is the cheapest read-only call whose reply shape is stable.
+  // It fails outright when CDPSession.send is called without its receiver.
+  const doc = await call(ctx, 'browser_cdp', { method: 'DOM.getDocument', params: { depth: 1 } }, agentId)
+  assert.equal(doc.isError, false, textBlock(doc))
+  const root = (doc.value as { root?: { nodeName?: string } }).root
+  assert.equal(root?.nodeName, '#document')
+})
+
+test('cdp tool: the allow-list rejects a method before the session is touched', async () => {
+  const ctx = await assemble({ allowCdp: true })
+  const denied = await call(ctx, 'browser_cdp', { method: 'Network.enable' }, 'cdp-deny-agent')
+  assert.equal(denied.isError, true)
+  assert.ok(textBlock(denied).includes('not in the allow-list'), textBlock(denied))
+  assert.ok(textBlock(denied).includes('Network.enable'), textBlock(denied))
+})
+
+// ---------------------------------------------------------------------------
+// Scenario: a native dialog is parked, blocks other tools, and never answers itself
+// ---------------------------------------------------------------------------
+
+test('native dialog: parked on the page, blocking other tools, answered only explicitly', async () => {
+  const ctx = await assemble({})
+  const agentId = 'dialog-agent'
+  await call(ctx, 'browser_navigate', { url: store.base + '/dialog' }, agentId)
+  const before = await call(ctx, 'browser_snapshot', {}, agentId)
+  const ref = refInTree(treeOf(before), 'button', 'Delete record')
+  assert.ok(ref !== null, 'the fixture button must be in the snapshot')
+
+  // The click raises confirm(): the call returns the parked-dialog stand-in
+  // instead of hanging, and nothing has been accepted or cancelled.
+  const raised = await call(ctx, 'browser_click', { ref }, agentId)
+  const raisedTree = treeOf(raised)
+  assert.match(raisedTree, /\[dialog\] confirm "Delete this record\?"/)
+  assert.match(raisedTree, /PENDING/)
+  assert.match(raisedTree, /Nothing has been accepted or cancelled yet/)
+
+  // While it is parked, every other tool refuses to act on the page.
+  const blocked = await call(ctx, 'browser_tabs', {}, agentId)
+  assert.equal(blocked.isError, true)
+  assert.ok(textBlock(blocked).includes('is PENDING and the page is blocked'), textBlock(blocked))
+
+  // Another owner cannot answer it: each owner has its own page here.
+  const stranger = await call(ctx, 'browser_dialog', { accept: true }, 'dialog-stranger')
+  assert.equal(stranger.isError, true)
+  assert.ok(textBlock(stranger).includes('nothing to accept or dismiss'), textBlock(stranger))
+
+  // Cancelling unblocks the page, and the page saw the cancel, not an accept.
+  const cancelled = await call(ctx, 'browser_dialog', { accept: false }, agentId)
+  assert.equal(cancelled.isError, false, textBlock(cancelled))
+  const after = await call(ctx, 'browser_snapshot', {}, agentId)
+  assert.match(treeOf(after), /kept/)
+})

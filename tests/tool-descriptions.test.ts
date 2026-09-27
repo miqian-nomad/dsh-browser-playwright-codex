@@ -58,11 +58,17 @@ const RULES: Record<string, { id: string; pattern: RegExp }[]> = {
     { id: 'try click (incl. text mode) first', pattern: /click[\s\S]*including its text mode[\s\S]*first/i },
     { id: 'ref mode only after click reports a failure', pattern: /not actionable|could not be delivered/i },
     { id: 'raw x/y is a last resort (canvas hit areas)', pattern: /last resort[\s\S]*canvas/i },
-    { id: 'a raw click has no landing-note guarantee', pattern: /no landing-note guarantee[\s\S]*confirm the effect/i },
+    {
+      id: 'a raw click still reports what it hit',
+      pattern: /raw clicks still return a landing note/i,
+    },
     { id: 'verify the effect', pattern: /verify the effect in the returned snapshot/i },
     { id: 'no blind repeat, no more raw coordinates', pattern: /do NOT repeat blindly[\s\S]*raw coordinates/i },
     { id: 'find the blocker or interception first', pattern: /blocker or interception/i },
-    { id: 'CAUTION note when the raw escape hatch missed', pattern: /CAUTION note/i },
+    {
+      id: 'CAUTION note when ref mode fell back to coordinates',
+      pattern: /fall back to a bare click[\s\S]*CAUTION note/i,
+    },
     { id: 'intercepted → failed and retarget', pattern: /treat it as failed and retarget/i },
     { id: 'ref mode scrolls the element into view', pattern: /the element is scrolled into view/i },
     {

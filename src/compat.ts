@@ -1,15 +1,21 @@
 /**
- * Boundary adapter for the DeepSeek Harness packages this plugin links
- * against. The harness ships a release every few days and renames its
- * internals freely (`CallId` became `ToolCallId`, brand constructors moved to
- * `@deepseek-ai/dsh-brand`), so every borrowed name lives here instead of
- * being imported at each call site: when a rename lands, exactly one file
- * changes.
+ * Boundary adapter for the branded identifiers this plugin borrows from the
+ * DeepSeek Harness. The harness ships a release every few days and renames
+ * freely — `CallId` became `ToolCallId`, brand constructors moved to
+ * `@deepseek-ai/dsh-brand` — and a renamed identifier used to break an import
+ * in the middle of the tests.
  *
- * Prefer owning the value outright. `CallId` / `ToolCallId` are nominal
- * wrappers over a string whose runtime body is the identity function, so this
- * plugin defines its own instead of importing theirs — a harness rename can no
- * longer break it, and no version range has to be chased.
+ * Scope, stated honestly: this file owns the *identifier brands* (below).
+ * The harness API surface this plugin uses on purpose (cordis `Context`,
+ * `defineTool` / `ToolExecution`, `BlockAssembler`, `createUserMessage`) is
+ * still imported directly at its call site — a rename there is a load-time
+ * failure that `npm run doctor` reports as a missing export, which is the
+ * signal we want rather than a silent `undefined`.
+ *
+ * `CallId` / `ToolCallId` are nominal wrappers over a string whose runtime body
+ * is the identity function, so this plugin defines its own instead of importing
+ * theirs — a harness rename cannot break it, and no version range has to be
+ * chased.
  * @module dsh-browser-playwright/compat
  */
 
@@ -32,27 +38,3 @@ export function toolCallId(id: string): ToolCallId {
 
 /** Historical alias: the 0.1.6-and-earlier name, kept so call sites read the same. */
 export const CallId = toolCallId
-
-/**
- * Branded-identifier constructors the harness may or may not export yet. Each
- * falls back to the identity function, so a missing (or renamed) export can
- * never fail an import again.
- */
-export const MessageId = toolCallId
-/** Provider-issued request identifier, used for diagnostics only. */
-export const ProviderRequestId = toolCallId
-/** One model streaming attempt within an agent lifecycle. */
-export const LlmAttemptId = toolCallId
-
-/**
- * Read one optional export off a harness module without a static named
- * import. A named import of a missing export fails at load time; a namespace
- * probe returns `undefined` instead, which is what "the harness renamed this"
- * should look like.
- * @param module - the namespace object to probe.
- * @param name - the export name to look for.
- * @returns the export when present, otherwise undefined.
- */
-export function optionalExport<T>(module: Record<string, unknown>, name: string): T | undefined {
-  return module[name] as T | undefined
-}

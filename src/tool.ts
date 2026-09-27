@@ -550,7 +550,9 @@ export function apply(ctx: Context, config: ToolConfig): void {
       name: p('dialog'),
       description:
         'Answer the native dialog currently blocking the page — alert, confirm, prompt or beforeunload — and return the fresh snapshot. ' +
-        'A dialog is NEVER auto-answered: it stays PENDING until this call, and every other tool returns the pending dialog instead of acting on the page. ' +
+        'A dialog is NEVER auto-answered: it stays PENDING until this call. The call that raised it and ' +
+        p('snapshot') +
+        ' report it as a note; every other tool refuses to act and fails with DIALOG_PENDING. ' +
         'accept: true confirms it (OK / leave page), false cancels it (Cancel / stay on page). Accept only when the user has explicitly authorized exactly this action (delete / pay / submit / overwrite); never confirm on your own initiative, and state in your reply which dialog you answered and how. ' +
         'A prompt takes its value through promptText. Without a pending dialog this errors with NO_DIALOG — there is no way to accept a dialog the page never raised.',
       parameters: {
@@ -582,9 +584,9 @@ export function apply(ctx: Context, config: ToolConfig): void {
         'Raw mode: pass x/y viewport CSS pixels to click a raw point with no element involvement. ' +
         'This is the FALLBACK, not a routine alternative: try ' +
         p('click') +
-        ' (including its text mode) first, and use ref mode only after a click reports the element is not actionable or the click could not be delivered. Raw x/y is a last resort for targets no ref resolves (canvas-drawn hit areas) — a raw click has no landing-note guarantee, so re-snapshot and confirm the effect. ' +
+        ' (including its text mode) first, and use ref mode only after a click reports the element is not actionable or the click could not be delivered. Raw x/y is a last resort for targets no ref resolves (canvas-drawn hit areas): raw clicks still return a landing note saying what they hit, so re-snapshot and confirm. ' +
         'IRON RULE: verify the effect in the returned snapshot; if nothing changed, do NOT repeat blindly and do NOT throw more raw coordinates at it — find the blocker or interception first, then retry the most direct semantic action. ' +
-        'The snapshot may open with a landing note naming what received the click, or a CAUTION note when the raw escape hatch landed elsewhere — if the click was intercepted, treat it as failed and retarget.',
+        'The snapshot may open with a landing note naming what received the click, or — when an intercepted ref-mode target had to fall back to a bare click at its centre — a CAUTION note: if the click was intercepted, treat it as failed and retarget.',
       parameters: {
         ref: {
           type: 'string',
@@ -657,11 +659,12 @@ export function apply(ctx: Context, config: ToolConfig): void {
         'IRON RULE: after filling, verify in the returned snapshot that the field actually holds the value. ' +
         'Frameworks can silently reject or transform input (controlled components, contenteditable editors, ' +
         'input-mask/currency fields). If the value is wrong or missing, do NOT blindly re-fill or append — ' +
-        'inspect the field DOM first (e.g. via ' +
+        'inspect the field DOM first — ' +
         p('evaluate') +
         ' reading value/outerHTML, or ' +
         p('cdp') +
-        ' Input.insertText for contenteditable), understand why it was ignored, then act.',
+        ' Input.insertText for contenteditable (both are gated — when one is missing from your tool list, ' +
+        'say so) — understand why it was ignored, then act.',
       parameters: {
         ref: { type: 'string', required: true, description: 'Input or select ref (e.g. e7) from the latest snapshot.' },
         text: { type: 'string', required: true, description: 'Exact value to fill, or option label for selects.' },
@@ -1075,7 +1078,8 @@ export function apply(ctx: Context, config: ToolConfig): void {
     defineTool({
       name: p('close'),
       description:
-        "Close this session's browser window. The browser profile keeps login state, so the next browser call reopens the window still signed in; use the profile/browser reset flow to fully clear cookies if needed.",
+        "Release this session's browser window. Persistent mode shares one window, so it closes only when the last session releases it; the profile keeps login state either way, so the next browser call reopens it still signed in (reset the profile to clear cookies).",
+
       parameters: {},
       output: {
         schema: { type: 'null' },

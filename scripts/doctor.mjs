@@ -13,8 +13,11 @@
  *   2. 是插件真用到的运行时 API 没了 → 适配代码，别去改 peer 范围；
  *   3. 装错版本 → 在 profile 里对齐版本，而不是把本目录钉成旧版。
  */
-import { readFileSync } from 'node:fs'
+import { readFileSync, readdirSync } from 'node:fs'
 import { createRequire } from 'node:module'
+import { homedir } from 'node:os'
+import { join } from 'node:path'
+import { fileURLToPath } from 'node:url'
 
 /** 运行时真正 import 的名字；缺一个就是载荷失败。 */
 const REQUIRED = {
@@ -22,6 +25,9 @@ const REQUIRED = {
   '@deepseek-ai/schemastery': ['default'],
   '@deepseek-ai/dsh-tools': ['default', 'defineTool'],
   '@deepseek-ai/dsh-llm': ['BlockAssembler', 'createUserMessage'],
+  // The only runtime dependency that is not the harness: without it the whole
+  // browser entry fails to load, before any DSH API question even matters.
+  'playwright-core': ['chromium'],
 }
 
 /** 只有测试 / 开发路径用到的包；缺了只提醒，不算失败。 */
@@ -88,6 +94,45 @@ for (const [pkg, names] of Object.entries(OPTIONAL)) {
     continue
   }
   console.log('✅ ' + pkg + ' ' + version)
+}
+
+console.log('')
+console.log('部署侧解析（profile 用 junction 挂这个插件，运行时到底从哪里取 playwright-core）')
+const pluginDir = fileURLToPath(new URL('..', import.meta.url))
+const profilesRoot = join(homedir(), '.dsh', 'profiles')
+/** Resolve one package from one directory, the way Node would at load time. */
+function resolveFrom(pkg, dir) {
+  try {
+    const resolved = createRequire(join(dir, 'package.json')).resolve(pkg + '/package.json')
+    return { path: resolved, version: JSON.parse(readFileSync(resolved, 'utf8')).version }
+  } catch {
+    return undefined
+  }
+}
+const anchors = [{ label: '插件目录', dir: pluginDir }]
+try {
+  for (const name of readdirSync(profilesRoot)) {
+    if (name === 'node_modules') continue
+    anchors.push({ label: 'profile ' + name, dir: join(profilesRoot, name) })
+  }
+} catch {
+  console.log('ℹ️  没有 ' + profilesRoot + '：只检查插件自身')
+}
+let resolvedAnywhere = 0
+for (const { label, dir } of anchors) {
+  const found = resolveFrom('playwright-core', dir)
+  if (found === undefined) {
+    // Junction 挂载时 Node 按插件真实路径解析，profile 目录里没有这个包是正常的；
+    // 只有"哪里都解析不到"才是部署级失败（下面的 resolvedAnywhere 判定）。
+    console.log('ℹ️  ' + label + ' 本目录没有 playwright-core（junction 会落到插件真实路径）—— ' + dir)
+    continue
+  }
+  resolvedAnywhere += 1
+  console.log('✅ ' + label + ' → playwright-core ' + found.version + '  ' + found.path)
+}
+if (resolvedAnywhere === 0) {
+  failed += 1
+  console.log('❌ 没有任何位置能解析 playwright-core：部署侧 browser entry 会在加载期直接失败')
 }
 
 console.log('')

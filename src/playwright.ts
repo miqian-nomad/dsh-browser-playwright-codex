@@ -288,8 +288,13 @@ export class PlaywrightProvider {
   launchError: unknown
   /** Resolved profile directory (persistent mode only). */
   profileDir = ''
-  /** Where cookies+localStorage are exported for the session-cookie fallback. */
-  stateFile = ''
+  /**
+   * Where cookies+localStorage are exported for the session-cookie fallback.
+   * Undefined outside persistent mode, and that is load-bearing: every writer
+   * and reader below guards on `undefined`, while an empty string would make
+   * `'' + '.tmp'` land in the process working directory.
+   */
+  stateFile: string | undefined = undefined
   /** Owner that raised the dialog currently parked on a page. */
   lastActor: string | undefined
   lastStatePersist = 0
@@ -1744,7 +1749,14 @@ class PlaywrightSession {
         this.cdpPage = page
       }
       try {
-        const send = this.cdpSession.send as unknown as (m: string, p: Record<string, unknown>) => Promise<unknown>
+        // CDPSession.send is a prototype method: it needs its receiver, so bind it
+        // before handing it to withAbort. An unbound reference dies on `this._channel`
+        // inside the driver, and the failure gets reported as a protocol error.
+        // CDPSession.send is a prototype method: it needs its receiver, so bind it
+        // before handing it to withAbort. An unbound reference dies on `this._channel`
+        // inside the driver, and the failure gets reported as a protocol error.
+        const session = this.cdpSession
+        const send = session.send.bind(session) as (m: string, p: Record<string, unknown>) => Promise<unknown>
         return await withAbort(send(method, params ?? {}), signal)
       } catch (error) {
         if (isAbortError(error)) throw error

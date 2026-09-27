@@ -4,6 +4,4 @@ lib/
 # Installed dependencies: resolved by the profile (pnpm) or `npm install` here.
 node_modules/
 
-# Runtime scratch (the browser plugin writes its transient state here).
-.tmp
 *.log
