@@ -1198,21 +1198,59 @@ class PlaywrightSession {
     })
   }
   /**
+   * Enforce the navigation policy for the link a click is about to follow.
+   * Click navigation does not run through navigate(), so this is the only place
+   * the rule lives and every click path (ref, text, geometric ref, raw x/y)
+   * calls it — a new path cannot quietly skip the allow-list.
+   *
+   * The policy is about which HOSTS this browser may visit, so it applies to
+   * http(s) destinations. An in-page `javascript:` link runs the page's own
+   * code without navigating anywhere and is allowed (refusing it made ordinary
+   * JS links unclickable); every other scheme — file:, data:, mailto:, tel:,
+   * custom ones — stays refused.
+   */
+  assertClickTargetAllowed(href: string | null) {
+    if (href === null || href === '') return
+    let target: URL
+    try {
+      target = new URL(href, this.currentPageSync().url())
+    } catch {
+      throw new BrowserError('URL_NOT_ALLOWED', 'invalid link target: ' + href)
+    }
+    if (target.protocol === 'javascript:') return
+    assertAllowedUrl(target.toString(), this.provider.config.allowedDomains ?? [])
+  }
+  /**
+   * Enforce the host policy on a tab before this session starts driving it. A
+   * page can open a tab by itself (`target="_blank"`, `window.open`) and the
+   * plugin never sees that navigation, so the policy is applied at the point of
+   * use instead: a tab outside the allow-list stays open — the user may well be
+   * using it — but this agent refuses to switch to it.
+   *
+   * http(s) is checked against allowedDomains; `about:blank` is allowed because
+   * it is the plugin's own interim state and has no host; every other scheme
+   * (file:, data:, chrome:, devtools:) is refused outright.
+   */
+  assertTabAllowed(page: Page) {
+    const raw = page.url()
+    if (raw === '') return
+    let target: URL
+    try {
+      target = new URL(raw)
+    } catch {
+      return
+    }
+    if (target.protocol === 'about:') return
+    assertAllowedUrl(target.toString(), this.provider.config.allowedDomains ?? [])
+  }
+  /**
    * Shared click core: enforce the URL policy for link targets, run the
    * Codex-style geometry ladder with the Playwright actionability fallback,
    * then report what actually received the click. The label names the target
    * in the landing note; shared is how many elements matched it (0 for refs).
    */
   async clickLocator(locator: Locator, signal: AbortSignal | undefined, label: string, shared: number) {
-    // Click navigation does not run through navigate(); enforce the URL
-    // policy for link destinations here as well.
-    const href = await locator.getAttribute('href')
-    if (href !== null) {
-      assertAllowedUrl(
-        new URL(href, this.currentPageSync().url()).toString(),
-        this.provider.config.allowedDomains ?? [],
-      )
-    }
+    this.assertClickTargetAllowed(await locator.getAttribute('href'))
     const page = this.currentPageSync()
     const urlBefore = page.url()
     let point
@@ -1276,10 +1314,10 @@ class PlaywrightSession {
     return this.run(async () => {
       const page = this.currentPageSync()
       const urlBefore = page.url()
-      // Raw mode has no locator: sample what sits at the target point so
-      // the returned snapshot can say what actually received the click.
-      let racedAt: ActionResult = { blocked: false }
-      const hitDesc = await page
+      // Raw mode has no locator: sample what sits at the target point so the
+      // returned snapshot can say what actually received the click, and so the
+      // URL policy can be enforced for the link that point belongs to.
+      const probe = await page
         .evaluate(
           (pt) => {
             const px = pt.x
@@ -1290,7 +1328,7 @@ class PlaywrightSession {
             } catch {
               hit = null
             }
-            if (!hit) return '(nothing — blank area or outside the viewport)'
+            if (!hit) return { desc: '(nothing — blank area or outside the viewport)', linkHref: null }
             const cls =
               typeof hit.className === 'string' && hit.className.trim()
                 ? '.' + hit.className.trim().split(/\s+/).filter(Boolean).join('.')
@@ -1298,17 +1336,25 @@ class PlaywrightSession {
             const role = hit.getAttribute && hit.getAttribute('role')
             const text =
               hit.childElementCount === 0 && hit.textContent ? ' "' + hit.textContent.trim().slice(0, 24) + '"' : ''
-            return (
-              (hit.tagName ? hit.tagName.toLowerCase() : hit.nodeName) +
-              (hit.id ? '#' + hit.id : '') +
-              cls +
-              (role ? '[role=' + role + ']' : '') +
-              text
-            )
+            const anchor = hit.closest('a[href]')
+            return {
+              desc:
+                (hit.tagName ? hit.tagName.toLowerCase() : hit.nodeName) +
+                (hit.id ? '#' + hit.id : '') +
+                cls +
+                (role ? '[role=' + role + ']' : '') +
+                text,
+              linkHref: anchor === null ? null : anchor.getAttribute('href'),
+            }
           },
           { x, y },
         )
-        .catch(() => '(unavailable)')
+        .catch(() => null)
+      const hitDesc = probe === null ? '(unavailable)' : probe.desc
+      // A raw click can navigate: enforce the policy for the link under the
+      // point before any input is delivered.
+      this.assertClickTargetAllowed(probe === null ? null : probe.linkHref)
+      let racedAt: ActionResult = { blocked: false }
       try {
         // Raw native click by viewport coordinates (CDP Input
         // dispatch, isTrusted=true — indistinguishable from a human
@@ -1331,6 +1377,9 @@ class PlaywrightSession {
       const locator = await this.refLocator(ref)
       const page = this.currentPageSync()
       const urlBefore = page.url()
+      // Ref mode resolves the element before clicking, so the link policy can
+      // be enforced up front — the same rule browser_click applies.
+      this.assertClickTargetAllowed(await locator.getAttribute('href'))
       try {
         // Codex-style geometry click with obstruction awareness:
         // scroll (centre → end → start), wait for the bounding rect to
@@ -1624,6 +1673,11 @@ class PlaywrightSession {
       this.guardBlockedContext()
       const page = this.pageAt(index)
       if (page === undefined) throw new BrowserError('REF_NOT_FOUND', 'no tab at index ' + String(index))
+      // Switching is the only way this session starts driving a tab it did not
+      // open itself, so the host policy is applied here: a page-opened tab
+      // outside the allow-list cannot be reached. The refusal happens before
+      // currentIndex moves, so the session stays on the tab it was driving.
+      this.assertTabAllowed(page)
       this.currentIndex = index
       // A minimized window stays minimized: switching tabs is a
       // context-level operation that needs no OS window activation.

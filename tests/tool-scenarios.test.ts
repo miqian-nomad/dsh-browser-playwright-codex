@@ -538,3 +538,147 @@ test('native dialog: parked on the page, blocking other tools, answered only exp
   const after = await call(ctx, 'browser_snapshot', {}, agentId)
   assert.match(treeOf(after), /kept/)
 })
+
+// ---------------------------------------------------------------------------
+// Link and tab policy: EVERY path that could reach another host enforces
+// allowedDomains. Two regressions this pins:
+//   * browser_click_at resolved an element (or a point) and clicked it without
+//     ever asking the policy, so a disallowed host was one click_at away while
+//     browser_click refused it;
+//   * a tab a page opened itself (window.open / target="_blank") bypassed the
+//     policy entirely, so switch_tab could drive a host the agent may not visit.
+// The fixture puts the links at fixed viewport positions so raw mode can be
+// aimed at one without measuring first, and offers a window.open button.
+// ---------------------------------------------------------------------------
+
+/**
+ * A provider whose allow-list admits the fixture's 127.0.0.1 host only.
+ * Non-persistent: these tests want their own context, not the shared profile
+ * window the other tool scenarios run on.
+ */
+function policyProvider(): PlaywrightProvider {
+  return new PlaywrightProvider({
+    ...pwConfig,
+    launch: { ...pwConfig.launch, persistent: false },
+    allowedDomains: ['127.0.0.1'],
+  })
+}
+
+/** assemble() against a specific provider (the shared one has no allow-list). */
+async function assembleWith(p: PlaywrightProvider, overrides: Partial<ToolConfig> = {}): Promise<Context> {
+  const ctx = new Context()
+  await ctx.plugin(SystemPrompt)
+  await ctx.plugin(ToolRuntime)
+  await ctx.plugin(BrowserRuntime)
+  ctx.browser.registerProvider(p)
+  browserTool.apply(ctx, { ...toolConfig, ...overrides })
+  return ctx
+}
+
+/** Assert a click was refused by the policy and that the page did not move. */
+async function assertRefused(result: ToolExecutionResult, label: string): Promise<void> {
+  assert.equal(result.isError, true, label + ' must be refused, but it was delivered')
+  const message = textBlock(result)
+  // contract.ts keeps the stable code as an API for tests and tools, not as
+  // model-facing text, so accept either the code or the rendered reason.
+  assert.ok(
+    message.includes('URL_NOT_ALLOWED') || message.includes('not in allowedDomains'),
+    label + ' must fail on the URL policy: ' + message,
+  )
+  assert.ok(message.includes('localhost'), label + ' must name the refused host: ' + message)
+}
+
+test('click policy: ref, geometric-ref and raw clicks all refuse a disallowed host', async () => {
+  const provider = policyProvider()
+  try {
+    const ctx = await assembleWith(provider)
+    const agentId = 'policy-agent'
+    const opened = await call(ctx, 'browser_navigate', { url: store.base + '/policy' }, agentId)
+    assert.equal(opened.isError, false, textBlock(opened))
+    const tree = treeOf(opened)
+    const externalRef = refInTree(tree, 'link', 'External docs')
+    assert.ok(externalRef, 'the external link must be in the snapshot: ' + tree)
+
+    const viaClick = await call(ctx, 'browser_click', { ref: externalRef }, agentId)
+    await assertRefused(viaClick, 'browser_click')
+
+    const viaGeometricRef = await call(ctx, 'browser_click_at', { ref: externalRef }, agentId)
+    await assertRefused(viaGeometricRef, 'browser_click_at (ref mode)')
+
+    // #external occupies y=0..40 of the viewport, above everything else.
+    const viaRaw = await call(ctx, 'browser_click_at', { x: 10, y: 20 }, agentId)
+    await assertRefused(viaRaw, 'browser_click_at (raw mode)')
+
+    // The page never left the allowed host.
+    const after = await call(ctx, 'browser_snapshot', {}, agentId)
+    assert.match(treeOf(after), /Link policy/)
+  } finally {
+    await provider.dispose()
+  }
+})
+
+test('click policy: an in-page javascript: link is clickable and stays on the page', async () => {
+  const provider = policyProvider()
+  try {
+    const ctx = await assembleWith(provider)
+    const agentId = 'policy-js-agent'
+    const opened = await call(ctx, 'browser_navigate', { url: store.base + '/policy' }, agentId)
+    const jsRef = refInTree(treeOf(opened), 'link', 'In-page JS link')
+    assert.ok(jsRef, 'the in-page link must be in the snapshot')
+
+    // It runs the page's own code and navigates nowhere, so the host policy has
+    // nothing to say about it — refusing it (as the old check did, because
+    // `javascript:` is not http(s)) made ordinary JS links unclickable.
+    const clicked = await call(ctx, 'browser_click', { ref: jsRef }, agentId)
+    assert.equal(clicked.isError, false, textBlock(clicked))
+
+    // The same link by raw coordinates (y=40..80).
+    const rawClicked = await call(ctx, 'browser_click_at', { x: 10, y: 60 }, agentId)
+    assert.equal(rawClicked.isError, false, textBlock(rawClicked))
+  } finally {
+    await provider.dispose()
+  }
+})
+
+test('tab policy: switch_tab refuses a tab a page opened outside the allow-list', async () => {
+  const provider = policyProvider()
+  try {
+    const ctx = await assembleWith(provider)
+    const agentId = 'policy-tab-agent'
+    const opened = await call(ctx, 'browser_navigate', { url: store.base + '/policy' }, agentId)
+    assert.equal(opened.isError, false, textBlock(opened))
+
+    // window.open is the one navigation the plugin never sees, so this is how a
+    // tab outside the allow-list comes into existence in the first place.
+    const openRef = refInTree(treeOf(opened), 'button', 'Open external tab')
+    assert.ok(openRef, 'the popup button must be in the snapshot')
+    const popup = await call(ctx, 'browser_click', { ref: openRef }, agentId)
+    assert.equal(popup.isError, false, textBlock(popup))
+
+    const listed = await callUntil(
+      ctx,
+      'browser_tabs',
+      {},
+      (value) => ((value as { tabs?: unknown[] }).tabs ?? []).length >= 2,
+      'the page-opened tab is listed',
+      agentId,
+    )
+    const tabs = (listed.value as { tabs: Array<{ index: number; url: string }> }).tabs
+    const outside = tabs.find((tab) => tab.url.includes('localhost'))
+    assert.ok(outside, 'the popup tab must be listed with its URL: ' + JSON.stringify(tabs))
+
+    const denied = await call(ctx, 'browser_switch_tab', { index: outside.index }, agentId)
+    assert.equal(denied.isError, true, 'switching to a disallowed tab must be refused')
+    assert.ok(textBlock(denied).includes('not in allowedDomains'), textBlock(denied))
+
+    // The refusal left the session on the tab it was already driving.
+    const still = await call(ctx, 'browser_snapshot', {}, agentId)
+    assert.match(treeOf(still), /Link policy/)
+
+    // Control: the allowed tab is still reachable.
+    const back = await call(ctx, 'browser_switch_tab', { index: 0 }, agentId)
+    assert.equal(back.isError, false, textBlock(back))
+  } finally {
+    await provider.dispose()
+  }
+})

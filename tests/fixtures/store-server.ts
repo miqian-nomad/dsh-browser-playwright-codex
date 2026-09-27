@@ -462,6 +462,13 @@ async function handle(req: IncomingMessage, res: ServerResponse, orders: Map<str
     send(res, 200, HTML, pageShell('Docs', '<main><h1>Docs</h1><p>External documentation placeholder.</p></main>'))
     return
   }
+  if (path === '/policy') {
+    // Same trick as the storefront footer: the localhost hostname is a distinct
+    // host from 127.0.0.1, so an allow-list of ['127.0.0.1'] excludes it.
+    const external = 'http://' + (req.headers.host ?? '127.0.0.1').replace(/^127\.0\.0\.1/, 'localhost') + '/docs'
+    send(res, 200, HTML, pageShell('Link policy', policyPage(external)))
+    return
+  }
   if (path === '/dialog') {
     send(res, 200, HTML, pageShell('Delete record — Acme Store', dialogPage()))
     return
@@ -995,6 +1002,43 @@ function orderPage(id: string, total: number): string {
     '</strong></p>\n' +
     '<p><a href="/">Back to store</a></p>\n' +
     '</main>\n'
+  )
+}
+
+/**
+ * Link-policy fixture: three links at FIXED viewport positions (0/40/80 px from
+ * the top, 300×40 each, above everything) so a raw-coordinate click can be
+ * aimed at a known link without an extra measurement round-trip:
+ *
+ *   #external  -> the same server under the localhost hostname, which policy
+ *                 tests treat as a host outside `allowedDomains: ['127.0.0.1']`
+ *   #inpage    -> `javascript:` — runs the page's own code, navigates nowhere
+ *   #local     -> same host, the allowed control case
+ *   #open-external -> opens the localhost host in a NEW tab through window.open,
+ *                 the one path the plugin never sees, so the only way a tab can
+ *                 exist outside the allow-list
+ */
+function policyPage(externalUrl: string): string {
+  const box = 'position:fixed;left:0;width:300px;height:40px;z-index:9999;'
+  return (
+    '<main><h1>Link policy</h1>' +
+    '<a id="external" style="' +
+    box +
+    'top:0" href="' +
+    esc(externalUrl) +
+    '">External docs</a>' +
+    '<a id="inpage" style="' +
+    box +
+    'top:40px" href="javascript:void(0)" onclick="document.title=\'inpage-clicked\'">In-page JS link</a>' +
+    '<a id="local" style="' +
+    box +
+    'top:80px" href="/docs">Local docs</a>' +
+    '<button id="open-external" style="' +
+    box +
+    'top:120px" onclick="window.open(\'' +
+    externalUrl +
+    "', '_blank')\">Open external tab</button>" +
+    '</main>'
   )
 }
 
