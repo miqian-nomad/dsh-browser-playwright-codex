@@ -106,11 +106,11 @@ All tunables are patchable through the profile's `cordis.patch.yml` (later layer
     extract:
       provider: deepseek-official       # optional: enables browser_extract
       model: deepseek-v4-flash
-      maxInputChars: 20000
+      maxInputChars: 20000             # caps the page text handed to that model
       maxOutputTokens: 2000
 ```
 
-`browser_extract` needs an auxiliary LLM route (`extract.provider` + `extract.model`); without one it fails with an actionable error. A gated tool is **not registered at all** while its capability is off, so its schema never reaches the system prompt; set `registerDisabledTools: true` to keep the whole surface discoverable (the tool then answers with the error naming the switch). Note the shipped layer in [`cordis.patch.yml`](cordis.patch.yml) turns `allowEvaluate` and `allowCdp` **on** (user choice, 2026-09-04), which contradicts the `false` shown in the sample above — the sample documents the schema defaults, the shipped patch documents this deployment. `browser_evaluate` stays off until `allowEvaluate: true` because it executes arbitrary page JavaScript. `browser_cdp` stays off until `allowCdp: true`; even then only the allow-list in `lib/cdp-policy.js` passes — network, storage, cookie, security and arbitrary-JS (`Runtime.evaluate`) commands are rejected with `CDP_DENIED`.
+`browser_extract` needs an auxiliary LLM route (`extract.provider` + `extract.model`); without one it fails with an actionable error. With a route configured, `extract.maxInputChars` bounds the page text in that prompt, and the prompt names the cap when it truncates. A gated tool is **not registered at all** while its capability is off, so its schema never reaches the system prompt; set `registerDisabledTools: true` to keep the whole surface discoverable (the tool then answers with the error naming the switch). Note the shipped layer in [`cordis.patch.yml`](cordis.patch.yml) turns `allowEvaluate` and `allowCdp` **on** (user choice, 2026-09-04), which contradicts the `false` shown in the sample above — the sample documents the schema defaults, the shipped patch documents this deployment. `browser_evaluate` stays off until `allowEvaluate: true` because it executes arbitrary page JavaScript. `browser_cdp` stays off until `allowCdp: true`; even then only the allow-list in `lib/cdp-policy.js` passes — network, storage, cookie, security and arbitrary-JS (`Runtime.evaluate`) commands are rejected with `CDP_DENIED`.
 
 ## Architecture
 
@@ -170,11 +170,11 @@ Measured with ``npm run cost`` (per-turn, resident in the system prompt):
 
 | Surface | Tools | Schema characters | ≈ tokens/turn |
 |---|---|---|---|
-| Schema defaults (`Config({})`, no patch layer) | 20 | 15,212 | ≈ 4,226 |
-| Shipped bundle layer (this package's `cordis.patch.yml`: evaluate + cdp on) | 22 | 17,609 | ≈ 4,891 |
-| Everything registered (`registerDisabledTools: true`, plus `extract`) | 23 | 18,065 | ≈ 5,018 |
+| Schema defaults (`Config({})`, no patch layer) | 20 | 14,822 | ≈ 4,117 |
+| Shipped bundle layer (this package's `cordis.patch.yml`: evaluate + cdp on) | 22 | 17,219 | ≈ 4,783 |
+| Everything registered (`registerDisabledTools: true`, plus `extract`) | 23 | 17,675 | ≈ 4,910 |
 
-Gating every switchable tool saves at most ≈ 790 tokens per turn (schema defaults vs. everything registered); for this deployment, which has evaluate and cdp on, the switchable part is only `browser_extract` (≈ 127 tokens). The expensive descriptions are the click family — ``browser_click`` alone is 1,750 characters — so trimming those is the next lever if the budget matters.
+Two levers were pulled here, and neither dropped a rule. A gated tool is registered only while its capability is live (`browser_extract` on this deployment: -456 characters ≈ 127 tokens/turn), and the click family was rewritten so each rule is stated once instead of three times (-390 characters ≈ 108 tokens/turn, with `browser_click` still the widest description at 1,597 characters). `tests/tool-descriptions.test.ts` pins every rule, example and rationale of that family, so a trim that eats one fails the build. Gating every switchable tool saves at most ≈ 793 tokens per turn (schema defaults vs. everything registered); what is left is per-tool prose rather than repetition, so a further cut trades away real guidance.
 
 #### KV Cache effect
 

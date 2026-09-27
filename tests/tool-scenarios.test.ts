@@ -436,3 +436,43 @@ test('stale ref surface: an outdated ref fails fast, then a fresh snapshot recov
     'grinder page',
   )
 })
+
+// ---------------------------------------------------------------------------
+// Scenario: the extract input budget is a live cap, not a dead config knob
+// ---------------------------------------------------------------------------
+
+test('extract tool: maxInputChars bounds the page data handed to the auxiliary model', async () => {
+  const ctx = await assemble({
+    extract: { provider: 'fake-provider', model: 'fake-model', maxInputChars: 300, maxOutputTokens: 2000 },
+  })
+
+  let promptSeen = ''
+  ctx.provide('llm', {
+    async *stream(options: { messages: { content: { type: string; text?: string }[] }[] }) {
+      promptSeen = options.messages
+        .flatMap((m) => m.content)
+        .map((c) => c.text ?? '')
+        .join('\n')
+      yield { type: 'block-start', index: 0, blockType: 'text' } satisfies StreamChunk
+      yield { type: 'text-delta', index: 0, text: '[]' } satisfies StreamChunk
+      yield { type: 'block-end', index: 0, block: { type: 'text', text: '[]' } } satisfies StreamChunk
+      yield { type: 'finish', reason: { kind: 'stop' } } satisfies StreamChunk
+    },
+  })
+
+  const agentId = 'extract-budget-agent'
+  await call(ctx, 'browser_navigate', { url: store.base + '/search?q=book' }, agentId)
+  const extracted = await call(ctx, 'browser_extract', { instruction: 'all book titles' }, agentId)
+  assert.equal(extracted.isError, false)
+
+  // The configured cap must actually reach the auxiliary model's prompt: a page
+  // that is larger than the cap arrives truncated with the cap named.
+  assert.ok(
+    promptSeen.includes('[page data truncated at 300 characters]'),
+    'the configured maxInputChars must bound the prompt',
+  )
+  const marker = 'Page data (JSON):'
+  const pageData = promptSeen.slice(promptSeen.indexOf(marker) + marker.length).trim()
+  assert.ok(pageData.length < 400, 'page data must be bounded: got ' + String(pageData.length) + ' characters')
+  assert.ok(promptSeen.includes('all book titles'), 'bounded input must still carry the instruction')
+})

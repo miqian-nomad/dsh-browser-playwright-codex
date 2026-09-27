@@ -366,8 +366,17 @@ function parseJsonText(raw: string): JsonValue {
     throw new Error('browser_extract: the model output is not valid JSON: ' + text.slice(0, 500))
   }
 }
-/** Prompt template for structured page extraction. */
-function extractionPrompt(instruction: string, data: unknown): string {
+/**
+ * Prompt template for structured page extraction. `maxInputChars` bounds the page
+ * data handed to the auxiliary model — that model is billed on this prompt, so an
+ * unbounded page is a tax on every extraction.
+ */
+function extractionPrompt(instruction: string, data: unknown, maxInputChars: number): string {
+  const page = JSON.stringify(data)
+  const bounded =
+    page.length > maxInputChars
+      ? page.slice(0, maxInputChars) + ' [page data truncated at ' + String(maxInputChars) + ' characters]'
+      : page
   return (
     'Extract the following from the page data according to the instruction. ' +
     'Answer with ONLY one valid JSON value (object, array, or scalar), no prose, no markdown fences.\n\n' +
@@ -375,7 +384,7 @@ function extractionPrompt(instruction: string, data: unknown): string {
     instruction +
     '\n\n' +
     'Page data (JSON):\n' +
-    JSON.stringify(data)
+    bounded
   )
 }
 /**
@@ -489,28 +498,23 @@ export function apply(ctx: Context, config: ToolConfig): void {
       name: p('click'),
       description:
         'Click the element with the given ref from the latest snapshot and return the new snapshot. ' +
-        'Refs go stale after navigation or DOM changes: call ' +
+        'Refs go stale after navigation or DOM changes — take a fresh ' +
         p('snapshot') +
-        ' again if a ref fails. ' +
+        ' if a ref fails. ' +
         'Prefer ref when the snapshot has one; for a target shown WITHOUT a ref (plain text, e.g. generic "设置", or a menu item ' +
         p('hover') +
-        ' just revealed), pass text instead — copy the label exactly as rendered, and the landing note names what was actually clicked. ' +
-        'Clicking a revealed menu item may need ' +
+        ' just revealed), pass text instead, copied exactly as rendered — a revealed item may need ' +
         p('hover') +
-        ' first so the item is still on screen. ' +
-        'IRON RULE: after the click, verify in the returned snapshot that the intended effect actually happened ' +
-        '(URL change, selection, toast, dialog, new content). If the click had no visible effect, do NOT blindly ' +
-        'repeat it and do NOT immediately fall back to ' +
-        p('click_at') +
-        ' raw coordinates — inspect the visible ' +
-        'state for a blocker or interception first, resolve it, then retry the most direct semantic action. ' +
-        'The snapshot may open with a landing note naming which element actually received the click — if it ' +
-        'intercepted the click, treat the click as failed and retarget. ' +
-        'IRON RULE: a click can succeed and still leave this page unchanged — when the snapshot shows no change, check ' +
+        ' first to stay on screen. ' +
+        'IRON RULE: after the click, verify in the returned snapshot that the intended effect actually happened (URL, selection, toast, dialog, new content). ' +
+        'A click can also succeed without changing this page: when the snapshot shows no change, check ' +
         p('tabs') +
-        ' for a new tab (a target="_blank" link) BEFORE concluding the click failed or retrying. ' +
-        'A same-page overlay or popup (URL unchanged, no new tab) is also a successful click: the returned snapshot is the evidence — compare its refs and content with the pre-click snapshot. ' +
-        'If the click raises a native dialog, the dialog stays PENDING and this call returns immediately with the dialog text instead of the page tree — answer it with ' +
+        ' for a new tab (a target="_blank" link) before concluding failure, and treat a same-page overlay or popup, URL unchanged and no new tab, as success — the returned snapshot is the evidence: compare its refs and content with the pre-click snapshot. ' +
+        'The snapshot may open with a landing note naming what received the click: if that is not your target, the click was intercepted — treat it as failed and retarget. ' +
+        'If there was no visible effect, do NOT blindly repeat the click and do NOT fall back to ' +
+        p('click_at') +
+        ' raw coordinates — inspect the visible state for the blocker or interception, resolve it, then retry the most direct semantic action. ' +
+        'If the click raises a native dialog, it stays PENDING and this call returns immediately with the dialog text instead of the page tree — answer it with ' +
         p('dialog') +
         '. This tool has no way to accept a dialog: accepting is a separate, deliberate call.',
       parameters: {
@@ -574,18 +578,13 @@ export function apply(ctx: Context, config: ToolConfig): void {
     defineTool({
       name: p('click_at'),
       description:
-        'Precise native click, two modes: ' +
-        '(1) ref mode (prefer this over raw x/y): pass ref — the element is scrolled into view, its bounding rect is awaited for stability, then its exact geometric centre is clicked via native input (no screenshot measuring, no devicePixelRatio guesswork, sub-pixel accurate). ' +
-        '(2) raw mode: pass x/y viewport CSS pixels to click at a raw point with no element involvement. ' +
+        'Precise native click, two modes. Ref mode (prefer it): pass ref — the element is scrolled into view, awaited for geometry stability, and clicked at its exact geometric centre through native input: no screenshot measuring, no devicePixelRatio guesswork. ' +
+        'Raw mode: pass x/y viewport CSS pixels to click a raw point with no element involvement. ' +
         'This is the FALLBACK, not a routine alternative: try ' +
         p('click') +
-        ' (including its text mode) first, and use ref mode only after it reports the element is not actionable or the click could not be delivered. Raw x/y is a last resort for targets no ref resolves (canvas-drawn hit areas): a raw click has no landing-note guarantee, so re-snapshot and confirm the effect. ' +
-        'IRON RULE: after the click, verify in the returned snapshot that the intended effect actually happened. ' +
-        'If the click had no visible effect, do NOT blindly repeat it and do NOT immediately fall back to raw ' +
-        'x/y coordinates — inspect the visible state for a blocker or interception first, resolve it, then retry ' +
-        'the most direct semantic action. The snapshot may open with a landing note naming which element actually ' +
-        'received the click, or a CAUTION note when the raw escape hatch landed elsewhere — read it: if the click ' +
-        'was intercepted, treat it as failed and retarget.',
+        ' (including its text mode) first, and use ref mode only after a click reports the element is not actionable or the click could not be delivered. Raw x/y is a last resort for targets no ref resolves (canvas-drawn hit areas) — a raw click has no landing-note guarantee, so re-snapshot and confirm the effect. ' +
+        'IRON RULE: verify the effect in the returned snapshot; if nothing changed, do NOT repeat blindly and do NOT throw more raw coordinates at it — find the blocker or interception first, then retry the most direct semantic action. ' +
+        'The snapshot may open with a landing note naming what received the click, or a CAUTION note when the raw escape hatch landed elsewhere — if the click was intercepted, treat it as failed and retarget.',
       parameters: {
         ref: {
           type: 'string',
@@ -615,9 +614,9 @@ export function apply(ctx: Context, config: ToolConfig): void {
         'Hover the element with the given ref — or, for a trigger the snapshot gave no ref, the visible element whose own label equals text — and return the new snapshot. ' +
         'Hover only REVEALS content and never activates anything: use ' +
         p('click') +
-        ' to open, select or submit. Use it when a control hides content until the pointer rests on it — submenus, dropdowns, account menus, tooltips, previews, chart values, player controls — and especially when the snapshot lacks an element the page obviously should have. ' +
+        ' to open, select or submit. Use it when a control hides content until the pointer rests on it (submenus, dropdowns, account menus, tooltips, previews, chart values, player controls) — and especially when the snapshot lacks an element the page obviously should have. ' +
         'Prefer ref when the snapshot has one; use text only for a label shown WITHOUT a ref, copied exactly as rendered. Do not hover plain links/buttons you mean to activate, and never hover "just in case". ' +
-        'A hover is never proof by itself: the call returning only means the pointer moved. The returned snapshot opens with a note comparing the actionable ref count before and after — read it. New refs means the revealed content is in this snapshot and pre-hover refs are stale, so pick from the NEW refs and act before any unrelated click closes the menu. ' +
+        'A hover returning only means the pointer moved: the snapshot opens with a note comparing the actionable ref count before and after — read it. New refs mean the revealed content is in this snapshot and pre-hover refs are stale, so pick from the NEW refs and act before any unrelated click closes the menu. ' +
         'IRON RULE: if the note reports no new refs and what you expected is still missing, do NOT repeat the hover and do NOT fall back to ' +
         p('click_at') +
         ' raw coordinates — hover the parent/container or the sibling that owns the menu; if that also reveals nothing, hover is not implemented here, so use a visible alternative or tell the user.',
@@ -902,7 +901,7 @@ export function apply(ctx: Context, config: ToolConfig): void {
           model,
           messages: [
             createUserMessage({
-              content: [{ type: 'text', text: extractionPrompt(args.instruction, data) }],
+              content: [{ type: 'text', text: extractionPrompt(args.instruction, data, extract.maxInputChars) }],
               source: { kind: 'user' },
             }),
           ],
