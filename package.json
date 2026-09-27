@@ -1,6 +1,6 @@
 {
   "name": "dsh-browser-playwright",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Playwright-powered browser capability for DeepSeek Harness: accessibility-snapshot interaction with stable element refs, session-scoped browser sessions, screenshots as attachments.",
   "license": "MIT",
   "type": "module",
@@ -33,7 +33,8 @@
     "lib",
     "scripts",
     "cordis.patch.yml",
-    "README.md"
+    "README.md",
+    "CHANGELOG.md"
   ],
   "scripts": {
     "build": "node node_modules/typescript/bin/tsc -p tsconfig.json",
