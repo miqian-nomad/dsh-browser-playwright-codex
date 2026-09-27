@@ -72,7 +72,7 @@ B 之后手动 dismiss   -> 那个 click 才正常返回
 
 ## 七、验收
 
-`node D:\dsh-plugins\_deps\scripts\dsh-browser-verify.mjs` 第 `[4]`/`[5]` 组：
+`node D:\dsh-plugins\dsh-browser-playwright\scripts\dsh-browser-verify.mjs`（或 `npm run verify`）第 `[4]`/`[5]` 组：
 挂起如实上报 / 动作不卡死 / 挂起期间快照立刻返回 / 无弹窗时 `NO_DIALOG` /
 取消后页面解锁 / 接受后动作真的执行 / click 上不再有 `acceptDialog`
 
