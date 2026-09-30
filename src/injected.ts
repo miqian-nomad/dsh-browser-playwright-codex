@@ -8,7 +8,7 @@
  * the line that carries the ref). A child that merely repeats an ancestor
  * name is folded, and container roles (select options, table rows) are never
  * named from their content.
- * @module dsh-browser-playwright/injected
+ * @module dsh-browser-playwright-codex/injected
  */
 /** Options passed from the provider into one snapshot call. */
 export interface SnapshotOptions {

@@ -3,8 +3,59 @@
 Bilingual by intent: the version headings and the summary of each release are given in both
 languages, the individual entries follow the language the surrounding code and docs use.
 
-一句话摘要：**0.2.0 的"只有编译产物"状态结束了** —— 这一版把整个插件还原成带类型、带测试、带验收工具的源码树，
-并修掉了三个真实缺陷（`browser_cdp` 整体失效、非持久模式把登录态明文写进工作目录、`allowedDomains` 可被绕过）。
+一句话摘要：**改名为 `dsh-browser-playwright-codex`、补上中文插件元数据、加入可选的 aria 快照引擎与增量 diff** ——
+并且查出并修掉了第一版 aria 引擎"测试全绿、真实页面全废"的真实缺陷（层级与链接全丢却仍报成功），同时把 CDP 白名单收紧成逐方法列举。
+
+## 0.4.0
+
+Renamed to `dsh-browser-playwright-codex`, localized (Chinese plugin metadata), and given an
+opt-in accessibility-tree snapshot engine plus incremental snapshot diffs — including the first
+version's real defect, found, fixed, and guarded.
+
+### Changed
+
+- **Package renamed** `dsh-browser-playwright` → `dsh-browser-playwright-codex`. A rename is a
+  cross-file operation, so everything that carries the name moved with it: the three `name:`
+  specifiers in this package's `cordis.patch.yml`, the `dsh-browser-toggle` host import
+  (`…/runtime-state`) together with its `node_modules` link, and the profile link. Miss any one and
+  the plugin stops loading with `MODULE_NOT_FOUND` — measured: the old specifier no longer resolves
+  in either profile while the new one does.
+- **The persisted switch file keeps its pre-rename name** (`~/.dsh/dsh-browser-playwright.state.json`)
+  on purpose: it is user state, and renaming it would silently reset the Settings toggle.
+
+### Added
+
+- **Plugin metadata localization** (`locale/en.json`, `locale/zh.json`), plus the
+  `"./locale/*.json"` export and a `locale` entry in `files` — without the export the harness'
+  `require.resolve` fails and the metadata silently falls back to English.
+- **`snapshot.engine: 'aria'`** (default `'legacy'`) — a semantic tree from Playwright's official
+  `locator.ariaSnapshot({ mode: 'ai' })`, re-aligned onto the project's stable `data-dsh-ref`
+  scheme so refs, `REF_PATTERN` and `refLocator` keep working unchanged.
+- **`snapshot.diff`** (default `false`) — incremental `+ / - / ~` deltas keyed by stable ref, with a
+  navigation-reset marker when the ref nonce changes, and full-snapshot degradation when the tree
+  was truncated.
+
+### Fixed
+
+- **The first aria engine was broken on real pages while its tests were green.** The parser assumed
+  a hand-written dialect (`- role "name" [flags] -> href`, nothing after the flags); real output ends
+  every container line with `:`, carries hrefs on a deeper `- /url:` child line, and writes text as
+  `- text: …`. On a 16-node page the parser produced 5 nodes: all structure and **every link** were
+  dropped, and the capture still reported success, so nothing fell back. Measured before/after with a
+  live `captureAriaSnapshot` probe.
+- **Format drift is now loud.** Unreadable lines are collected (`parseAriaSnapshotWithStats`) and
+  refuse the capture (`missing: true`), and `captureAria` falls back to the legacy DOM walker instead
+  of handing the model an empty tree.
+- The aria tests now parse **real captured YAML** (playwright-core 1.62, 2026-09-30) rather than a
+  fixture written in the parser's own dialect.
+
+### Security
+
+- **The CDP allow-list is method-explicit.** The family-wide `Input.` prefix is gone in favour of
+  `Input.dispatchMouseEvent` / `Input.dispatchKeyEvent` / `Input.dispatchTouchEvent` /
+  `Input.insertText`, so `Input.setIgnoreInputEvents`, `Input.synthesizeScrollGesture`,
+  `Input.dispatchDragEvent` and future `Input.*` mutations are denied by default; a widening-guard
+  test now asserts that **no** entry may end in `.` (the previous guard allowed exactly one).
 
 ## 0.3.0
 

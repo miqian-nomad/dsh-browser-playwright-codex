@@ -1,7 +1,7 @@
 /**
  * Playwright provider for the browser capability: owns the browser binary,
  * one context per owner key, idle disposal, and the snapshot engine.
- * @module dsh-browser-playwright/playwright
+ * @module dsh-browser-playwright-codex/playwright
  */
 import type { Context } from '@deepseek-ai/cordis'
 import {
@@ -20,6 +20,7 @@ import path from 'node:path'
 import fs from 'node:fs'
 import { BrowserError, launchFailed } from './errors.ts'
 import { SNAPSHOT_SCRIPT, type SnapshotOptions } from './injected.ts'
+import { captureAriaSnapshot } from './snapshot-aria.ts'
 import { getEnabled, subscribe as subscribeEnabled } from './runtime-state.ts'
 // Type-only: makes the ctx.browser declaration merge visible to this module.
 import type {} from './service.ts'
@@ -32,6 +33,8 @@ import type {
   DiagnosticsValue,
   LoadState,
   ScreenshotCapture,
+  SnapshotDiff,
+  SnapshotDiffEntry,
   TabInfo,
 } from './types.ts'
 /** Cordis plugin name used by loader diagnostics. */
@@ -65,9 +68,13 @@ export interface PlaywrightConfig {
   /** Maximum concurrent browser contexts; acquiring beyond it evicts the least recently used. */
   maxSessions: number
   snapshot: {
+    /** 'legacy' keeps the injected DOM walker; 'aria' uses the official ariaSnapshot(mode:'ai') engine. */
+    engine: 'legacy' | 'aria'
     maxNodes: number
     maxNameLength: number
     maxTextLength: number
+    /** Incremental ref-diff mode; false = always full snapshots (zero behavioral change). */
+    diff: boolean
   }
 }
 
@@ -115,11 +122,18 @@ export const Config: z<PlaywrightConfig> = z.object({
   maxSessions: z.number().default(8),
   snapshot: z
     .object({
+      // 'legacy' keeps the injected DOM walker as the default: existing
+      // tests, verify and every consumer see byte-identical snapshots until
+      // a caller opts into the aria engine.
+      engine: z.union([z.const('legacy'), z.const('aria')]).default('legacy'),
       maxNodes: z.number().default(500),
       maxNameLength: z.number().default(120),
       maxTextLength: z.number().default(300),
+      // diff=false keeps every return path a full snapshot: zero behavioral
+      // change unless a caller explicitly turns the incremental mode on.
+      diff: z.boolean().default(false),
     })
-    .default({ maxNodes: 500, maxNameLength: 120, maxTextLength: 300 }),
+    .default({ engine: 'legacy', maxNodes: 500, maxNameLength: 120, maxTextLength: 300, diff: false }),
 })
 /** Channels probed in order when none is configured. */
 const AUTO_CHANNELS = ['chromium', 'chrome', 'msedge', 'edge']
@@ -390,7 +404,7 @@ export class PlaywrightProvider {
     if (!getEnabled()) {
       throw new BrowserError(
         'DISABLED',
-        'dsh-browser-playwright is disabled; open Settings → Plugins → 浏览器 and turn it on to use the browser',
+        'dsh-browser-playwright-codex is disabled; open Settings → Plugins → 浏览器 and turn it on to use the browser',
       )
     }
     const existing = this.entries.get(owner)
@@ -794,6 +808,75 @@ function asTimeoutError(kind: string, cause: unknown) {
     return new BrowserError('NAVIGATION_TIMEOUT', '[NAVIGATION_TIMEOUT] the browser operation timed out: ' + detail)
   return new BrowserError('ACTION_TIMEOUT', '[ACTION_TIMEOUT] the browser action timed out: ' + detail)
 }
+/** Feature fingerprint of one ref-bearing node, for cross-snapshot diffing. */
+interface RefSignature {
+  role?: string
+  name?: string
+  level?: number
+  checked?: boolean
+  selected?: boolean
+  disabled?: boolean
+  href?: string
+  parentRef?: string
+}
+
+/** Feature flags carried by an added diff entry. */
+function flagsOf(sig: RefSignature): string[] {
+  const flags: string[] = []
+  if (sig.checked === true) flags.push('checked')
+  if (sig.selected === true) flags.push('selected')
+  if (sig.disabled === true) flags.push('disabled')
+  if (sig.level !== undefined) flags.push('level=' + String(sig.level))
+  if (sig.href !== undefined) flags.push('href=' + sig.href)
+  return flags
+}
+
+/** Flag keys whose value changed between two signatures. */
+function flagsDeltaOf(before: RefSignature, after: RefSignature): string[] {
+  const delta: string[] = []
+  const keys = ['checked', 'selected', 'disabled', 'level', 'href'] as const
+  for (const key of keys) {
+    const b = before[key]
+    const a = after[key]
+    if (String(b ?? '') === String(a ?? '')) continue
+    delta.push(
+      a !== undefined && a !== false
+        ? key === 'level'
+          ? 'level=' + String(a)
+          : key === 'href'
+            ? 'href=' + a
+            : key
+        : key,
+    )
+  }
+  return delta
+}
+
+/** Build a SnapshotDiffEntry, dropping undefined optionals (exactOptionalPropertyTypes). */
+function diffEntry(input: {
+  ref: string
+  role?: string | undefined
+  name?: string | undefined
+  flags?: string[] | undefined
+  flagsDelta?: string[] | undefined
+  parentRef?: string | undefined
+}): SnapshotDiffEntry {
+  const out: {
+    ref: string
+    role?: string | undefined
+    name?: string | undefined
+    flags?: string[] | undefined
+    flagsDelta?: string[] | undefined
+    parentRef?: string | undefined
+  } = { ref: input.ref }
+  if (input.role !== undefined) out.role = input.role
+  if (input.name !== undefined) out.name = input.name
+  if (input.flags !== undefined) out.flags = input.flags
+  if (input.flagsDelta !== undefined) out.flagsDelta = input.flagsDelta
+  if (input.parentRef !== undefined) out.parentRef = input.parentRef
+  return out as SnapshotDiffEntry
+}
+
 /** Live session over one browser context owned by one caller. */
 class PlaywrightSession {
   provider: PlaywrightProvider
@@ -821,6 +904,10 @@ class PlaywrightSession {
   requestEntries = new WeakMap<Request, { entry: DiagnosticsEntry; startedAt: number }>()
   /** Ring capacity per stream. */
   diagLimit = 200
+  /** ref -> feature signature of the previous capture (diff baseline). */
+  lastRefSignatures: Map<string, RefSignature> | undefined = undefined
+  /** Nonce of the baseline ref space; a change means navigation reset. */
+  lastRefNonce: string | undefined = undefined
   constructor(provider: PlaywrightProvider, owner: string, context: BrowserContext) {
     this.provider = provider
     this.owner = owner
@@ -984,6 +1071,45 @@ class PlaywrightSession {
   /** Read the snapshot tree from one page (must run inside a run()). */
   async capture(page: Page, opts: { interactiveOnly?: boolean } | undefined) {
     this.provider.armDialogGuard(page)
+    const raw =
+      this.provider.config.snapshot.engine === 'aria'
+        ? await this.captureAria(page, opts)
+        : await this.captureLegacy(page, opts)
+    return this.attachDiff(raw)
+  }
+  /**
+   * Semantic-tree capture via Playwright's official ariaSnapshot(mode:'ai').
+   * An unavailable or unreadable aria tree (`missing`) degrades to the legacy
+   * DOM walker instead of returning an empty snapshot: the model must never
+   * receive "the page has no elements" because the engine failed to parse.
+   */
+  async captureAria(page: Page, opts: { interactiveOnly?: boolean } | undefined) {
+    const o = {
+      interactiveOnly: opts?.interactiveOnly === true,
+      maxNodes: this.provider.config.snapshot.maxNodes,
+      maxNameLength: this.provider.config.snapshot.maxNameLength,
+      maxTextLength: this.provider.config.snapshot.maxTextLength,
+    }
+    let raw: { nodes: BrowserNode[]; truncated: boolean; totalRefs: number; missing?: boolean }
+    try {
+      raw = await captureAriaSnapshot(page, o)
+    } catch (error) {
+      // Same mid-evaluate navigation race as the legacy path: settle once and retry.
+      if (!isContextDestroyed(error)) throw error
+      await this.settleNavigation(page)
+      raw = await captureAriaSnapshot(page, o)
+    }
+    if (raw.missing === true) return this.captureLegacy(page, opts)
+    return {
+      url: page.url(),
+      title: await page.title(),
+      nodes: raw.nodes ?? [],
+      totalRefs: raw.totalRefs ?? 0,
+      truncated: raw.truncated ?? false,
+    }
+  }
+  /** Legacy capture: injected DOM walker (default engine, byte-identical output). */
+  async captureLegacy(page: Page, opts: { interactiveOnly?: boolean } | undefined) {
     const o = {
       ...(opts?.interactiveOnly !== undefined ? { interactiveOnly: opts.interactiveOnly } : {}),
       maxNodes: this.provider.config.snapshot.maxNodes,
@@ -1013,6 +1139,84 @@ class PlaywrightSession {
       totalRefs: raw.totalRefs ?? 0,
       truncated: raw.truncated ?? false,
     }
+  }
+  /**
+   * Attach an incremental diff when snapshot.diff is enabled. Absence of the
+   * diff field means "full snapshot follows": first capture of the session,
+   * navigation reset, or a truncated tree. The diff is keyed by the stable
+   * data-dsh-ref, so legacy and aria engines share the same contract.
+   */
+  attachDiff(snap: BrowserSnapshot): BrowserSnapshot {
+    if (this.provider.config.snapshot.diff !== true) {
+      this.lastRefSignatures = undefined
+      this.lastRefNonce = undefined
+      return snap
+    }
+    const sigs = this.buildRefSignatures(snap.nodes)
+    const nonce = this.refNonce(snap.nodes)
+    const base = this.lastRefSignatures
+    const baseNonce = this.lastRefNonce
+    this.lastRefSignatures = sigs
+    this.lastRefNonce = nonce
+    // No baseline yet (first capture) — the full snapshot is the baseline.
+    if (base === undefined || baseNonce === undefined) return snap
+    // Navigation reset (ref nonce changed) or truncation: the delta is void.
+    if (nonce !== baseNonce || snap.truncated === true) {
+      return { ...snap, diff: { added: [], removed: [], changed: [], same: 0, navigationReset: true } }
+    }
+    const added: SnapshotDiffEntry[] = []
+    const removed: string[] = []
+    const changed: SnapshotDiffEntry[] = []
+    let same = 0
+    for (const [ref, sig] of sigs) {
+      const oldSig = base.get(ref)
+      if (oldSig === undefined) {
+        added.push(diffEntry({ ref, role: sig.role, name: sig.name, flags: flagsOf(sig), parentRef: sig.parentRef }))
+      } else {
+        const delta = flagsDeltaOf(oldSig, sig)
+        if (sig.role !== oldSig.role || sig.name !== oldSig.name || delta.length > 0) {
+          changed.push(diffEntry({ ref, role: sig.role, name: sig.name, flagsDelta: delta, parentRef: sig.parentRef }))
+        } else {
+          same += 1
+        }
+      }
+    }
+    for (const ref of base.keys()) {
+      if (!sigs.has(ref)) removed.push(ref)
+    }
+    return { ...snap, diff: { added, removed, changed, same, navigationReset: false } }
+  }
+  /** Build ref -> feature signature map from a captured tree, with parent refs. */
+  buildRefSignatures(nodes: readonly BrowserNode[]): Map<string, RefSignature> {
+    const out = new Map<string, RefSignature>()
+    const walk = (list: readonly BrowserNode[], parentRef?: string) => {
+      for (const node of list) {
+        if (node.ref !== undefined) {
+          out.set(node.ref, {
+            role: node.role,
+            name: node.name,
+            ...(node.level !== undefined ? { level: node.level } : {}),
+            checked: node.checked === true,
+            selected: node.selected === true,
+            disabled: node.disabled === true,
+            ...(node.href !== undefined ? { href: node.href } : {}),
+            ...(parentRef !== undefined ? { parentRef } : {}),
+          })
+        }
+        walk(node.children ?? [], node.ref ?? parentRef)
+      }
+    }
+    walk(nodes)
+    return out
+  }
+  /** The document nonce shared by this snapshot's refs, or undefined. */
+  refNonce(nodes: readonly BrowserNode[]): string | undefined {
+    for (const node of nodes) {
+      if (node.ref !== undefined && node.ref.length >= 10) return node.ref.slice(1, 10)
+      const nested = this.refNonce(node.children ?? [])
+      if (nested !== undefined) return nested
+    }
+    return undefined
   }
   async navigate(url: string, waitUntil: LoadState, signal: AbortSignal | undefined) {
     return this.run(async () => {

@@ -7,7 +7,7 @@
  * Real sites change independently of this repository, so these tests assert
  * only stable facts (status pages, titles, PNG structure) and are meant as
  * a manual gate before releases, not as part of CI.
- * @module dsh-browser-playwright/tests/live-smoke
+ * @module dsh-browser-playwright-codex/tests/live-smoke
  */
 
 import { test, before, after } from 'node:test'

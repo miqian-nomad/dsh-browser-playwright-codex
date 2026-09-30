@@ -4,7 +4,7 @@
  * arguments, canonical value, rendered content blocks). A fabricated Agent
  * carries the harness session id that becomes the browser owner key, and fake
  * attachments/llm services stand in for the harness composition.
- * @module dsh-browser-playwright/tests/tool-scenarios
+ * @module dsh-browser-playwright-codex/tests/tool-scenarios
  */
 
 import { test, before, after } from 'node:test'

@@ -1,10 +1,10 @@
-# dsh-browser-playwright 使用铁律（源自 Codex 浏览器文档系统性排查）
+# dsh-browser-playwright-codex 使用铁律（源自 Codex 浏览器文档系统性排查）
 
 > 用途：解决「模型以为成功了、实际没成功」「老是不检查当前状态」「无效时盲目重试/乱降坐标」等行为问题。
 > 来源：OpenAI Codex Chrome 插件 docs/ 全量 27 篇 + control-chrome SKILL（api-use-behavior / browser-safety / confirmations / browserAuth / cdp / viewport / botDetection / troubleshooting / tab-cleanup 等）。
 >
 > 两层落地方式（推荐 A+B 都做）：
-> - **A 工具层**：已内嵌进 dsh-browser-playwright 各工具 description（改代码，随工具 schema 每次下发，模型绕不开）。
+> - **A 工具层**：已内嵌进 dsh-browser-playwright-codex 各工具 description（改代码，随工具 schema 每次下发，模型绕不开）。
 > - **B 会话层**：把下文本块粘进 DSH 的 profile / 系统提示，管跨工具的全局纪律。
 
 ---

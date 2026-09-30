@@ -1,11 +1,11 @@
-# dsh-browser-playwright
+# dsh-browser-playwright-codex
 
 Playwright-powered browser capability for [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness): the agent drives a **visible, profile-backed browser window** through accessibility snapshots with stable element refs — no CSS-selector guessing, no full-DOM dumps. Login state survives window close and harness restarts (Codex-style personal browser), tabs, screenshots as durable image attachments, structured extraction, gated JavaScript evaluation, and Codex-inspired reliability guards (bounded render-stability waits, post-action verification, fast-fail actionability checks, crash auto-recovery) and native-dialog handling (alert/confirm/prompt/beforeunload are parked as a pending state, reported to the model, and answered only by an explicit `browser_dialog` call — never auto-accepted; see [DIALOG-POLICY.md](DIALOG-POLICY.md)).
 
 ## Install
 
 ```sh
-dsh plugin --profile <name> add dsh-browser-playwright
+dsh plugin --profile <name> add dsh-browser-playwright-codex
 ```
 
 The bundle mounts three rows: the `ctx.browser` seam (`service`), the Playwright provider (`playwright`), and the model-facing tool family (`tool`).
@@ -209,3 +209,27 @@ The scenario suites originally surfaced four hazards, now fixed and regression-t
 ## License
 
 MIT
+
+
+<!-- changelog:today -->
+## 更新记录
+
+### 0.4.0（2026-09-30）
+
+- **改名为 `dsh-browser-playwright-codex`**：改名是跨文件操作 —— 本包 `cordis.patch.yml` 的三个 `name:`、`dsh-browser-toggle` 的 `import '…/runtime-state'` 与它的 `node_modules` 链接、以及 profile 链接，全都必须一起走。少改一处，插件加载就 `MODULE_NOT_FOUND`（已实测：旧名在两个 profile 均已解析失败，新名可解析）。
+- **持久化开关文件名故意保持旧拼写**（`~/.dsh/dsh-browser-playwright.state.json`）：那是用户状态，改名会让设置页的开关被静默重置。
+- **中文插件元数据**：新增 `locale/en.json` / `locale/zh.json`，并在 `exports` 加 `"./locale/*.json"`、在 `files` 加 `locale` —— 少了 exports 这一行，harness 的 `require.resolve` 会失败并静默回退英文。
+- **新增可选 aria 快照引擎**（`snapshot.engine: 'aria'`，默认仍是 `'legacy'`）：用 Playwright 官方 `locator.ariaSnapshot({ mode: 'ai' })` 取语义树，再对齐回本项目稳定的 `data-dsh-ref`，所以 ref、`REF_PATTERN`、`refLocator` 全都不变。
+- **新增增量快照 diff**（`snapshot.diff`，默认关）：按稳定 ref 输出 `+ / - / ~` 增量；ref nonce 变化即标注"导航重置"，树被截断时退回整棵树。
+- **修掉第一版 aria 引擎的真实缺陷**：解析器按自造方言写（`- role "name" -> href`、行尾无其他内容），而真实输出每个容器行都以 `:` 结尾、href 走更深的 `- /url:` 子行、文本是 `- text: …`。16 个节点的页面只解析出 5 个 —— **层级与链接全丢，却仍报成功**（所以不会回退）。已用真实页面实测前后对比。
+- **格式漂移现在会大声失败**：读不懂的行会被收集（`parseAriaSnapshotWithStats`）并让本次捕获返回 `missing: true`，`captureAria` 随即回退 legacy DOM 引擎，绝不把空树交给模型。
+- **aria 测试改用真实抓取的 YAML**（2026-09-30 从 playwright-core 1.62 实抓），不再用解析器自己方言手写的 fixture。
+- **CDP 白名单收紧为逐方法列举**：去掉 `Input.` 族前缀，只留 `Input.dispatchMouseEvent` / `dispatchKeyEvent` / `dispatchTouchEvent` / `insertText`；`Input.setIgnoreInputEvents`、`synthesizeScrollGesture`、`dispatchDragEvent` 及未来的 `Input.*` 默认拒绝，并新增守卫测试断言**任何**条目都不得以 `.` 结尾（旧的守卫恰好允许了一条）。
+
+### 0.3.0（2026-09-26）
+
+- **源码化**：插件重新变成有源码的工程 —— `src/` 10 个 TypeScript 模块是唯一真源，`lib/` 由 `npm run build` 生成（10 个 .js + 10 个 .d.ts），不再手改产物。
+- **代码规范**：引入 Prettier 配置（`.prettierrc.json`），`npm run format` / `npm run format:check` 统一格式；严格类型检查 0 错误。
+- **新增两只诊断工具**：`browser_console_messages`（控制台报错）与 `browser_network_requests`（网络请求），用于"点了没反应"时快速定位原因。
+- **接口与实现同步**：`BrowserSession` 补齐 9 个实现里已有的方法；`errors.ts` 补齐 12 个实际在用的错误码；`BrowserSnapshot` 补 `dialogNote` / `landingNote`；`TabInfo` 补 `active`；`runtime-state` / `cdp-policy` 新增类型声明。
+- **依赖范围修正**：`devDependencies` 与 `peerDependencies` 对齐，可在当前 DSH 版本下安装。

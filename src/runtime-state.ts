@@ -1,14 +1,16 @@
 /**
- * Shared enable/disable flag for dsh-browser-playwright as a whole.
+ * Shared enable/disable flag for dsh-browser-playwright-codex as a whole.
  *
  * Single source of truth shared across the three host entries
  * (browser / browser-playwright / browser-tool) and the toggle HTTP API. State persists to
- * ~/.dsh/dsh-browser-playwright.state.json so toggling survives
+ * ~/.dsh/dsh-browser-playwright.state.json (the FILE name deliberately keeps the pre-rename
+ * spelling: it is persisted user state, and renaming it would silently reset
+ * the switch) so toggling survives
  * DSH restarts without needing to touch cordis.patch.yml or restart DSH.
  *
  * Default is `true` (enabled) on first run, which matches the user-visible
  * behaviour the plugin has had so far.
- * @module dsh-browser-playwright/runtime-state
+ * @module dsh-browser-playwright-codex/runtime-state
  */
 import fs from 'node:fs'
 import os from 'node:os'

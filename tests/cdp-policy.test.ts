@@ -3,7 +3,7 @@
  * adversarial cases. Every method in DENIED below would reach cookies, storage,
  * request interception, TLS settings or arbitrary page JavaScript if the prefix
  * list ever widened — the widening guard is the last test.
- * @module dsh-browser-playwright/tests/cdp-policy
+ * @module dsh-browser-playwright-codex/tests/cdp-policy
  */
 
 import { test } from 'node:test'
@@ -59,6 +59,12 @@ const DENIED = [
   'DOM.highlightNode',
   'DOMSnapshot.captureSnapshot',
   'Overlay.highlightNode',
+  'Input.setIgnoreInputEvents',
+  'Input.synthesizeScrollGesture',
+  'Input.synthesizePinchGesture',
+  'Input.dispatchDragEvent',
+  'Input.dispatchMouseEvent2',
+  'Input.insertText.extra',
 ]
 
 test('the allow-list accepts every inspection / input-simulation method', () => {
@@ -84,11 +90,13 @@ test('the denial message names the method and the allowed families', () => {
   assert.ok(message.includes('DOM inspection'), message)
 })
 
-test('only Input may be allowed as a whole family (widening guard)', () => {
-  // A family-wide prefix like 'Network.' or 'Runtime.' would silently open
-  // everything behind it; the list must stay method-explicit apart from Input.
+test('no family-wide prefix may be allow-listed (widening guard)', () => {
+  // A family-wide prefix like 'Input.' or 'Network.' would silently open
+  // everything behind it (Input.setIgnoreInputEvents, Input.synthesizeScroll
+  // Gesture, a future Input.* mutation ...). The list must stay method-explicit:
+  // nothing may end in a dot, not even Input.
   assert.deepEqual(
     CDP_ALLOW_PREFIXES.filter((prefix) => prefix.endsWith('.')),
-    ['Input.'],
+    [],
   )
 })

@@ -16,7 +16,7 @@
  * is the identity function, so this plugin defines its own instead of importing
  * theirs — a harness rename cannot break it, and no version range has to be
  * chased.
- * @module dsh-browser-playwright/compat
+ * @module dsh-browser-playwright-codex/compat
  */
 
 /**

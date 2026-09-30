@@ -4,7 +4,7 @@
 > 于是 select、表格行、按钮 value 之间反复打架，改一次冒一个新毛病。
 > 以后**先改这份规范 + 先加验收用例，再改代码**。
 
-配套验收：`node D:\dsh-plugins\dsh-browser-playwright\scripts\dsh-browser-verify.mjs`（包内自包含；`D:\dsh-plugins\_deps\scripts\dsh-browser-verify.mjs` 是一层转发，旧命令照旧可用）。期望值不写死在这份脚本里——工具面从 `lib/contract.js` 推导，所以"数字过期"这类假报警不会再出现（改完必须出现「全部通过」，总数以脚本输出为准；加 `--live` 会联网采样真实页面）
+配套验收：`node D:\dsh-plugins\dsh-browser-playwright-codex\scripts\dsh-browser-verify.mjs`（包内自包含；`D:\dsh-plugins\_deps\scripts\dsh-browser-verify.mjs` 是一层转发，旧命令照旧可用）。期望值不写死在这份脚本里——工具面从 `lib/contract.js` 推导，所以"数字过期"这类假报警不会再出现（改完必须出现「全部通过」，总数以脚本输出为准；加 `--live` 会联网采样真实页面）
 
 ---
 

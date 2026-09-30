@@ -50,9 +50,9 @@ const baseConfig = {
 /** Read the shipped bundle layer: what a deployment actually gets. */
 function bundleConfig() {
   const yml = readFileSync(new URL('../cordis.patch.yml', import.meta.url), 'utf8')
-  const row = yml.split(/\n(?=\s*- id: )/).find((block) => block.includes('dsh-browser-playwright/tool')) ?? ''
+  const row = yml.split(/\n(?=\s*- id: )/).find((block) => block.includes('dsh-browser-playwright-codex/tool')) ?? ''
   const flag = (name) => new RegExp(name + ':\\s*(true|false)').exec(row)?.[1] === 'true'
-  if (row === '') throw new Error('cordis.patch.yml: no dsh-browser-playwright/tool row found')
+  if (row === '') throw new Error('cordis.patch.yml: no dsh-browser-playwright-codex/tool row found')
   return { allowEvaluate: flag('allowEvaluate'), allowCdp: flag('allowCdp') }
 }
 

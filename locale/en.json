@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Browser Automation",
+    "description": "Playwright-powered browser capability for DeepSeek Harness: accessibility-snapshot interaction with stable element refs, session-scoped browser sessions, screenshots as attachments."
+  }
+}

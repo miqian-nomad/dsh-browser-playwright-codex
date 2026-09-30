@@ -1,8 +1,8 @@
 /**
- * dsh-browser-playwright: Playwright-powered browser capability for
+ * dsh-browser-playwright-codex: Playwright-powered browser capability for
  * DeepSeek Harness. Snapshot-first interaction with stable element refs,
  * session-scoped browser contexts, screenshots as attachments.
- * @module dsh-browser-playwright
+ * @module dsh-browser-playwright-codex
  */
 
 export { BrowserError, launchFailed } from './errors.ts'

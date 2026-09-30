@@ -1,6 +1,6 @@
 /**
  * Domain types for the browser capability: snapshots, sessions, providers.
- * @module dsh-browser-playwright/types
+ * @module dsh-browser-playwright-codex/types
  */
 
 /** Page load condition a navigation waits for. */
@@ -37,6 +37,14 @@ export interface BrowserSnapshot {
   /** True when node or text caps cut the tree short. */
   readonly truncated: boolean
   /**
+   * Incremental diff against the previous snapshot of this document, present
+   * only when the provider's snapshot.diff is enabled and a baseline exists.
+   * Absence means "full snapshot follows": first capture, navigation reset,
+   * or a truncated tree (diff is then unreliable, so the provider degrades
+   * to the full tree). Diff entries are keyed by the stable data-dsh-ref.
+   */
+  readonly diff?: SnapshotDiff
+  /**
    * Note parked on the snapshot when a native dialog blocks the page: the
    * snapshot then describes the blocker instead of the page (DIALOG-POLICY).
    */
@@ -46,6 +54,35 @@ export interface BrowserSnapshot {
    * absence means "not reported", never "landed on the target".
    */
   landingNote?: string
+}
+
+/** One element that entered the tree since the previous snapshot. */
+export interface SnapshotDiffEntry {
+  readonly ref: string
+  readonly role?: string
+  readonly name?: string
+  /** State flags for an added element (checked / selected / disabled / level=N). */
+  readonly flags?: string[]
+  /** State flags that changed on an existing element. */
+  readonly flagsDelta?: string[]
+  /** Nearest ancestor ref, so a diff line keeps its tree context. */
+  readonly parentRef?: string
+}
+
+/**
+ * Incremental delta between two snapshots of the same document, keyed by the
+ * stable data-dsh-ref (e<docNonce><seq>). `navigationReset: true` means the
+ * ref space changed (navigation) or the tree was truncated, so the delta is
+ * void and the consumer must rely on the full snapshot that follows.
+ */
+export interface SnapshotDiff {
+  readonly added: readonly SnapshotDiffEntry[]
+  readonly removed: readonly string[]
+  readonly changed: readonly SnapshotDiffEntry[]
+  /** Number of elements whose ref and features are unchanged. */
+  readonly same: number
+  /** True when the previous ref space is void (navigation or truncation). */
+  readonly navigationReset: boolean
 }
 
 /** One open tab in the browser session. */

@@ -1,13 +1,19 @@
-# dsh-browser-playwright bundle layer: the browser seam, the Playwright
+# dsh-browser-playwright-codex bundle layer: the browser seam, the Playwright
 # provider, and the model-facing tool family. Applied as one insert over the
 # profile's entry list; rows are patchable by id like every other plugin.
+#
+# The `name:` values are package specifiers resolved from the profile, so they
+# must track package.json#name — a rename that misses this file fails at load
+# with MODULE_NOT_FOUND (2026-09-30: the 0.4.0 rename to *-codex did exactly
+# that; verified `require.resolve('dsh-browser-playwright/service')` fails in
+# both profiles while the *-codex specifier resolves).
 - insert:
     - id: browser
-      name: 'dsh-browser-playwright/service'
+      name: 'dsh-browser-playwright-codex/service'
       config:
         provider: playwright
     - id: browser-playwright
-      name: 'dsh-browser-playwright/playwright'
+      name: 'dsh-browser-playwright-codex/playwright'
       config:
         launch:
           # Visible profile-backed window (persistent mode): the agent drives a
@@ -27,7 +33,7 @@
         idleTimeoutMs: 0
         maxSessions: 8
     - id: browser-tool
-      name: 'dsh-browser-playwright/tool'
+      name: 'dsh-browser-playwright-codex/tool'
       config:
         # Arbitrary page JavaScript (browser_evaluate) is a powerful backdoor:
         # it can read anything in the page and act on the user's logged-in

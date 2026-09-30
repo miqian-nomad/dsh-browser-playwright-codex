@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * dsh-browser-verify — 一条命令跑完 dsh-browser-playwright 的快照取名/折叠与
+ * dsh-browser-verify — 一条命令跑完 dsh-browser-playwright-codex 的快照取名/折叠与
  * click/hover 两种定位模式的回归。改任何取名规则或工具说明后必须跑通它。
  *
  * 跑法（包内即自包含，无需 _deps）:

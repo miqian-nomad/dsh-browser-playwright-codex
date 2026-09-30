@@ -4,7 +4,7 @@
  * message; tools translate these onto the wire without exposing internals.
  * The code list lives in `contract.ts` so registration, tests and the verify
  * script share one source of truth.
- * @module dsh-browser-playwright/errors
+ * @module dsh-browser-playwright-codex/errors
  */
 import type { BrowserErrorCode } from './contract.ts'
 

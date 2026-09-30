@@ -1,10 +1,10 @@
 /**
  * Pure snapshot rendering: model-facing tree text. No I/O, no clock — these
  * functions run on live calls and on session replay alike.
- * @module dsh-browser-playwright/snapshot-render
+ * @module dsh-browser-playwright-codex/snapshot-render
  */
 
-import type { BrowserNode, BrowserSnapshot } from './types.ts'
+import type { BrowserNode, BrowserSnapshot, SnapshotDiff, SnapshotDiffEntry } from './types.ts'
 
 /** Render one node line into the accumulating line list. */
 function renderNode(node: BrowserNode, depth: number, lines: string[]): void {
@@ -52,4 +52,39 @@ export function renderSnapshot(snapshot: BrowserSnapshot): string {
     String(snapshot.totalRefs) +
     (snapshot.truncated ? ' (truncated)' : '')
   return header + '\n\n' + (tree === '' ? '(no visible elements)' : tree)
+}
+
+/** Render one diff entry line: +/-/~ prefix plus role, name, flags, parent chain. */
+function renderDiffEntry(prefix: string, entry: SnapshotDiffEntry): string {
+  const parts: string[] = []
+  if (entry.role !== undefined) parts.push(entry.role)
+  if (entry.name !== undefined && entry.name !== '') parts.push('"' + entry.name + '"')
+  if (entry.flags !== undefined && entry.flags.length > 0) parts.push('[' + entry.flags.join(', ') + ']')
+  if (entry.flagsDelta !== undefined && entry.flagsDelta.length > 0)
+    parts.push('[delta: ' + entry.flagsDelta.join(', ') + ']')
+  parts.push('ref=' + entry.ref)
+  if (entry.parentRef !== undefined) parts.push('parent=' + entry.parentRef)
+  return prefix + ' ' + parts.join(' ')
+}
+
+/**
+ * Render an incremental snapshot diff as model-facing lines: `+` for added,
+ * `-` for removed, `~` for changed, each line carrying its nearest ancestor
+ * ref so the model keeps tree context without a full re-render. A navigation
+ * reset renders as a marker line: the delta is void and the full snapshot
+ * that follows is authoritative.
+ * @param diff - the incremental delta produced by the provider.
+ * @returns the rendered diff text.
+ */
+export function renderSnapshotDiff(diff: SnapshotDiff): string {
+  const lines: string[] = []
+  if (diff.navigationReset) {
+    lines.push('(navigation reset: full snapshot follows)')
+  } else {
+    for (const entry of diff.added) lines.push(renderDiffEntry('+', entry))
+    for (const ref of diff.removed) lines.push('- ' + ref)
+    for (const entry of diff.changed) lines.push(renderDiffEntry('~', entry))
+  }
+  lines.push('same: ' + String(diff.same))
+  return lines.join('\n')
 }

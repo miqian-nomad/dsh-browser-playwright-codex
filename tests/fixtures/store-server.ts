@@ -3,7 +3,7 @@
  * served over plain node:http. Deliberately close to real production pages:
  * server-rendered catalog and cart, cookie sessions, client-side validation,
  * lazy-loaded sections, infinite scroll, a modal dialog, and popup links.
- * @module dsh-browser-playwright/tests/fixtures/store-server
+ * @module dsh-browser-playwright-codex/tests/fixtures/store-server
  */
 
 import { createServer, type Server, type IncomingMessage, type ServerResponse } from 'node:http'

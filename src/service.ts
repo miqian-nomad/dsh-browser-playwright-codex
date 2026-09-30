@@ -2,7 +2,7 @@
  * Browser capability seam: the provider registry and selection service.
  * Providers implement browser backends; consumers acquire sessions through
  * ctx.browser without importing a concrete implementation.
- * @module dsh-browser-playwright/service
+ * @module dsh-browser-playwright-codex/service
  */
 
 import { Context, Service } from '@deepseek-ai/cordis'

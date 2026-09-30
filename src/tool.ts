@@ -6,7 +6,7 @@
  * the browser persists across calls. Persistent mode shares one profile-backed
  * window across sessions (personal-browser style). Outputs follow the
  * canonical-value + pure-render contract.
- * @module dsh-browser-playwright/tool
+ * @module dsh-browser-playwright-codex/tool
  */
 import type { Context } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
@@ -24,7 +24,7 @@ import type { BrowserSession, BrowserSnapshot, DiagnosticsValue } from './types.
 type JsonValue = string | number | boolean | null | JsonValue[] | { [key: string]: JsonValue }
 import { BrowserError } from './errors.ts'
 import { registeredSuffixes, type ToolSuffix, type ToolSurfaceConfig } from './contract.ts'
-import { renderSnapshot } from './snapshot-render.ts'
+import { renderSnapshot, renderSnapshotDiff } from './snapshot-render.ts'
 import { getEnabled } from './runtime-state.ts'
 import { isCdpMethodAllowed, cdpDenialMessage } from './cdp-policy.ts'
 /** Cordis plugin name used by loader diagnostics. */
@@ -259,6 +259,8 @@ function snapshotValue(snapshot: BrowserSnapshot): SnapshotValue {
   const landing = snapshot.landingNote
   if (landing !== undefined && landing !== '') notes.push(landing)
   const head = notes.length > 0 ? notes.join('\n\n') + '\n\n' : ''
+  // Incremental diff rides along when the provider computed one (snapshot.diff).
+  const diffBlock = snapshot.diff !== undefined ? '\n\n' + renderSnapshotDiff(snapshot.diff) : ''
   return {
     url: snapshot.url,
     title: snapshot.title,
@@ -266,7 +268,8 @@ function snapshotValue(snapshot: BrowserSnapshot): SnapshotValue {
     truncated: snapshot.truncated,
     tree:
       head +
-      (challenge === null ? tree : challenge.engine + ': ' + challenge.hint + '.\n' + CHALLENGE_NOTE + '\n\n' + tree),
+      (challenge === null ? tree : challenge.engine + ': ' + challenge.hint + '.\n' + CHALLENGE_NOTE + '\n\n' + tree) +
+      diffBlock,
   }
 }
 /** Render a snapshot value as one text block. */
@@ -423,7 +426,7 @@ export function apply(ctx: Context, config: ToolConfig): void {
     if (!getEnabled()) {
       throw new BrowserError(
         'DISABLED',
-        'dsh-browser-playwright is disabled; open Settings → Plugins → 浏览器 and turn it on to use the browser',
+        'dsh-browser-playwright-codex is disabled; open Settings → Plugins → 浏览器 and turn it on to use the browser',
       )
     }
     return ctx.browser.acquire(ownerFor(exec), exec.signal)

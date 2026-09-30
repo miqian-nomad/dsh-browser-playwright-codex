@@ -1,7 +1,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { renderSnapshot, renderSnapshotTree } from '../src/snapshot-render.ts'
-import type { BrowserNode, BrowserSnapshot } from '../src/types.ts'
+import { renderSnapshot, renderSnapshotTree, renderSnapshotDiff } from '../src/snapshot-render.ts'
+import type { BrowserNode, BrowserSnapshot, SnapshotDiff } from '../src/types.ts'
 
 test('renderSnapshotTree prints roles, names, flags, and refs', () => {
   const nodes: BrowserNode[] = [
@@ -37,4 +37,31 @@ test('renderSnapshot includes the header facts and an empty marker', () => {
 test('renderSnapshot marks truncation', () => {
   const snap: BrowserSnapshot = { url: 'u', title: 't', nodes: [], totalRefs: 7, truncated: true }
   assert.match(renderSnapshot(snap), /Refs: 7 \(truncated\)/)
+})
+
+test('renderSnapshotDiff renders +, -, and ~ lines with parent chains', () => {
+  const diff: SnapshotDiff = {
+    added: [{ ref: 'e2', role: 'link', name: 'Docs', flags: ['href=/docs'], parentRef: 'e1' }],
+    removed: ['e3'],
+    changed: [{ ref: 'e4', role: 'checkbox', name: 'Agree', flagsDelta: ['checked'], parentRef: 'e1' }],
+    same: 5,
+    navigationReset: false,
+  }
+  const text = renderSnapshotDiff(diff)
+  assert.equal(
+    text,
+    [
+      '+ link "Docs" [href=/docs] ref=e2 parent=e1',
+      '- e3',
+      '~ checkbox "Agree" [delta: checked] ref=e4 parent=e1',
+      'same: 5',
+    ].join('\n'),
+  )
+})
+
+test('renderSnapshotDiff marks a navigation reset', () => {
+  const diff: SnapshotDiff = { added: [], removed: [], changed: [], same: 0, navigationReset: true }
+  const text = renderSnapshotDiff(diff)
+  assert.match(text, /navigation reset/)
+  assert.match(text, /same: 0/)
 })

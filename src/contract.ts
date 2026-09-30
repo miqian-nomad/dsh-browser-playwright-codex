@@ -3,7 +3,7 @@
  * registers and the failure codes it can raise. Registration, the load-time
  * guard, the regression suites and the standalone verify script all read this
  * module, so a renamed tool or a changed code cannot drift apart silently.
- * @module dsh-browser-playwright/contract
+ * @module dsh-browser-playwright-codex/contract
  */
 
 /**

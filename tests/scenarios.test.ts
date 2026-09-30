@@ -1,10 +1,10 @@
 /**
- * Realistic end-to-end scenarios for dsh-browser-playwright, driven exactly the
+ * Realistic end-to-end scenarios for dsh-browser-playwright-codex, driven exactly the
  * way an agent drives the capability: snapshot → find ref → act → snapshot.
  * Each test is a scripted agent journey over the store fixture (a realistic
  * mini e-commerce app with search, cart, coupons, checkout validation, login,
  * lazy content, infinite scroll, dialogs, and popups).
- * @module dsh-browser-playwright/tests/scenarios
+ * @module dsh-browser-playwright-codex/tests/scenarios
  */
 
 import { test, before, after } from 'node:test'
@@ -674,4 +674,49 @@ test('state file: non-persistent mode has none, persistent mode has one under th
     typeof persistent.stateFile === 'string' && persistent.stateFile.endsWith('dsh-storage-state.json'),
     String(persistent.stateFile),
   )
+})
+
+// ---------------------------------------------------------------------------
+// Snapshot engine: the aria engine must read Playwright's REAL YAML format
+// ---------------------------------------------------------------------------
+
+test('aria engine: a real page still exposes its links, hrefs and structure', async () => {
+  // Regression guard for the 0.4.0 defect. The first aria parser matched a
+  // hand-written dialect (`- role "name" -> href`, nothing after the flags),
+  // while real output ends every container line with ':' and carries hrefs on a
+  // deeper `- /url:` child line. On a real page that parser dropped all
+  // structure and EVERY href, yet captureAriaSnapshot still reported success, so
+  // the provider never fell back to the legacy engine. Hrefs and link ancestors
+  // are exactly what the broken version could not produce, which is why they are
+  // what this test asserts: the failure cannot come back silently.
+  const ariaEngine = new PlaywrightProvider(
+    providerConfig({ snapshot: { engine: 'aria', maxNodes: 500, maxNameLength: 120, maxTextLength: 300 } }),
+  )
+  try {
+    const session = await ariaEngine.acquire('aria-engine')
+    const snap = await session.navigate(store.base + '/?nopromo=1', 'load')
+    const links: BrowserNode[] = []
+    walk(snap.nodes, (node) => {
+      if (node.role === 'link') links.push(node)
+    })
+    assert.ok(links.length >= 2, 'aria engine must expose the page links, got ' + String(links.length))
+    assert.ok(
+      links.some((link) => link.href !== undefined),
+      'link hrefs must survive (they ride the /url: child lines)',
+    )
+    // Structure: real pages nest links under containers (list / listitem /
+    // navigation / …), so at least one link must have a non-actionable ancestor.
+    const linkAncestors: string[] = []
+    const collect = (nodes: readonly BrowserNode[], chain: readonly string[]): void => {
+      for (const node of nodes) {
+        if (node.role === 'link') linkAncestors.push(...chain)
+        collect(node.children, [...chain, node.role])
+      }
+    }
+    collect(snap.nodes, [])
+    assert.ok(linkAncestors.length > 0, 'a link must sit under at least one container node')
+    assert.ok(snap.totalRefs > 0, 'DOM-minted refs must be aligned onto the aria tree')
+  } finally {
+    await ariaEngine.dispose()
+  }
 })
