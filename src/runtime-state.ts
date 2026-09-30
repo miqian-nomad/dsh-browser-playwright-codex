@@ -1,28 +1,51 @@
 /**
- * Shared enable/disable flag for dsh-browser-playwright-codex as a whole.
+ * Shared user settings for dsh-browser-playwright-codex, used by the three host
+ * entries (browser / browser-playwright / browser-tool) and by the settings-page
+ * switches in dsh-browser-toggle.
  *
- * Single source of truth shared across the three host entries
- * (browser / browser-playwright / browser-tool) and the toggle HTTP API. State persists to
- * ~/.dsh/dsh-browser-playwright.state.json (the FILE name deliberately keeps the pre-rename
- * spelling: it is persisted user state, and renaming it would silently reset
- * the switch) so toggling survives
- * DSH restarts without needing to touch cordis.patch.yml or restart DSH.
+ * Two settings, both user-facing:
+ *   - `enabled` (default true)  — are the browser tools available at all.
+ *   - `engine`  (default: unset) — how a page is read into the snapshot tree.
+ *       'legacy' = the plugin's own DOM walk (most tested).
+ *       'aria'   = the browser's official accessibility tree (what a screen
+ *                  reader sees), usually more faithful on complex pages.
+ *     Unset means "follow the configured default", which is 'legacy'.
  *
- * Default is `true` (enabled) on first run, which matches the user-visible
- * behaviour the plugin has had so far.
+ * State persists to ~/.dsh/dsh-browser-playwright.state.json so both settings
+ * survive a DSH restart. The FILE name deliberately keeps the pre-rename
+ * spelling: it is persisted user state, and renaming it would silently reset the
+ * user's switches.
+ *
+ * The file is re-read on every call (no read-once caching), so a change made on
+ * one side (web or desktop) is visible to the other immediately, and flipping a
+ * switch needs no restart and no config edit.
+ *
+ * `DSH_BROWSER_STATE_FILE` redirects the file; tests use it so they never touch
+ * real user state.
  * @module dsh-browser-playwright-codex/runtime-state
  */
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 
+/** How a page is read into a snapshot tree. */
+export type SnapshotEngine = 'legacy' | 'aria'
+
 // Shared layer: the web and desktop sides read the same switch file, so one
 // agent can never see two different states depending on which side is open.
 const STATE_DIR = path.join(os.homedir(), '.dsh')
-const STATE_FILE = path.join(STATE_DIR, 'dsh-browser-playwright.state.json')
+const DEFAULT_STATE_FILE = path.join(STATE_DIR, 'dsh-browser-playwright.state.json')
 
-let _loaded = false
+/** The state file in use, resolved per call so tests can redirect it. */
+function stateFile(): string {
+  const override = process.env.DSH_BROWSER_STATE_FILE
+  return override !== undefined && override !== '' ? override : DEFAULT_STATE_FILE
+}
+
 let _enabled = true
+let _engine: SnapshotEngine | undefined = undefined
+/** Default pushed in by the provider that is actually loaded (display only). */
+let _configuredEngine: SnapshotEngine | undefined = undefined
 const _subscribers = new Set<(enabled: boolean) => void>()
 
 function load() {
@@ -30,11 +53,17 @@ function load() {
   // other side follows immediately (no read-once caching).
   const previous = _enabled
   try {
-    const txt = fs.readFileSync(STATE_FILE, 'utf8')
-    const obj = JSON.parse(txt)
-    if (obj !== null && typeof obj === 'object' && typeof obj.enabled === 'boolean') _enabled = obj.enabled
+    const txt = fs.readFileSync(stateFile(), 'utf8')
+    const obj = JSON.parse(txt) as { enabled?: unknown; engine?: unknown } | null
+    if (obj !== null && typeof obj === 'object') {
+      if (typeof obj.enabled === 'boolean') _enabled = obj.enabled
+      // The file is authoritative for the page-reading mode: an absent or
+      // unknown value means "follow the configured default" (undefined here).
+      // Files written before this setting existed therefore stay valid.
+      _engine = obj.engine === 'legacy' || obj.engine === 'aria' ? obj.engine : undefined
+    }
   } catch {
-    // Missing file / parse error / unreadable: keep the current value.
+    // Missing file / parse error / unreadable: keep the current values.
   }
   if (_enabled !== previous) {
     for (const fn of [..._subscribers]) {
@@ -49,15 +78,19 @@ function load() {
 
 function persist() {
   try {
-    fs.mkdirSync(STATE_DIR, { recursive: true })
+    const target = stateFile()
+    fs.mkdirSync(path.dirname(target), { recursive: true })
     // Atomic write: rename(2) is atomic on the same filesystem, so a crash
     // mid-write leaves either the old file or the new file, never half of
     // both.
-    const tmp = STATE_FILE + '.tmp'
-    fs.writeFileSync(tmp, JSON.stringify({ enabled: _enabled }, null, 2))
-    fs.renameSync(tmp, STATE_FILE)
+    const tmp = target + '.tmp'
+    // Keep the historical shape until the user actually picks a page-reading
+    // mode: an absent `engine` means "use the configured default".
+    const payload = _engine === undefined ? { enabled: _enabled } : { enabled: _enabled, engine: _engine }
+    fs.writeFileSync(tmp, JSON.stringify(payload, null, 2))
+    fs.renameSync(tmp, target)
   } catch {
-    // Persist failure must not break the in-memory toggle; the next set
+    // Persist failure must not break the in-memory switches; the next set
     // will retry.
   }
 }
@@ -91,4 +124,48 @@ export function subscribe(fn: (enabled: boolean) => void) {
   return () => {
     _subscribers.delete(fn)
   }
+}
+
+/**
+ * The page-reading mode the user picked, or undefined when they never picked
+ * one — the configured default then applies.
+ */
+export function getSnapshotEngine(): SnapshotEngine | undefined {
+  load()
+  return _engine
+}
+
+/** Pick the page-reading mode. Returns true if the value actually changed. */
+export function setSnapshotEngine(next: SnapshotEngine): boolean {
+  load()
+  if (next !== 'legacy' && next !== 'aria') return false
+  if (_engine === next) return false
+  _engine = next
+  persist()
+  return true
+}
+
+/**
+ * Report the mode this deployment was configured with, so the settings page can
+ * display what is actually in effect instead of guessing. Called by the provider
+ * when it is constructed; not persisted (it comes from config).
+ * @param engine - the configured default mode.
+ */
+export function publishConfiguredEngine(engine: SnapshotEngine): void {
+  if (engine === 'legacy' || engine === 'aria') _configuredEngine = engine
+}
+
+/**
+ * What a capture will use right now: the user's pick, else the configured
+ * default, else 'legacy'. This is what the settings page shows.
+ */
+export function getEffectiveEngine(): SnapshotEngine {
+  load()
+  return _engine ?? _configuredEngine ?? 'legacy'
+}
+
+/** Whether the current mode is the user's own pick rather than the default. */
+export function isEngineUserChosen(): boolean {
+  load()
+  return _engine !== undefined
 }

@@ -21,7 +21,12 @@ import fs from 'node:fs'
 import { BrowserError, launchFailed } from './errors.ts'
 import { SNAPSHOT_SCRIPT, type SnapshotOptions } from './injected.ts'
 import { captureAriaSnapshot } from './snapshot-aria.ts'
-import { getEnabled, subscribe as subscribeEnabled } from './runtime-state.ts'
+import {
+  getEnabled,
+  getSnapshotEngine,
+  publishConfiguredEngine,
+  subscribe as subscribeEnabled,
+} from './runtime-state.ts'
 // Type-only: makes the ctx.browser declaration merge visible to this module.
 import type {} from './service.ts'
 import type {
@@ -187,6 +192,17 @@ export function assertAllowedUrl(raw: string, allowedDomains: readonly string[])
   }
   return parsed
 }
+
+/**
+ * Which page-reading mode a capture uses. The user's choice on the settings page
+ * (Settings → 浏览器 → 页面识别方式) wins over the deployment default, so flipping
+ * that switch changes the very next operation — no restart, no config edit.
+ * @param configured - the mode from this provider's config.
+ * @returns the effective mode.
+ */
+export function resolveSnapshotEngine(configured: 'legacy' | 'aria'): 'legacy' | 'aria' {
+  return getSnapshotEngine() ?? configured
+}
 /** Wrap a Playwright op so an aborted signal rejects while the op keeps draining in the background. */
 async function withAbort<T>(promise: Promise<T>, signal: AbortSignal | undefined): Promise<T> {
   // Attach handlers FIRST: the caller's promise may still be draining (a
@@ -314,6 +330,10 @@ export class PlaywrightProvider {
   lastStatePersist = 0
   constructor(config: PlaywrightConfig) {
     this.config = config
+    // Tell the settings card which page-reading mode this deployment was
+    // configured with, so it can show "当前：X（默认）" truthfully instead of
+    // assuming the built-in default.
+    publishConfiguredEngine(config.snapshot.engine)
     if (config.launch.persistent) {
       const dir =
         config.launch.profileDir !== undefined && config.launch.profileDir.trim() !== ''
@@ -1072,7 +1092,7 @@ class PlaywrightSession {
   async capture(page: Page, opts: { interactiveOnly?: boolean } | undefined) {
     this.provider.armDialogGuard(page)
     const raw =
-      this.provider.config.snapshot.engine === 'aria'
+      resolveSnapshotEngine(this.provider.config.snapshot.engine) === 'aria'
         ? await this.captureAria(page, opts)
         : await this.captureLegacy(page, opts)
     return this.attachDiff(raw)

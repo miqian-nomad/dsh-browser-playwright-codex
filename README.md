@@ -216,6 +216,7 @@ MIT
 
 ### 0.4.0（2026-09-30）
 
+- **设置页多了一组选择**：在「允许 AI 操作网页」开关下面，多了「页面识别方式」——**兼容模式**（插件自己找按钮输入框，用得最久）与**智能模式**（用浏览器官方的"页面说明书"，复杂页面通常更准；读不出来会自动退回兼容模式）。选完**下一步操作就生效，不用重启、不用改配置文件**；卡片底部写着"当前：X（你选的 / 默认）"。多选一用的是和"搜索提供方"卡片一样的单选行，不是开关，一眼看去是同一套。
 - **改名为 `dsh-browser-playwright-codex`**：改名是跨文件操作 —— 本包 `cordis.patch.yml` 的三个 `name:`、`dsh-browser-toggle` 的 `import '…/runtime-state'` 与它的 `node_modules` 链接、以及 profile 链接，全都必须一起走。少改一处，插件加载就 `MODULE_NOT_FOUND`（已实测：旧名在两个 profile 均已解析失败，新名可解析）。
 - **持久化开关文件名故意保持旧拼写**（`~/.dsh/dsh-browser-playwright.state.json`）：那是用户状态，改名会让设置页的开关被静默重置。
 - **中文插件元数据**：新增 `locale/en.json` / `locale/zh.json`，并在 `exports` 加 `"./locale/*.json"`、在 `files` 加 `locale` —— 少了 exports 这一行，harness 的 `require.resolve` 会失败并静默回退英文。
