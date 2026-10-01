@@ -9,6 +9,8 @@
 
 import { test, before, after } from 'node:test'
 import assert from 'node:assert/strict'
+import os from 'node:os'
+import path from 'node:path'
 import { PlaywrightProvider } from '../src/playwright.ts'
 import type { PlaywrightConfig } from '../src/playwright.ts'
 import { BrowserError } from '../src/errors.ts'
@@ -21,6 +23,11 @@ import {
   type CartItem,
   type StoreFixture,
 } from './fixtures/store-server.ts'
+
+// 这套用例的期望值是按「兼容模式」(legacy) 的树写的，所以必须把设置页那份用户状态隔离掉：
+// 否则用户把「页面识别方式」拨到智能模式后，同一份代码在这里会整片假失败
+// （2026-10-01 实测：真读用户状态 = 10 项挂；隔离后 = 0 项挂）。
+process.env.DSH_BROWSER_STATE_FILE = path.join(os.tmpdir(), 'dsh-browser-tests-state-isolated.json')
 
 // ---------------------------------------------------------------------------
 // Fixtures and providers

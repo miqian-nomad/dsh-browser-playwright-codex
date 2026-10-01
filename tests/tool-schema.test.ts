@@ -1,5 +1,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
+import os from 'node:os'
+import path from 'node:path'
 import { Context } from '@deepseek-ai/cordis'
 import ToolRuntime from '@deepseek-ai/dsh-tools'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
@@ -9,6 +11,9 @@ import type { PlaywrightConfig } from '../src/playwright.ts'
 import * as browserTool from '../src/tool.ts'
 import type { ToolConfig } from '../src/tool.ts'
 import { registeredToolNames, toolNames, type ToolSurfaceConfig } from '../src/contract.ts'
+
+// 隔离设置页的真实用户状态：这套用例的期望值按 legacy（兼容模式）的树写。
+process.env.DSH_BROWSER_STATE_FILE = path.join(os.tmpdir(), 'dsh-browser-tests-state-isolated.json')
 
 const pwConfig: PlaywrightConfig = {
   launch: {

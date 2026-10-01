@@ -21,8 +21,17 @@
  */
 import http from 'node:http'
 import { readdirSync, statSync } from 'node:fs'
+import os from 'node:os'
+import path from 'node:path'
 import { Config as ConfigSchema, PlaywrightProvider } from '../lib/playwright.js'
 import { renderSnapshot } from '../lib/snapshot-render.js'
+
+// 验收必须只看代码，不看这台机器上用户的选择。
+// 设置页的「页面识别方式」存在 ~/.dsh/dsh-browser-playwright.state.json，运行时状态层
+// 允许用 DSH_BROWSER_STATE_FILE 把它指向别处（src/runtime-state.ts 里为测试留的开关）。
+// 指向一个不存在的文件 = engine 回到配置默认值 legacy，本脚本的期望值就是按它写的。
+// 不隔离的话：用户把开关拨到「智能模式」，这份 52 项验收就会假失败（2026-10-01 实测）。
+process.env.DSH_BROWSER_STATE_FILE = path.join(os.tmpdir(), 'dsh-browser-verify-state-isolated.json')
 
 let pass = 0
 const failures = []

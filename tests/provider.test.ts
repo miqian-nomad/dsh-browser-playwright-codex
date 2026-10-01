@@ -2,10 +2,15 @@ import { test, before, after } from 'node:test'
 import assert from 'node:assert/strict'
 import { createServer, type Server } from 'node:http'
 import { readFile } from 'node:fs/promises'
+import os from 'node:os'
+import path from 'node:path'
 import { PlaywrightProvider } from '../src/playwright.ts'
 import type { PlaywrightConfig } from '../src/playwright.ts'
 import { BrowserError } from '../src/errors.ts'
 import type { BrowserNode } from '../src/types.ts'
+
+// 期望值按 legacy（兼容模式）的树写；隔离掉设置页的真实用户状态，避免假失败。
+process.env.DSH_BROWSER_STATE_FILE = path.join(os.tmpdir(), 'dsh-browser-tests-state-isolated.json')
 
 const config: PlaywrightConfig = {
   launch: {

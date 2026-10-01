@@ -1,0 +1,111 @@
+﻿diff --git a/src/playwright.ts b/src/playwright.ts
+index bc90695..f0df960 100644
+--- a/src/playwright.ts
++++ b/src/playwright.ts
+@@ -5,7 +5,7 @@
+  */
+ 
+ import type { Context } from '@deepseek-ai/cordis'
+-import { chromium, type Browser, type BrowserContext, type Page } from 'playwright-core'
++import { chromium, type Browser, type BrowserContext, type CDPSession, type Page } from 'playwright-core'
+ import z from '@deepseek-ai/schemastery'
+ import { BrowserError, launchFailed } from './errors.ts'
+ // Type-only: makes the ctx.browser declaration merge visible to this module.
+@@ -154,6 +154,57 @@ async function withAbort<T>(promise: Promise<T>, signal: AbortSignal | undefined
+   })
+ }
+ 
++/**
++ * True when the OS window hosting this page is minimized. Tab selection lives in
++ * the browser context, not in the OS window, so activating the window is a side
++ * effect we are free to decline -- and declining it is what stops the agent from
++ * yanking a window the user deliberately minimized back onto their screen.
++ * When the state cannot be read we answer true (treat as minimized): the safe
++ * direction is to leave the user's desktop alone, and a skipped activation costs
++ * nothing functionally.
++ */
++async function isWindowMinimized(page: Page): Promise<boolean> {
++  let session: CDPSession | undefined
++  try {
++    session = await page.context().newCDPSession(page)
++    const { windowId } = await session.send('Browser.getWindowForTarget')
++    const { bounds } = await session.send('Browser.getWindowBounds', { windowId })
++    return bounds.windowState === 'minimized'
++  } catch {
++    return true
++  } finally {
++    await session?.detach().catch(() => {})
++  }
++}
++
++/**
++ * Create a tab without raising the window. context.newPage() routes through CDP
++ * Target.createTarget without `background`, and Chromium activates the window on
++ * every tab creation -- plainly visible once the user has minimized it. Sending
++ * the command ourselves with background:true creates the tab silently; Playwright
++ * still auto-attaches and returns a fully driveable Page. The URL is left at
++ * about:blank on purpose so the caller's own goto keeps owning navigation policy,
++ * timeouts and abort handling. On any failure this falls back to newPage(): a tab
++ * that pops the window beats no tab at all.
++ */
++async function createBackgroundPage(context: BrowserContext): Promise<Page> {
++  const anchor = context.pages()[0]
++  if (anchor === undefined) return await context.newPage()
++  let session: CDPSession | undefined
++  try {
++    session = await context.newCDPSession(anchor)
++    // Arm the listener before sending: Playwright attaches as soon as the target
++    // exists, which can happen before createTarget resolves.
++    const attached = context.waitForEvent('page', { timeout: 10000 })
++    await session.send('Target.createTarget', { url: 'about:blank', background: true })
++    return await attached
++  } catch {
++    return await context.newPage()
++  } finally {
++    await session?.detach().catch(() => {})
++  }
++}
++
+ /**
+  * Playwright-backed {@link BrowserProvider}: one shared browser, one context
+  * per owner key, LRU eviction, idle disposal, ref-based snapshot interaction.
+@@ -502,7 +553,10 @@ class PlaywrightSession implements BrowserSession {
+       const page = this.pageAt(index)
+       if (page === undefined) throw new BrowserError('REF_NOT_FOUND', 'no tab at index ' + String(index))
+       this.currentIndex = index
+-      await withAbort(page.bringToFront(), signal)
++      // Tab selection is a context-level concern: the OS window does not have to
++      // come forward for the agent to keep driving this tab. Skipping activation
++      // while the window is minimized is what keeps the user's desktop untouched.
++      if (!(await isWindowMinimized(page))) await withAbort(page.bringToFront(), signal)
+       return this.snapshot()
+     })
+   }
+@@ -511,7 +565,7 @@ class PlaywrightSession implements BrowserSession {
+     return this.run(async () => {
+       this.assertLive()
+       const target = assertAllowedUrl(url, this.provider.config.allowedDomains ?? [])
+-      const page = await this.context.newPage()
++      const page = await createBackgroundPage(this.context)
+       this.currentIndex = this.context.pages().length - 1
+       try {
+         await withAbort(page.goto(target.toString(), { waitUntil, timeout: this.timeoutMs() }), signal)
+@@ -604,14 +658,16 @@ class PlaywrightSession implements BrowserSession {
+     this.assertLive()
+     const pages = this.context.pages()
+     if (pages.length === 0) {
+-      const created = await this.context.newPage()
++      // No anchor page exists yet, so the window cannot be raised on purpose --
++      // the helper degrades to newPage() in exactly this case.
++      const created = await createBackgroundPage(this.context)
+       this.currentIndex = 0
+       return created
+     }
+     this.currentIndex = Math.min(this.currentIndex, pages.length - 1)
+     const page = pages[this.currentIndex] ?? pages[0]
+     if (page === undefined) {
+-      const created = await this.context.newPage()
++      const created = await createBackgroundPage(this.context)
+       this.currentIndex = 0
+       return created
+     }

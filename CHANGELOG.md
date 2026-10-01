@@ -3,8 +3,54 @@
 Bilingual by intent: the version headings and the summary of each release are given in both
 languages, the individual entries follow the language the surrounding code and docs use.
 
-一句话摘要：**改名为 `dsh-browser-playwright-codex`、补上中文插件元数据、加入可选的 aria 快照引擎与增量 diff** ——
-并且查出并修掉了第一版 aria 引擎"测试全绿、真实页面全废"的真实缺陷（层级与链接全丢却仍报成功），同时把 CDP 白名单收紧成逐方法列举。
+一句话摘要：**把 GitHub 上独有的文档/补丁/分析脚本收回本仓库，并把 `lib/` 正式入库** ——
+同时修掉一个会让"全绿"变"全红"的测试缺陷：测试与验收会去读设置页那份真实用户状态，
+用户把「页面识别方式」拨到智能模式后，同一份未改动的代码会整片假失败。
+
+## 0.4.1
+
+Adopted as the single canonical tree for this repository: the assets that only existed on the
+GitHub side (docs, patches, analysis scripts, license/notice) are now here, `lib/` is committed
+because this repository is the distribution channel, and the tests/verify no longer read the real
+user settings file.
+
+### Added
+
+- **`patches/`** — `upstream-window-activation.patch` plus its README: the minimized-window
+  focus-stealing fix as a patch against upstream, so the diagnosis is reusable outside this fork.
+- **`scripts/analysis/`** — four probes (`repro-minimize`, `hl-compare`, `live-handoff-probe`,
+  `needs-human-probe`) used to produce the measured claims in `FOCUS-STEALING.md` and
+  `MODE-TRADE-OFFS.md`.
+- **Docs** — `FOCUS-STEALING.md`, `MODE-TRADE-OFFS.md`, `PLUGIN-README.md`, `中文说明.md`,
+  `对比与优势.md`; **`LICENSE-DOCS`** and **`NOTICE.md`** (the docs' license and the provenance
+  statement).
+
+### Changed
+
+- **`lib/` is committed again** (`.gitignore` now ignores only `lib/*.bak-*`). Reason: this
+  repository *is* the distribution channel — `dsh plugin add github:…` clones it, and a clone with
+  no build output has no `main` to load.
+- **The `prepare` hook is gone** from `package.json#scripts`. pnpm 11 refuses to run a git
+  dependency's build scripts (`ERR_PNPM_GIT_DEP_PREPARE_NOT_ALLOWED`), so keeping `prepare`
+  guarantees a one-command install fails on a clean machine. `npm run build` stays.
+- **`lib/` was rebuilt from this tree's `src/`**, not taken from the GitHub side's older artifacts.
+- The three docs that exist on both sides (`codex-rules.md`, `DIALOG-POLICY.md`,
+  `SNAPSHOT-RULES.md`) keep **this tree's** version: it already carries the `-codex` name and the
+  corrected paths, while the GitHub copies still said `dsh-browser-playwright`.
+
+### Fixed
+
+- **Tests and the acceptance script no longer read the real user settings file**
+  (`~/.dsh/dsh-browser-playwright.state.json`). Their expectations are written against the
+  `legacy` engine, so a user who picks 智能模式 (aria) on the settings page turned the suite red
+  while the code was untouched — measured 2026-10-01: reading the real state = 10 failures;
+  isolated = 0 failures. Both now point `DSH_BROWSER_STATE_FILE` at a non-existent temp path, the
+  override `src/runtime-state.ts` already provides for exactly this.
+
+### Notes
+
+- Local verification output (`test_*.txt`, `*_alone.txt`, `verify_clean.txt`) is now gitignored:
+  it is scratch from a run, not repository content.
 
 ## 0.4.0
 
