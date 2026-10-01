@@ -1,12 +1,23 @@
 # dsh-browser-playwright-codex
 
+> [![dsh.so 安装验证](https://www.dsh.so/badge/install/dsh-browser-playwright-codex@0.1.7-rc.2.svg)](https://www.dsh.so/zh/artifact/dsh-browser-playwright-codex/)
+
 Playwright-powered browser capability for [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness): the agent drives a **visible, profile-backed browser window** through accessibility snapshots with stable element refs — no CSS-selector guessing, no full-DOM dumps. Login state survives window close and harness restarts (Codex-style personal browser), tabs, screenshots as durable image attachments, structured extraction, gated JavaScript evaluation, and Codex-inspired reliability guards (bounded render-stability waits, post-action verification, fast-fail actionability checks, crash auto-recovery) and native-dialog handling (alert/confirm/prompt/beforeunload are parked as a pending state, reported to the model, and answered only by an explicit `browser_dialog` call — never auto-accepted; see [DIALOG-POLICY.md](DIALOG-POLICY.md)).
 
 ## Install
 
+This package is **not on npm** — the repository is the distribution channel, so install it from GitHub
+(or link a checkout):
+
 ```sh
-dsh plugin --profile <name> add dsh-browser-playwright-codex
+dsh plugin --profile <name> add github:miqian-nomad/dsh-browser-playwright-codex
+
+# local development: clone, then link the checkout
+dsh plugin --profile <name> add link:<absolute path to this directory>
 ```
+
+`lib/` ships in the repository (and there is deliberately no `prepare` hook), so a fresh clone loads
+without a build step — `npm run build` is only needed after editing `src/`.
 
 The bundle mounts three rows: the `ctx.browser` seam (`service`), the Playwright provider (`playwright`), and the model-facing tool family (`tool`).
 
