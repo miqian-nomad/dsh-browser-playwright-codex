@@ -50,6 +50,13 @@ user settings file.
   while the code was untouched — measured 2026-10-01: reading the real state = 10 failures;
   isolated = 0 failures. Both now point `DSH_BROWSER_STATE_FILE` at a non-existent temp path, the
   override `src/runtime-state.ts` already provides for exactly this.
+- **The README install command actually works now.** It said
+  `dsh plugin --profile <name> add dsh-browser-playwright-codex`, but this package is not on npm
+  (registry returns 404), so that one-liner could never have installed anything. It now shows the
+  GitHub specifier this repository is actually distributed by, plus the `link:` form for a local
+  checkout, and states that a fresh clone needs no build. The dsh.so install-verification badge is
+  back at the top of the README, pointing at [the artifact page](https://www.dsh.so/zh/artifact/dsh-browser-playwright-codex/)
+  (its recorded verification is still the older `v0.3.1`, so the badge does not claim 0.4.1).
 
 ### Notes
 
@@ -188,13 +195,3 @@ version's real defect, found, fixed, and guarded.
   (`browser_click_at`) with landing-element reporting, the CDP policy layer, the persistent
   profile with login-state export, parked native dialogs, snapshot/safety rules.
 - Distributed as compiled output only; the source of that build was not on the machine.
-
-### Fixed
-
-- **The README install command actually works now.** It said
-  `dsh plugin --profile <name> add dsh-browser-playwright-codex`, but this package is not on npm
-  (registry returns 404), so that one-liner could never have installed anything. It now shows the
-  GitHub specifier this repository is actually distributed by, plus the `link:` form for a local
-  checkout, and states that a fresh clone needs no build. The dsh.so install-verification badge is
-  back at the top of the README, pointing at [the artifact page](https://www.dsh.so/zh/artifact/dsh-browser-playwright-codex/)
-  (its recorded verification is still the older `v0.3.1`, so the badge does not claim 0.4.1).

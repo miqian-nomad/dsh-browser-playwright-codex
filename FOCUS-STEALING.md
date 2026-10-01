@@ -144,7 +144,7 @@ The only browser-touching step common to every call is the fork's login-state ex
 
 **But the minimal harness above cannot reproduce it**: `context.storageState()` is safe when minimized, in both `launch` and `persistent` modes, in a fresh process. So either the trigger needs the long-lived multi-tab instance (renderer/CDP state accumulated over hours), or the A/B was confounded by something else that changed at the same time.
 
-**Conclusion:** treat the gate as a *mitigation* that demonstrably stopped the symptom on the affected instance, not as a root-cause fix. This is [help wanted #2](README.md#help-wanted--求助).
+**Conclusion:** treat the gate as a *mitigation* that demonstrably stopped the symptom on the affected instance, not as a root-cause fix. No root cause was found, and we are not asking anyone to look for one: the fork gates the export while minimized and the symptom stays away.
 
 **中文小结**：这个 fork 上最严重的症状是"**每次**调用都弹窗，连参数校验就失败的调用也弹"。唯一每次都跑的浏览器动作是"操作后导出登录态"。把它在最小化时跳过，症状消失（实机 A/B）；但最小复现里 `storageState()` 是安全的，所以这只能算**缓解**而非根治，机制仍未知。
 
