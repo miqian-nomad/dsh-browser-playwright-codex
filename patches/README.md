@@ -22,9 +22,9 @@ What it changes (`src/playwright.ts`, 61 insertions / 5 deletions):
 
 Why it matters: upstream defaults to `headless: true`, so neither call site is visible in the default configuration. The moment a user sets `launch.headless: false` — which is how a human gets pulled in at all — every tab switch and every tab creation drags a **minimized** window back onto the screen.
 
-> Update: a later measurement round found that this patch's `isWindowMinimized()` helper works in headless too (it returns `false`, so nothing is silently disabled there), and that **native dialogs do not need a window** — so "headful is needed for dialogs" (an earlier claim of ours) is wrong. See [`../docs/MODE-TRADE-OFFS.md`](../docs/MODE-TRADE-OFFS.md).
+> Update: a later measurement round found that this patch's `isWindowMinimized()` helper works in headless too (it returns `false`, so nothing is silently disabled there), and that **native dialogs do not need a window** — so "headful is needed for dialogs" (an earlier claim of ours) is wrong. See [`../MODE-TRADE-OFFS.md`](../MODE-TRADE-OFFS.md).
 
-The evidence, the reproduction script, and the honest limits of both are in [`../docs/FOCUS-STEALING.md`](../docs/FOCUS-STEALING.md).
+The evidence, the reproduction script, and the honest limits of both are in [`../FOCUS-STEALING.md`](../FOCUS-STEALING.md).
 
 ## Not included on purpose
 

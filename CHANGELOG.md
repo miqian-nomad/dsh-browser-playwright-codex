@@ -23,7 +23,11 @@ user settings file.
   `MODE-TRADE-OFFS.md`.
 - **Docs** — `FOCUS-STEALING.md`, `MODE-TRADE-OFFS.md`, `PLUGIN-README.md`, `中文说明.md`,
   `对比与优势.md`; **`LICENSE-DOCS`** and **`NOTICE.md`** (the docs' license and the provenance
-  statement).
+  statement). They sit at the repository root, next to the docs this tree already had, and their
+  cross-links were rewritten for that move.
+- **`scripts/check-doc-links.py`** — dependency-free checker for every relative markdown link
+  (21 checked, 0 broken as of this release). It exists because moving a doc silently breaks
+  `../` links; run it after touching docs.
 
 ### Changed
 

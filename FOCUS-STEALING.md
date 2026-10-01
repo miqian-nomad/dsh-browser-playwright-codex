@@ -53,7 +53,7 @@ Each probe brackets the action with a state read, and every run includes a **no-
 
 ## Minimal reproduction / 最小复现
 
-No DSH, no plugin — pure Playwright + Chromium: [`scripts/analysis/repro-minimize.mjs`](../scripts/analysis/repro-minimize.mjs).
+No DSH, no plugin — pure Playwright + Chromium: [`scripts/analysis/repro-minimize.mjs`](scripts/analysis/repro-minimize.mjs).
 
 ```sh
 set PW_MODE=launch          # upstream shape: chromium.launch() + browser.newContext()
@@ -144,7 +144,7 @@ The only browser-touching step common to every call is the fork's login-state ex
 
 **But the minimal harness above cannot reproduce it**: `context.storageState()` is safe when minimized, in both `launch` and `persistent` modes, in a fresh process. So either the trigger needs the long-lived multi-tab instance (renderer/CDP state accumulated over hours), or the A/B was confounded by something else that changed at the same time.
 
-**Conclusion:** treat the gate as a *mitigation* that demonstrably stopped the symptom on the affected instance, not as a root-cause fix. This is [help wanted #2](../README.md#help-wanted--求助).
+**Conclusion:** treat the gate as a *mitigation* that demonstrably stopped the symptom on the affected instance, not as a root-cause fix. This is [help wanted #2](README.md#help-wanted--求助).
 
 **中文小结**：这个 fork 上最严重的症状是"**每次**调用都弹窗，连参数校验就失败的调用也弹"。唯一每次都跑的浏览器动作是"操作后导出登录态"。把它在最小化时跳过，症状消失（实机 A/B）；但最小复现里 `storageState()` 是安全的，所以这只能算**缓解**而非根治，机制仍未知。
 
@@ -200,7 +200,7 @@ Side note from the same session, worth knowing: with the window **already restor
 
 ## For upstream / 给上游的东西
 
-[`patches/upstream-window-activation.patch`](../patches/upstream-window-activation.patch) — applies cleanly to upstream `main` (`git apply --check` clean), **61 insertions, 5 deletions, one file** (`src/playwright.ts`):
+[`patches/upstream-window-activation.patch`](patches/upstream-window-activation.patch) — applies cleanly to upstream `main` (`git apply --check` clean), **61 insertions, 5 deletions, one file** (`src/playwright.ts`):
 
 - adds `isWindowMinimized()` and `createBackgroundPage()` as module-level helpers,
 - gates `switchTab`'s `bringToFront()` on the window not being minimized,
