@@ -1,4 +1,4 @@
-﻿#!/usr/bin/env node
+#!/usr/bin/env node
 /**
  * measure-prompt-cost —— 常驻 prompt 成本体检。
  *
@@ -11,8 +11,8 @@
  * 三行分别对应三种"默认"，别混：
  *   ① 配置默认值（Config({})，不含任何补丁层）
  *   ② 出厂 bundle 层 —— 本包 cordis.patch.yml 里给 browser-tool 的配置，
- *      也就是 profile 挂上这个 bundle 后真正生效的那份（本包当前把
- *      allowEvaluate / allowCdp 都打开了）
+ *      也就是 profile 挂上这个 bundle 后真正生效的那份。两个闸门默认关闭，
+ *      所以这一行正常情况下应当与 ① 相同；包里的默认值一改，它自己跟着变。
  *   ③ 全量注册（再加 registerDisabledTools: true）
  *
  * 注意：唯一会抬高这个数字的动作是「注册新工具」。文档、脚本、git 都不进 prompt。
@@ -47,12 +47,25 @@ const baseConfig = {
   interactiveOnlyDefault: false,
 }
 
-/** Read the shipped bundle layer: what a deployment actually gets. */
+/**
+ * Read the shipped bundle layer: what a deployment actually gets.
+ *
+ * Comment lines are stripped first, and that is not cosmetic: this file documents
+ * the opt-in snippet, so a naive regex matched the *example* `allowEvaluate: true`
+ * inside a comment and reported the bundle as having both gates on while the real
+ * keys said false — the printed label and the file disagreed (measured 2026-10-02,
+ * and it is the same trap as the aria parser reading `/placeholder:` as drift).
+ */
 function bundleConfig() {
   const yml = readFileSync(new URL('../cordis.patch.yml', import.meta.url), 'utf8')
-  const row = yml.split(/\n(?=\s*- id: )/).find((block) => block.includes('dsh-browser-playwright-codex/tool')) ?? ''
-  const flag = (name) => new RegExp(name + ':\\s*(true|false)').exec(row)?.[1] === 'true'
+  const code = yml
+    .split('\n')
+    .map((line) => line.replace(/\s+#.*$/, ''))
+    .filter((line) => !/^\s*#/.test(line))
+    .join('\n')
+  const row = code.split(/\n(?=\s*- id: )/).find((block) => block.includes('dsh-browser-playwright-codex/tool')) ?? ''
   if (row === '') throw new Error('cordis.patch.yml: no dsh-browser-playwright-codex/tool row found')
+  const flag = (name) => new RegExp(name + ':\\s*(true|false)').exec(row)?.[1] === 'true'
   return { allowEvaluate: flag('allowEvaluate'), allowCdp: flag('allowCdp') }
 }
 
