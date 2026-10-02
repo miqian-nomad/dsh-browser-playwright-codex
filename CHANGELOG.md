@@ -33,8 +33,11 @@ window.
     used only when the window is positively visible, where a temporary page disturbs nobody.
   - This is strictly better than the mitigation it replaces: the old gate *skipped* the export while
     minimized, so the session-cookie fallback had a hole exactly for the user most likely to close the
-    window by hand. Nothing durable is lost — localStorage already lives in the persistent profile,
-    and `restoreState` is unchanged.
+    window by hand. The state file is a snapshot, and we no longer write origins we did not read —
+    which also removes a subtler hazard: the old gate left the *previous* origins list sitting in the
+    file, and `restoreState` re-applies that list with `addInitScript` on the next launch, overwriting
+    whatever the profile had stored since. No durable loss either way: localStorage lives in the
+    persistent profile.
 - **Guards:** `tests/login-state.test.ts` drives that decision with a fake browser context (no
   browser, no network), pinning which playwright API is used per window state. Measured against the
   previous code it fails 3 of its 4 cases (it catches `storageState()` being reached while minimized,
