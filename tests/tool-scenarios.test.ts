@@ -417,7 +417,15 @@ test('stale ref surface: an outdated ref fails fast, then a fresh snapshot recov
     ctx,
     'browser_snapshot',
     {},
-    (value) => !(value as { tree: string }).tree.includes('Mechanical Keyboard'),
+    // Keyed on a product that exists ONLY in the grid. The first four catalog entries also
+    // show up in the asynchronous "Recently viewed" list (200 ms fetch, 200 ms delay), so a
+    // wait keyed on one of those — this used to key on 'Mechanical Keyboard' — can never
+    // settle once that list has rendered, no matter how well the filter worked. That is a
+    // race, and it is why this test passed on a warm laptop and timed out on a cold CI
+    // runner: the first snapshot got in before the list rendered here, and after it there.
+    // 'Adjustable Dumbbells' is Sports (so the Kitchen filter removes it) and sits outside
+    // the first four (so nothing else on the page can put it back).
+    (value) => !(value as { tree: string }).tree.includes('Adjustable Dumbbells'),
     'filtered grid',
   )
 
