@@ -24,7 +24,7 @@ Or pin a binary: `launch.executablePath` / `launch.channel` in the plugin config
 
 ## Tools
 
-The default `toolPrefix` is `browser_`. Every action returns a fresh snapshot, so refs always come from the latest result. The registered set is capability-gated: `browser_evaluate`, `browser_cdp` and `browser_extract` appear only when their capability is switched on (their schemas are resident in the system prompt on every turn, so a tool that could only answer "disabled" would be pure prompt cost). Count the live surface with `npm run cost` — this package ships `cordis.patch.yml` with `allowEvaluate: true` and `allowCdp: true`, so a profile mounting this bundle sees 22 tools (23 once `extract` is configured).
+The default `toolPrefix` is `browser_`. Every action returns a fresh snapshot, so refs always come from the latest result. The registered set is capability-gated: `browser_evaluate`, `browser_cdp` and `browser_extract` appear only when their capability is switched on (their schemas are resident in the system prompt on every turn, so a tool that could only answer "disabled" would be pure prompt cost). Count the live surface with `npm run cost` — the shipped `cordis.patch.yml` keeps **both power gates off** (since 0.4.7), so a profile mounting this bundle sees **20 tools**; 21 or 22 once your deployment opts into `evaluate` / `cdp`, 23 once `extract` is configured. How to opt in: [SECURITY.md](SECURITY.md) §1.
 
 | Tool | Purpose |
 |---|---|

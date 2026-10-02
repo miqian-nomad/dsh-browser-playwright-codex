@@ -2,7 +2,35 @@
 
 > [![dsh.so 安装验证 · dsh 0.2.0-rc.1](https://www.dsh.so/badge/install/dsh-browser-playwright-codex@0.2.0-rc.1.svg)](https://www.dsh.so/zh/artifact/dsh-browser-playwright-codex/) [![dsh.so 风险](https://www.dsh.so/badge/dsh-browser-playwright-codex.svg)](https://www.dsh.so/zh/artifact/dsh-browser-playwright-codex/)
 
-Playwright-powered browser capability for [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness): the agent drives a **visible, profile-backed browser window** through accessibility snapshots with stable element refs — no CSS-selector guessing, no full-DOM dumps. Login state survives window close and harness restarts (Codex-style personal browser), tabs, screenshots as durable image attachments, structured extraction, gated JavaScript evaluation, and Codex-inspired reliability guards (bounded render-stability waits, post-action verification, fast-fail actionability checks, crash auto-recovery) and native-dialog handling (alert/confirm/prompt/beforeunload are parked as a pending state, reported to the model, and answered only by an explicit `browser_dialog` call — never auto-accepted; see [DIALOG-POLICY.md](DIALOG-POLICY.md)).
+**一句话**：让 AI 用你**已经登录的账号**替你上网办事 —— 窗口就在你桌面上、你随时看得见；遇到登录、验证码、原生弹框，它会**停下来等你**，绝不替你点「确定」。
+
+**In one line**: the agent drives a **visible, profile-backed browser window** with the logins you
+already have, through accessibility snapshots with stable element refs — and it stops for logins,
+captchas and native dialogs instead of guessing. No CSS-selector guessing, no full-DOM dumps.
+
+```sh
+dsh plugin --profile <name> add github:miqian-nomad/dsh-browser-playwright-codex
+```
+
+**为什么值得装 / What makes it different**
+
+- **登录一次，一直用** — a profile-backed window plus an exported session state, so a closed window or
+  a restarted harness comes back logged in.
+- **全程看得见，也不抢你的焦点** — a real window you can watch, minimise or take over; the provider
+  keeps working while it is minimised ([FOCUS-STEALING.md](FOCUS-STEALING.md)).
+- **遇事停下来叫人** — `alert` / `confirm` / `prompt` are parked and reported, answered only by an
+  explicit `browser_dialog` call; a login, 2FA or captcha is handed back to you
+  ([DIALOG-POLICY.md](DIALOG-POLICY.md)).
+- **ref 失效会明说** — per-document nonce refs; a stale ref fails fast with an explanation instead of
+  silently clicking a different element.
+- **强力工具默认关闭** — `browser_evaluate` / `browser_cdp` are **not registered at all** unless your
+  deployment opts in; this package ships both off.
+
+**安全一览 / Security at a glance** — dsh.so's scanner reports *2 Critical* on this repository, and
+both findings **are** the implementation of `browser_evaluate`, which this package ships switched off.
+Every finding is explained gate by gate in [SECURITY.md](SECURITY.md), together with what the plugin
+can and cannot do with your logins (URL policy, CDP allow-list, dialog policy, no telemetry, and it
+never types passwords or 2FA codes).
 
 ## Install
 
@@ -35,7 +63,7 @@ Or pin a binary: `launch.executablePath` / `launch.channel` in the plugin config
 
 ## Tools
 
-The default `toolPrefix` is `browser_`. Every action returns a fresh snapshot, so refs always come from the latest result. The registered set is capability-gated: `browser_evaluate`, `browser_cdp` and `browser_extract` appear only when their capability is switched on (their schemas are resident in the system prompt on every turn, so a tool that could only answer "disabled" would be pure prompt cost). Count the live surface with `npm run cost` — this package ships `cordis.patch.yml` with `allowEvaluate: true` and `allowCdp: true`, so a profile mounting this bundle sees 22 tools (23 once `extract` is configured).
+The default `toolPrefix` is `browser_`. Every action returns a fresh snapshot, so refs always come from the latest result. The registered set is capability-gated: `browser_evaluate`, `browser_cdp` and `browser_extract` appear only when their capability is switched on (their schemas are resident in the system prompt on every turn, so a tool that could only answer "disabled" would be pure prompt cost). Count the live surface with `npm run cost` — the shipped `cordis.patch.yml` keeps **both power gates off** (since 0.4.7), so a profile mounting this bundle sees **20 tools**; 21 or 22 once your deployment opts into `evaluate` / `cdp`, 23 once `extract` is configured. How to opt in: [SECURITY.md](SECURITY.md) §1.
 
 | Tool | Purpose |
 |---|---|

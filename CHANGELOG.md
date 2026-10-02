@@ -3,7 +3,38 @@
 Bilingual by intent: the version headings and the summary of each release are given in both
 languages, the individual entries follow the language the surrounding code and docs use.
 
-一句话摘要：**文档对齐 + 指向配套件** —— README 里那句「出厂 patch 把两个闸门打开」在 0.4.7 之后已经过期（现在包里保持关闭），改成事实；同时指向新的配套仓库 `dsh-browser-toggle`（设置页卡片，那两个开关就在上面）。
+一句话摘要：**把「看着危险」变成「说得清楚」** —— 新增 `SECURITY.md`，把 dsh.so 扫描报的 **2 Critical / 5 Warning / 26 Info** 逐条对上：那 2 个 Critical 就是 `browser_evaluate` 的实现，而**包里默认关闭**（关着时工具根本不注册）。README 第一屏重写（中文一句话 + 一条命令安装 + 五条差异点 + 安全入口），并又清掉两处「出厂开启闸门」的过期说法。
+
+## 0.4.10
+
+一句话摘要（0.4.9）：**文档对齐 + 指向配套件** —— README 里那句「出厂 patch 把两个闸门打开」在 0.4.7 之后已经过期（现在包里保持关闭），改成事实；同时指向新的配套仓库 `dsh-browser-toggle`（设置页卡片，那两个开关就在上面）。
+
+### Added
+
+- **`SECURITY.md`.** The scanner's output is the first thing a cautious user reads, and it said
+  "2 Critical · dynamic code execution" with no context. The file now maps every finding to what it
+  actually is and to the gate that decides whether it is reachable at all: both Criticals *are* the
+  body of `browser_evaluate`, a tool this package ships switched off, so it is not registered until a
+  deployment opts in. It also states plainly what the plugin can and cannot do with your logins (URL
+  policy and its limits, dialog parking, the CDP allow-list, where it writes, no telemetry, and that
+  the agent never types passwords or 2FA codes), plus how to re-check all of it yourself
+  (`npm test` / `npm run verify` / `npm run doctor` / CI / the sandbox records).
+  - It says the honest thing twice: the finding count **will not go to zero** (a scanner reads code,
+    not runtime gates), and we did not try to hide or suppress it.
+
+### Changed
+
+- **README first screen rewritten.** It used to open with one 90-word sentence that only a maintainer
+  would finish. Now: a one-line "what it does for you" in Chinese and English, the single install
+  command, five concrete differences (login reuse, watchable window that does not steal focus,
+  stopping for logins/captchas/dialogs, honest stale-ref failure, power tools off), then a pointer to
+  `SECURITY.md`. The technical detail is all still below the fold.
+
+### Fixed
+
+- **Two more stale "the shipped layer enables the gates" claims** (README's tool section and its
+  mirror `PLUGIN-README.md`) — the third and fourth appearance of that sentence, both now stating
+  that the package ships `allowEvaluate: false` / `allowCdp: false` and pointing at `SECURITY.md` §1.
 
 ## 0.4.9
 
