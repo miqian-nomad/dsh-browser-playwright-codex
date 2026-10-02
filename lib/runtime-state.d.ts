@@ -27,3 +27,19 @@ export declare function publishConfiguredEngine(engine: SnapshotEngine): void;
 export declare function getEffectiveEngine(): SnapshotEngine;
 /** Whether the current mode is the user's own pick rather than the default. */
 export declare function isEngineUserChosen(): boolean;
+/**
+ * The tool family's effective gates, published at registration. The Settings page
+ * needs to show what is actually in effect — including whatever a profile patch
+ * or a home-level patch decided — instead of guessing at the package default.
+ * Not persisted: it is derived from config every time the plugin is applied.
+ * @param gates - whether browser_evaluate / browser_cdp are registered.
+ */
+export declare function publishGates(gates: {
+    allowEvaluate: boolean;
+    allowCdp: boolean;
+}): void;
+/** The published gates, or undefined while the tool family has not been applied. */
+export declare function getGates(): {
+    allowEvaluate: boolean;
+    allowCdp: boolean;
+} | undefined;

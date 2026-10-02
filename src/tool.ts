@@ -25,7 +25,7 @@ type JsonValue = string | number | boolean | null | JsonValue[] | { [key: string
 import { BrowserError } from './errors.ts'
 import { registeredSuffixes, type ToolSuffix, type ToolSurfaceConfig } from './contract.ts'
 import { renderSnapshot, renderSnapshotDiff } from './snapshot-render.ts'
-import { getEnabled } from './runtime-state.ts'
+import { getEnabled, publishGates } from './runtime-state.ts'
 import { isCdpMethodAllowed, cdpDenialMessage } from './cdp-policy.ts'
 /** Cordis plugin name used by loader diagnostics. */
 export const name = 'browser-tool'
@@ -429,6 +429,12 @@ export function apply(ctx: Context, config: ToolConfig): void {
     registerDisabledTools: config.registerDisabledTools,
   }
   const registered = new Set<ToolSuffix>(registeredSuffixes(surface))
+  // Tell the Settings page what is actually in effect. It cannot read this
+  // config itself (the value may come from a bundle patch, a profile patch or a
+  // home-level patch), so the tool family publishes it at registration and the
+  // switch shows the truth instead of a guess. Driven by the same values that
+  // decided which tools register, so the two can never disagree.
+  publishGates({ allowEvaluate: registered.has('evaluate'), allowCdp: registered.has('cdp') })
   /** Register one gated tool only when this configuration keeps it live. */
   const registerMaybe = (suffix: ToolSuffix, definition: ToolDefinition): void => {
     if (registered.has(suffix)) ctx.tools.register(definition)
