@@ -3,7 +3,31 @@
 Bilingual by intent: the version headings and the summary of each release are given in both
 languages, the individual entries follow the language the surrounding code and docs use.
 
-一句话摘要：**修掉智能模式下的 ref 指错元素** —— 它按「位置」把 DOM 里所有可交互元素（含隐藏的）贴到 aria 树里只有可见的节点上，页面上一有隐藏副本就整体错位；模型照着快照里的 ref 操作，可能命中另一个元素。
+一句话摘要：**日志不再跨标签页混流** —— `browser_console_messages` / `browser_network_requests` 承诺给的是「当前这个标签页」的日志，实际给的是整个会话里所有标签页混在一起的大锅；现在只报当前页，并明确写出「另有 N 条来自其它标签页、已排除」。顺带修掉新开标签页**第一段导航完全没有日志采集**的问题。
+
+## 0.4.6
+
+一句话摘要（0.4.5）：**修掉智能模式下的 ref 指错元素** —— 它按「位置」把 DOM 里所有可交互元素（含隐藏的）贴到 aria 树里只有可见的节点上，页面上一有隐藏副本就整体错位；模型照着快照里的 ref 操作，可能命中另一个元素。
+
+### Fixed
+
+- **The diagnostics tools served every tab's entries as if they belonged to the driven tab.** Both
+  rings live on the session (deliberately: chronology and eviction stay honest across a tab switch),
+  but neither reader scoped its output to the page it was reporting on, while the tool descriptions
+  promise "the tab this session is driving". Measured 2026-10-02: sitting on a GitHub OAuth page,
+  `browser_console_messages` offered 抖音 CORS errors, B站 warnings and dsh.so failed loads — a
+  misdiagnosis one step away for exactly the tool whose job is to answer "the action looked
+  successful but nothing changed — was it the page or the request?".
+  - Every entry now carries the page that produced it, the readers filter to the page the session is
+    driving, and the rendered output discloses the excluded count
+    (`[N matching entries from other tabs of the same window not shown …]`). An empty result now says
+    "this tab is quiet" instead of implying the whole window is.
+  - **Second gap found while testing the first:** `browser_open_tab` never called `trackPage`, so a tab
+    opened through the tool had no console/network listeners during its first navigation — its own
+    load was invisible. Capture is now wired before that first `goto`.
+  - Guarded by a test that drives two tabs, makes each request a URL the other never uses, and asserts
+    that the driven tab is reported, the other tab is not, and the exclusion is disclosed rather than
+    silent.
 
 ## 0.4.5
 

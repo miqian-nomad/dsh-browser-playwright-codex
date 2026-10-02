@@ -124,6 +124,12 @@ export type DiagnosticsEntry = {
   ms?: number | null | undefined
   /** Transport failure text, when the request never completed. */
   failure?: string | null | undefined
+  /**
+   * Which page of this session produced the entry. The rings stay session-wide so
+   * chronology survives a tab switch, but the diagnostics tools report only the
+   * page the session is driving and say how many entries they left out.
+   */
+  page?: number | undefined
 }
 
 /** Canonical value of browser_console_messages and browser_network_requests. */
@@ -138,6 +144,12 @@ export type DiagnosticsValue = {
   readonly returned: number
   /** Entries evicted from the ring buffer, so truncation stays visible. */
   readonly dropped?: number
+  /**
+   * Matching entries that were left out because they belong to another tab of
+   * the shared window. Non-zero means "this tab is quiet, the noise is elsewhere"
+   * — the reader must say so instead of letting a model diagnose a foreign page.
+   */
+  readonly otherPages?: number
   readonly entries: readonly DiagnosticsEntry[]
 }
 

@@ -695,3 +695,42 @@ test('tab policy: switch_tab refuses a tab a page opened outside the allow-list'
     await provider.dispose()
   }
 })
+
+// ---------------------------------------------------------------------------
+// Diagnostics scope: a reader that promises one tab must not serve another tab
+// ---------------------------------------------------------------------------
+
+test('diagnostics report only the tab this session is driving', async () => {
+  const ctx = await assemble()
+  const agentId = 'diag-scope-agent'
+
+  // Tab 0 makes one request, with a URL no other tab will share.
+  const first = await call(ctx, 'browser_navigate', { url: store.base + '/diag-scope-a' }, agentId)
+  assert.equal(first.isError, false, textBlock(first))
+
+  // A second tab makes a different one. Both land in the same session-wide ring,
+  // because the ring keeps chronology and eviction honest across tab switches.
+  const second = await call(ctx, 'browser_open_tab', { url: store.base + '/diag-scope-b' }, agentId)
+  assert.equal(second.isError, false, textBlock(second))
+
+  // Drive tab 0 again, then read the log: it must describe tab 0 only, and it must
+  // say out loud that it left the other tab's entries out. Serving both is how a
+  // model ends up diagnosing a page it is not even looking at — measured
+  // 2026-10-02, the log offered 抖音/B站/dsh.so errors while the session sat on a
+  // GitHub page, and the first misdiagnosis was one step away.
+  const back = await call(ctx, 'browser_switch_tab', { index: 0 }, agentId)
+  assert.equal(back.isError, false, textBlock(back))
+  const log = await call(ctx, 'browser_network_requests', { urlContains: 'diag-scope-' }, agentId)
+  assert.equal(log.isError, false, textBlock(log))
+  const text = textBlock(log)
+
+  assert.ok(text.includes('/diag-scope-a'), 'the driven tab must be reported: ' + text)
+  assert.ok(!text.includes('/diag-scope-b'), 'another tab must not be served as if it were this one: ' + text)
+  assert.ok(
+    text.includes('from other tabs of the same window not shown'),
+    'the exclusion must be disclosed, not silent: ' + text,
+  )
+  const value = log.value as { total: number; otherPages?: number }
+  assert.equal(value.total, 1)
+  assert.ok((value.otherPages ?? 0) >= 1, 'the excluded count must be reported: ' + JSON.stringify(value))
+})

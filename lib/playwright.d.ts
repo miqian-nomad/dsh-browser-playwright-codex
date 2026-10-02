@@ -267,6 +267,10 @@ declare class PlaywrightSession {
     cdpPage: Page | undefined;
     /** Pages already wired for console/network capture (WeakSet: pages stay collectable). */
     trackedPages: WeakSet<Page>;
+    /** Stable id per page, so diagnostics can be reported for one page only. */
+    pageIds: WeakMap<Page, number>;
+    /** Ids handed out so far (monotonic within the session). */
+    pageIdSeq: number;
     /** Bounded console + pageerror ring, shared by every tracked page of this session. */
     consoleLog: DiagnosticsEntry[];
     /** Bounded network ring, shared by every tracked page of this session. */
@@ -560,6 +564,21 @@ declare class PlaywrightSession {
      * otherwise healthy, and it must never grow without a bound.
      */
     trackPage(page: Page): void;
+    /** Stable id for one page of this session (used to scope diagnostics). */
+    pageIdFor(page: Page): number;
+    /** Id of the page this session is driving, or undefined when there is none. */
+    currentPageId(): number | undefined;
+    /**
+     * Split diagnostics into "the page this session is driving" and "everything
+     * else". The rings keep every page's entries so chronology and eviction stay
+     * honest, but a reader that promises one tab must not serve another tab's
+     * lines: that is how a model diagnoses an error that belongs to a page it is
+     * not even looking at.
+     */
+    scopeToCurrentPage(entries: readonly DiagnosticsEntry[]): {
+        kept: DiagnosticsEntry[];
+        otherPages: number;
+    };
     /** URL of the tab this session is driving right now, or null. */
     currentUrl(): string | null;
     /** Recent console messages and uncaught page errors, newest last. */
@@ -572,6 +591,7 @@ declare class PlaywrightSession {
         total: number;
         returned: number;
         dropped: number;
+        otherPages: number;
         note: string;
         entries: {
             n: number;
@@ -590,6 +610,7 @@ declare class PlaywrightSession {
         total: number;
         returned: number;
         dropped: number;
+        otherPages: number;
         note: string;
         entries: {
             n: number;
