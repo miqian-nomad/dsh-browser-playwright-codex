@@ -3,12 +3,22 @@
 Bilingual by intent: the version headings and the summary of each release are given in both
 languages, the individual entries follow the language the surrounding code and docs use.
 
-一句话摘要：**给 `LICENSE` 加上 SPDX 标识行** —— dsh.so 的提交检查读许可证文件时报「找到许可证文件，但无法确定 SPDX 标识」；MIT 正文本身是标准的、`package.json` 也写了 `"license": "MIT"`，但那一步要求标识出现在文件里。许可条款没有任何改动。
+一句话摘要：**撤回 0.4.3 加的 SPDX 行** —— 实测它反而让 dsh.so 的「许可证」字段从 `MIT` 变成 `NOASSERTION`（他们的匹配器是整文模板比对，多一行就失配）。`LICENSE` 恢复原样，许可条款从未改变。
+
+## 0.4.4
+
+Reverted the SPDX line added in 0.4.3. Measured against dsh.so's submission checker it made the
+license field *worse* while leaving the format note untouched, so `LICENSE` is back to the exact
+0.4.2 bytes. No code change, and the license terms never changed at any point.
+
+### Fixed
+
+- **Reverted the SPDX line added in 0.4.3.** Measured against dsh.so's submission checker on a `v0.4.3` freeze: the license field changed from `MIT` to `NOASSERTION`, while the format note `找到许可证文件，但无法确定 SPDX 标识` stayed exactly as before. Their matcher compares the whole file against known license templates, so one extra leading line makes identification fail. `LICENSE` is byte-identical to the 0.4.2 version again — verified with `git diff v0.4.2 -- LICENSE` (empty).
+- The remaining format note is a quirk of that checker, not a licensing problem: `package.json` declares `"license": "MIT"` and the file is the standard MIT text. It is a warning, not a blocker — the submission was accepted with it in place.
 
 ## 0.4.3
 
-A packaging fix so registries can identify the license. No code change, and no change to the license
-terms.
+一句话摘要（0.4.3）：**给 `LICENSE` 加上 SPDX 标识行** —— dsh.so 的提交检查读许可证文件时报「找到许可证文件，但无法确定 SPDX 标识」；MIT 正文本身是标准的、`package.json` 也写了 `"license": "MIT"`，但那一步要求标识出现在文件里。许可条款没有任何改动。
 
 ### Fixed
 
