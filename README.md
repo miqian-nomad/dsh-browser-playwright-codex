@@ -233,6 +233,19 @@ Tool schemas are static per registration and keep the prompt prefix stable. Resu
 
 The page state itself (DOM, cookies, storage) lives in the browser context and never enters the prompt except through snapshot or page-data results.
 
+## Further reading
+
+Written for people deciding whether to hand an agent their browser:
+
+- [让 AI 用你已经登录的账号干活](docs/articles/login-state.md) — why session cookies are the hard part, and
+  what the export does to a minimised window.
+- [AI 开着浏览器抢你的焦点：三个根因](docs/articles/focus-stealing.md) — all three traced into source, with a
+  60-line reproduction script that needs no part of this plugin.
+- [遇到验证码和弹窗，为什么它不该替你点「确定」](docs/articles/dialogs-and-captcha.md) — mechanism-level
+  dialog parking, and the same philosophy behind stale refs failing loudly.
+- [官方 Discussions 发帖草稿](docs/articles/discussions-post.md) — a compatibility report in the format the
+  community asks for, ready to paste.
+
 ## Known Limitations and Deferred Work
 
 - **Persistent mode is one shared window** — all calling sessions drive the same profile-backed window and share its login state and tabs. Ideal for a personal assistant; if you need hard per-session isolation (separate logins per conversation), set `launch.persistent: false` and manage per-owner contexts, or run separate DSH profiles.
