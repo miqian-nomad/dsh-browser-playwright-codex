@@ -148,7 +148,12 @@ async function waitFor(
   session: BrowserSession,
   condition: (snap: BrowserSnapshot) => boolean,
   label: string,
-  timeoutMs = 8000,
+  // 25s, not 8s: the poll returns the moment the condition holds, so this budget only bounds
+  // how long a *failure* takes to surface — and an 8s budget proved too tight for the cold,
+  // slow windows runner, where a single step (fixture round trip + settle + snapshot) can eat
+  // seconds on its own (measured 2026-10-02: 'A cart badge' timed out there while the same
+  // suite passed on ubuntu and locally).
+  timeoutMs = 25000,
   intervalMs = 150,
 ): Promise<BrowserSnapshot> {
   const deadline = Date.now() + timeoutMs
@@ -165,7 +170,15 @@ async function waitFor(
     }
     if (Date.now() > deadline) {
       if (lastError !== undefined) throw lastError
-      assert.fail('condition never became true: ' + label + ' — last url: ' + (last?.url ?? 'unknown'))
+      // Say what the page actually looked like, so a timeout is diagnosable without a re-run.
+      assert.fail(
+        'condition never became true: ' +
+          label +
+          ' — last url: ' +
+          (last?.url ?? 'unknown') +
+          ' — last text: ' +
+          (last === undefined ? '(no snapshot)' : text(last).slice(0, 240).replace(/\s+/g, ' ')),
+      )
     }
     await sleep(intervalMs)
   }

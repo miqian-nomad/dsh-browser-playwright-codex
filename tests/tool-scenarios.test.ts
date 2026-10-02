@@ -106,20 +106,31 @@ async function callUntil(
   condition: (value: unknown) => boolean,
   label: string,
   agentId = 'tool-agent-1',
-  timeoutMs = 8000,
+  // 25s, not 8s: the poll returns the moment the condition holds, so the budget only bounds how
+  // long a *failure* takes to surface — and 8s proved too tight on the cold windows runner, where
+  // one tool round trip can take seconds (measured 2026-10-02).
+  timeoutMs = 25000,
 ): Promise<ToolExecutionResult> {
   const deadline = Date.now() + timeoutMs
   let lastError: unknown
+  let lastValue: unknown
   for (;;) {
     const result = await call(ctx, name, args, agentId)
     if (!result.isError && condition(result.value)) return result
     if (result.isError) lastError = result.error
+    else lastValue = result.value
     if (Date.now() > deadline) {
       // Transient failures (e.g. a snapshot racing a JS navigation) are
       // retried like the agent loop would; only a persistent failure fails.
       if (lastError !== undefined)
         assert.fail('tool kept failing while waiting for ' + label + ': ' + JSON.stringify(lastError))
-      assert.fail('tool condition never true: ' + label)
+      // Say what the tool actually returned, so a timeout is diagnosable without a re-run.
+      assert.fail(
+        'tool condition never true: ' +
+          label +
+          ' — last value: ' +
+          (lastValue === undefined ? '(none)' : JSON.stringify(lastValue).slice(0, 260).replace(/\s+/g, ' ')),
+      )
     }
     await new Promise((resolve) => setTimeout(resolve, 150))
   }
