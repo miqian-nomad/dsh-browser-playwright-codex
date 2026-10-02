@@ -3,7 +3,40 @@
 Bilingual by intent: the version headings and the summary of each release are given in both
 languages, the individual entries follow the language the surrounding code and docs use.
 
-一句话摘要：**智能模式原来几乎从未真正生效** —— 解析器把 `/placeholder:` 这类属性行当成「格式漂移」，于是**任何带输入框提示语的页面都静默退回兼容模式**；同时「先 flags 后跟冒号」的内联文字被丢掉，导致段落文字整条消失。两个都修了，并给智能模式补上端到端验收与「已回退」明示。另外：**包里不再默认打开 `browser_evaluate` / `browser_cdp`**（那是发给每个安装者的后门），本机授权改由 profile 配置承担。
+一句话摘要：**文档对齐 + 指向配套件** —— README 里那句「出厂 patch 把两个闸门打开」在 0.4.7 之后已经过期（现在包里保持关闭），改成事实；同时指向新的配套仓库 `dsh-browser-toggle`（设置页卡片，那两个开关就在上面）。
+
+## 0.4.9
+
+一句话摘要（0.4.8）：**设置页能如实显示并可切换两个强力工具** —— 工具族在注册时发布自己真正使用的闸门值，设置页显示的就是事实；配套卡片把用户的选择写进部署自己的配置层。
+
+### Fixed
+
+- **The READMEs no longer claim the shipped layer enables the gates.** They said the packaged
+  `cordis.patch.yml` turns `allowEvaluate`/`allowCdp` **on** ("user choice, 2026-09-04") and even
+  flagged the contradiction with the sample above it. 0.4.7 removed that, so the sentence described
+  a state that no longer exists — exactly the kind of stale claim a third-party reader would take at
+  face value. Both files now state what the package does: keeps them off, because the file travels
+  inside the package and anything it enabled would be enabled for every installer.
+
+### Added
+
+- **A pointer to the companion package** [`dsh-browser-toggle`](https://github.com/miqian-nomad/dsh-browser-toggle),
+  with the reason the card cannot live in this package: `dsh-client-modules` rejects a package mounted
+  from multiple loader entries, and this one is mounted as three (`service`, `playwright`, `tool`),
+  while a Settings card needs a client module. The card writes the gates into the deployment's
+  home-level `cordis.patch.yml`, so what you download is never the thing that decided to enable them.
+
+## 0.4.8
+
+一句话摘要（0.4.7）：**智能模式原来几乎从未真正生效** —— 解析器把 `/placeholder:` 这类属性行当成「格式漂移」，于是**任何带输入框提示语的页面都静默退回兼容模式**；同时「先 flags 后跟冒号」的内联文字被丢掉，导致段落文字整条消失。两个都修了，并给智能模式补上端到端验收与「已回退」明示。另外：**包里不再默认打开 `browser_evaluate` / `browser_cdp`**（那是发给每个安装者的后门），本机授权改由 profile 配置承担。
+
+### Added
+
+- **`runtime-state.publishGates` / `getGates`.** The tool family publishes the gates it actually
+  applied, so a Settings UI can show what is in effect instead of guessing at the package default —
+  the value may come from the bundle patch, a profile patch or a home-level patch. Published from the
+  same set that decides which tools register, so the two can never disagree. Purely additive: no
+  behaviour change on its own (99 tests / 96 pass, verify 57/57, CI green on both runners).
 
 ## 0.4.7
 

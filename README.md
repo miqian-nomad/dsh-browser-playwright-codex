@@ -121,7 +121,17 @@ All tunables are patchable through the profile's `cordis.patch.yml` (later layer
       maxOutputTokens: 2000
 ```
 
-`browser_extract` needs an auxiliary LLM route (`extract.provider` + `extract.model`); without one it fails with an actionable error. With a route configured, `extract.maxInputChars` bounds the page text in that prompt, and the prompt names the cap when it truncates. A gated tool is **not registered at all** while its capability is off, so its schema never reaches the system prompt; set `registerDisabledTools: true` to keep the whole surface discoverable (the tool then answers with the error naming the switch). Note the shipped layer in [`cordis.patch.yml`](cordis.patch.yml) turns `allowEvaluate` and `allowCdp` **on** (user choice, 2026-09-04), which contradicts the `false` shown in the sample above — the sample documents the schema defaults, the shipped patch documents this deployment. `browser_evaluate` stays off until `allowEvaluate: true` because it executes arbitrary page JavaScript. `browser_cdp` stays off until `allowCdp: true`; even then only the allow-list in `lib/cdp-policy.js` passes — network, storage, cookie, security and arbitrary-JS (`Runtime.evaluate`) commands are rejected with `CDP_DENIED`.
+`browser_extract` needs an auxiliary LLM route (`extract.provider` + `extract.model`); without one it fails with an actionable error. With a route configured, `extract.maxInputChars` bounds the page text in that prompt, and the prompt names the cap when it truncates. A gated tool is **not registered at all** while its capability is off, so its schema never reaches the system prompt; set `registerDisabledTools: true` to keep the whole surface discoverable (the tool then answers with the error naming the switch). The shipped layer in [`cordis.patch.yml`](cordis.patch.yml) keeps `allowEvaluate` and `allowCdp` **off**, matching the schema defaults and this sample: that file travels inside the package, so anything it enabled would be enabled for everyone who installs it. Opt in per deployment, in that deployment's own patch layer. `browser_evaluate` executes arbitrary page JavaScript; `browser_cdp` stays off until `allowCdp: true`, and even then only the allow-list in `lib/cdp-policy.js` passes — network, storage, cookie, security and arbitrary-JS (`Runtime.evaluate`) commands are rejected with `CDP_DENIED`.
+
+### Prefer a switch to editing config?
+
+The companion package [`dsh-browser-toggle`](https://github.com/miqian-nomad/dsh-browser-toggle) puts
+this on a Settings card: enable/disable the browser, pick the page-reading mode, and turn the two
+power tools on or off — no restart, no YAML. It is a separate package because
+`dsh-client-modules` rejects a package mounted from multiple loader entries, and this plugin is
+mounted as three (`service`, `playwright`, `tool`), while a Settings card needs a client module. The
+card writes the gates into a managed block in the deployment's home-level `cordis.patch.yml`; the
+package here stays untouched, so what you download is never the thing that decided to enable them.
 
 ## Architecture
 
