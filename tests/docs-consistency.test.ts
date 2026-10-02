@@ -342,3 +342,47 @@ test('docs: every file quotes the same acceptance count', () => {
       JSON.stringify([...claims].map(([n, where]) => `${n} @ ${where.join(', ')}`)),
   )
 })
+
+test("docs: the registry entry matches the code and opens with the user's words", () => {
+  // The `awesome-dsh-plugin` registry is the catalog behind dsh-market — the market most DSH users
+  // install first — and this description is the text they read there. It is kept in-repo (and
+  // pushed to the PR branch) precisely so the same guards cover it: numbers against contract.ts,
+  // gate defaults against cordis.patch.yml, and the opening line against how people actually search
+  // (source: the author's own finding that the first version led with "无障碍快照 / 稳定 ref", which
+  // nobody searching "dsh 浏览器 填表" would ever match).
+  const entry = read('registry/awesome-dsh-plugin.yml')
+  const off = registeredToolNames('browser_', SURFACE_OFF).length
+  const all = registeredToolNames('browser_', SURFACE_ALL).length
+  const gated = all - off
+
+  assert.ok(
+    entry.includes('url: https://github.com/miqian-nomad/dsh-browser-playwright-codex'),
+    'the entry must point at this repository',
+  )
+  assert.ok(entry.includes('name: miqian-nomad/dsh-browser-playwright-codex'), 'the entry name must match')
+  assert.ok(/^category: browser$/m.test(entry), 'the entry category should stay "browser"')
+
+  for (const want of [`${all} Playwright tools`, `${off} always on`, `${gated} gated`]) {
+    assert.ok(entry.includes(want), `the English entry should quote the measured surface (${want})`)
+  }
+  for (const want of [`${all} 个 Playwright 工具`, `${off} 个常驻`, `${gated} 个默认关闭`]) {
+    assert.ok(entry.includes(want), `the Chinese entry should quote the measured surface (${want})`)
+  }
+  assert.ok(/off by default/.test(entry) && /默认关闭/.test(entry), 'the entry must say the gates ship off')
+
+  const zh = /zh:\s*'(.*)'/.exec(entry)?.[1] ?? ''
+  assert.ok(zh !== '', 'the entry needs a Chinese description')
+  const firstSentence = zh.split('。')[0] ?? ''
+  const NEED = ['浏览器', '网页', '填表', '抓取', '多标签', '登录', '账号']
+  const hits = NEED.filter((word) => firstSentence.includes(word))
+  assert.ok(
+    hits.length >= 3,
+    `the pitch should open with words a user searches for (found ${hits.join('/') || 'none'}): ${firstSentence}`,
+  )
+  for (const jargon of ['无障碍快照', '稳定 ref', 'CSS 选择器', '工具族']) {
+    assert.ok(
+      !firstSentence.includes(jargon),
+      `the pitch should not open with implementation jargon (${jargon}): ${firstSentence}`,
+    )
+  }
+})
