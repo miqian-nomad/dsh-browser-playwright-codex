@@ -59,6 +59,13 @@ user settings file.
 
 ### Added
 
+- **A settings-page switch for how pages are read** (`dsh-browser-toggle` card, right under
+  the existing on/off switch): 兼容模式 (the plugin's own DOM walk) ↔ 智能模式 (the browser's
+  official accessibility tree). It is persisted next to the enable flag and applies from the
+  next operation — no restart, no config edit. The card shows the mode actually in effect and
+  whether it is the user's pick or the deployment default, and the choice is rendered as radio
+  rows (the pattern the search-provider card uses for a pick-one setting) rather than a switch.
+  Landed after the 0.4.0 tag (`81d8769`), which is why it is listed here and not under 0.4.0.
 - **`patches/`** — `upstream-window-activation.patch` plus its README: the minimized-window
   focus-stealing fix as a patch against upstream, so the diagnosis is reusable outside this fork.
 - **`scripts/analysis/`** — four probes (`repro-minimize`, `hl-compare`, `live-handoff-probe`,
@@ -125,12 +132,6 @@ version's real defect, found, fixed, and guarded.
 
 ### Added
 
-- **A settings-page switch for how pages are read** (`dsh-browser-toggle` card, right under
-  the existing on/off switch): 兼容模式 (the plugin's own DOM walk) ↔ 智能模式 (the browser's
-  official accessibility tree). It is persisted next to the enable flag and applies from the
-  next operation — no restart, no config edit. The card shows the mode actually in effect and
-  whether it is the user's pick or the deployment default, and the choice is rendered as radio
-  rows (the pattern the search-provider card uses for a pick-one setting) rather than a switch.
 - **Plugin metadata localization** (`locale/en.json`, `locale/zh.json`), plus the
   `"./locale/*.json"` export and a `locale` entry in `files` — without the export the harness'
   `require.resolve` fails and the metadata silently falls back to English.
