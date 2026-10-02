@@ -3,9 +3,24 @@
 Bilingual by intent: the version headings and the summary of each release are given in both
 languages, the individual entries follow the language the surrounding code and docs use.
 
-一句话摘要：**最后一个已知缺陷查清并修掉了** —— 每次操作后的登录态导出会为「访问过但标签已关」的站点临时开一个标签去读 localStorage，而那个标签不带 `background`，于是把用户最小化的窗口拽回桌面。
+一句话摘要：**给 `LICENSE` 加上 SPDX 标识行** —— dsh.so 的提交检查读许可证文件时报「找到许可证文件，但无法确定 SPDX 标识」；MIT 正文本身是标准的、`package.json` 也写了 `"license": "MIT"`，但那一步要求标识出现在文件里。许可条款没有任何改动。
+
+## 0.4.3
+
+A packaging fix so registries can identify the license. No code change, and no change to the license
+terms.
+
+### Fixed
+
+- **`LICENSE` now opens with `SPDX-License-Identifier: MIT`.** dsh.so's submission checker reads the
+  license file and reported `找到许可证文件，但无法确定 SPDX 标识` while scanning `v0.4.2`; the MIT
+  text was already standard and `package.json` already declared `"license": "MIT"`, but its detector
+  wants the identifier inside the file. Everything below that line is byte-identical to the previous
+  LICENSE.
 
 ## 0.4.2
+
+一句话摘要（0.4.2）：**最后一个已知缺陷查清并修掉了** —— 每次操作后的登录态导出会为「访问过但标签已关」的站点临时开一个标签去读 localStorage，而那个标签不带 `background`，于是把用户最小化的窗口拽回桌面。
 
 Root cause of the last known defect, found in playwright-core's source and fixed in-plugin: the
 post-operation login-state export used `context.storageState()`, which opens a temporary page for
