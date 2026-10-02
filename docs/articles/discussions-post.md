@@ -1,9 +1,21 @@
 # 官方 Discussions 发帖草稿（可直接贴）
 
 两个版本：**A 是短版兼容性报告**（按 dsh.so 提交页给的模板格式，他们明说会把 Discussions 上的实测并入数据）；
-**B 是长版"交作业"帖**（更能带来点击）。建议先发 A，隔几天发 B（或把 B 作为 A 的回复）。
+**B 是长版"交作业"帖**（更能带来点击）。
 
-发布位置：<https://github.com/deepseek-ai/deepseek-harness/discussions/new?category=general>
+发布位置：<https://github.com/deepseek-ai/deepseek-harness/discussions>
+
+官方仓库的实况（2026-10-02 查）：★242k、**Issues 已关闭**（`has_issues: false`）→ **Discussions 是唯一的官方沟通渠道**；
+共 8,536 条讨论，当天仍有多帖在动。板块有：Announcements / General / Ideas / Polls / Q&A / **Show Your Plugins!**
+
+| 内容 | 发到哪个板块 | 链接 |
+|---|---|---|
+| **B（插件展示长帖）** | **Show Your Plugins!** ← 就是为这个开的 | `/discussions/new?category=show-your-plugins` |
+| **A（兼容性实测报告）** | **General** | `/discussions/new?category=general` |
+| 以后回答别人的"怎么让 AI 操作网页" | **Q&A**（比发自己的帖回报更高） | `/discussions/new?category=q-a` |
+
+建议顺序：先在 **Show Your Plugins!** 发 B（有内容、有人味），隔一两天再把 A 作为其回复或单独发到 General。
+**别把 B 发到 Ideas 或 Announcements** —— 前者是提需求，后者只有维护者能发。
 
 ---
 
