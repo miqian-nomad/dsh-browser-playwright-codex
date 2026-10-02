@@ -1,5 +1,9 @@
 # 官方 Discussions 发帖草稿（可直接贴）
 
+> **已发布（B 版）**：<https://github.com/deepseek-ai/deepseek-harness/discussions/8685>
+> 板块 Show Your Plugins! · 作者 miqian-nomad · 2026-10-02T15:22Z
+> 待办：观察回复并逐条回答；A 版（兼容性报告）按计划隔一两天发到 General。
+
 两个版本：**A 是短版兼容性报告**（按 dsh.so 提交页给的模板格式，他们明说会把 Discussions 上的实测并入数据）；
 **B 是长版"交作业"帖**（更能带来点击）。
 
