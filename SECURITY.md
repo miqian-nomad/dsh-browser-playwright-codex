@@ -90,8 +90,9 @@ Two honest notes:
 ## 3. How to check all of this yourself
 
 ```sh
-npm test          # 99 tests: contracts, tool schemas, scenarios, aria engine, CDP policy, diff,
-                  # click/tab allow-lists, snapshot rendering, prompt budget
+npm test          # 100+ unit, scenario and guard tests: contracts, tool schemas, scenarios,
+                  # aria engine, CDP policy, diff, click/tab allow-lists, snapshot rendering,
+                  # prompt budget, docs-vs-reality consistency
 npm run verify    # 57 self-contained acceptance checks: no DSH, no network, local fixture server
 npm run doctor    # the host packages this plugin imports are still exporting what it uses
 npm run cost      # resident prompt cost of the registered tool surface

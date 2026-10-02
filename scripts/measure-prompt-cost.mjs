@@ -24,6 +24,7 @@ import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import BrowserRuntime from '../src/service.ts'
 import { PlaywrightProvider } from '../src/playwright.ts'
 import * as browserTool from '../src/tool.ts'
+import { bundleConfig } from './shipped-gates.mjs'
 
 const pwConfig = {
   launch: {
@@ -48,26 +49,10 @@ const baseConfig = {
 }
 
 /**
- * Read the shipped bundle layer: what a deployment actually gets.
- *
- * Comment lines are stripped first, and that is not cosmetic: this file documents
- * the opt-in snippet, so a naive regex matched the *example* `allowEvaluate: true`
- * inside a comment and reported the bundle as having both gates on while the real
- * keys said false — the printed label and the file disagreed (measured 2026-10-02,
- * and it is the same trap as the aria parser reading `/placeholder:` as drift).
+ * Read the shipped bundle layer: what a deployment actually gets. The parser lives in
+ * `shipped-gates.mjs` because it is the one place that must not be fooled by the opt-in
+ * example in the patch file's comments, and a guard test pins it (tests/docs-consistency).
  */
-function bundleConfig() {
-  const yml = readFileSync(new URL('../cordis.patch.yml', import.meta.url), 'utf8')
-  const code = yml
-    .split('\n')
-    .map((line) => line.replace(/\s+#.*$/, ''))
-    .filter((line) => !/^\s*#/.test(line))
-    .join('\n')
-  const row = code.split(/\n(?=\s*- id: )/).find((block) => block.includes('dsh-browser-playwright-codex/tool')) ?? ''
-  if (row === '') throw new Error('cordis.patch.yml: no dsh-browser-playwright-codex/tool row found')
-  const flag = (name) => new RegExp(name + ':\\s*(true|false)').exec(row)?.[1] === 'true'
-  return { allowEvaluate: flag('allowEvaluate'), allowCdp: flag('allowCdp') }
-}
 
 /** Assemble one tool surface and return its per-schema wire sizes. */
 async function surface(config) {
