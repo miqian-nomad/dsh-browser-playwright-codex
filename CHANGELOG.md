@@ -3,9 +3,49 @@
 Bilingual by intent: the version headings and the summary of each release are given in both
 languages, the individual entries follow the language the surrounding code and docs use.
 
-一句话摘要：**把 GitHub 上独有的文档/补丁/分析脚本收回本仓库，并把 `lib/` 正式入库** ——
-同时修掉一个会让"全绿"变"全红"的测试缺陷：测试与验收会去读设置页那份真实用户状态，
-用户把「页面识别方式」拨到智能模式后，同一份未改动的代码会整片假失败。
+一句话摘要：**最后一个已知缺陷查清并修掉了** —— 每次操作后的登录态导出会为「访问过但标签已关」的站点临时开一个标签去读 localStorage，而那个标签不带 `background`，于是把用户最小化的窗口拽回桌面。
+
+## 0.4.2
+
+Root cause of the last known defect, found in playwright-core's source and fixed in-plugin: the
+post-operation login-state export used `context.storageState()`, which opens a temporary page for
+every visited origin whose page is gone — a page created without `background`, which activates the
+window.
+
+### Fixed
+
+- **A minimized window is no longer dragged back onto the screen by the login-state export.**
+  `context.storageState()` is not a pure read: for every origin the context has visited whose page is
+  since gone, it opens a **temporary page**, navigates it to that origin, reads its storage and closes
+  it (`playwright-core@1.62.1 lib/coreBundle.js:51663-51683`). The origin set is accumulated by
+  `addVisitedOrigin` on every navigation (`:22352` → `:51634`) and is only ever reset by
+  `setStorageState` (`:51737`), so a long-lived context always has leftovers. That page is created
+  through `Target.createTarget` **without `background: true`** (`:38340-38342`), and Chromium
+  activates the window on every tab creation — the same root as the earlier "tab creation raises the
+  window" fix, with a trigger nobody had suspected: Playwright's own storage bookkeeping, running
+  after every tool call.
+  - **Why the earlier minimal reproduction could not see it:** in a fresh process every visited origin
+    is still covered by an open page, so the temporary-page branch is never entered — `storageState()`
+    is genuinely safe there. It needs a long-lived context that has navigated away from sites it no
+    longer keeps open.
+  - **The fix:** when the window is minimized — or its state cannot be read — export **cookies only**
+    (`context.cookies()`; cookies never open a page, `:51639`). The full `context.storageState()` is
+    used only when the window is positively visible, where a temporary page disturbs nobody.
+  - This is strictly better than the mitigation it replaces: the old gate *skipped* the export while
+    minimized, so the session-cookie fallback had a hole exactly for the user most likely to close the
+    window by hand. Nothing durable is lost — localStorage already lives in the persistent profile,
+    and `restoreState` is unchanged.
+- **Guards:** `tests/login-state.test.ts` drives that decision with a fake browser context (no
+  browser, no network), pinning which playwright API is used per window state. Measured against the
+  previous code it fails 3 of its 4 cases (it catches `storageState()` being reached while minimized,
+  and the throttled export being skipped); it passes 4/4 now.
+
+### Docs
+
+- `FOCUS-STEALING.md` Cause 3 is no longer "only half understood": the four-link mechanism is written
+  out with source lines, the "the A/B may have been confounded" alternative is withdrawn, and the
+  method table explains why `storageState()` measured *safe* in a fresh process and still raised the
+  window on a long-lived instance.
 
 ## 0.4.1
 

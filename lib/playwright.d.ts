@@ -192,9 +192,45 @@ export declare class PlaywrightProvider {
     ensureContext(): Promise<BrowserContext>;
     /** Remove stale Chrome singleton lock files inside the profile directory. */
     clearChromeLocks(): Promise<void>;
-    /** Export cookies + localStorage to the state file (session-cookie fallback). */
+    /**
+     * Collect the login-state fallback WITHOUT ever opening a page while the
+     * window is put away.
+     *
+     * `context.storageState()` is not a pure read. For every origin this context
+     * has visited whose page is since gone, it opens a TEMPORARY PAGE, navigates
+     * it to that origin, reads its storage, and closes it again
+     * (playwright-core 1.62.1 `coreBundle.js:51663-51683`). The origins set is
+     * accumulated by `addVisitedOrigin` on every navigation
+     * (`coreBundle.js:22352` → `51634`) and only reset by `setStorageState`, so a
+     * long-lived context always has leftovers. That temporary page is created
+     * through `Target.createTarget` without `background: true`
+     * (`coreBundle.js:38340-38342`) — and Chromium activates the window on every
+     * tab creation. Same root as Cause 2 in FOCUS-STEALING.md, different trigger:
+     * a bookkeeping step that ran after every call could drag a minimized window
+     * back onto the screen.
+     *
+     * Cookies alone never open a page (`coreBundle.js:51639`), so when the window
+     * is minimized — or its state cannot be read at all — export cookies only.
+     * Nothing durable is lost: this file's job is the session-cookie fallback, and
+     * localStorage already survives in the persistent profile. When the window is
+     * positively visible we take the full `storageState()`, because a temporary
+     * page cannot disturb someone who is already looking at the window.
+     */
+    collectLoginState(context: BrowserContext): Promise<{
+        cookies: unknown[];
+        origins: unknown[];
+    }>;
+    /** Export the login-state fallback to the state file (session-cookie fallback). */
     persistState(context: BrowserContext): Promise<void>;
-    /** Throttled, fire-and-forget variant called after every operation. */
+    /**
+     * Throttled, fire-and-forget variant called after every operation.
+     *
+     * The "is the window minimized?" question moved inside `collectLoginState`,
+     * which answers it by choosing a safe API rather than by giving up: the export
+     * now runs in either window state, so the session-cookie fallback stops having
+     * a hole exactly where it matters most (a user who minimized the window is the
+     * one most likely to close it by hand).
+     */
     persistStateSoon(context: BrowserContext): void;
     /**
      * Re-inject a previously exported state. Durable cookies already live in

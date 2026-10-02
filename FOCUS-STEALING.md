@@ -16,11 +16,11 @@ Headful + a minimized window + any of these three = the window comes back:
 
 1. `switchTab` → `page.bringToFront()` — **measured**, exists in upstream `src/playwright.ts:505`, patched here.
 2. Any tab creation → `context.newPage()` — **measured**, upstream `src/playwright.ts:514/607/614`, patched here. Chromium activates the window on tab creation; sending CDP `Target.createTarget({ background: true })` ourselves avoids it.
-3. A post-operation login-state export in this fork (`endOp` → `persistStateSoon` → `context.storageState()`) — **measured on one long-lived live instance (A/B), NOT reproduced in a minimal harness**. Cause unknown; see [Cause 3](#cause-3--fork-specific-and-only-half-understood).
+3. A post-operation login-state export in this fork (`endOp` → `persistStateSoon` → `context.storageState()`) — **measured on one long-lived live instance (A/B), and the cause is now found in playwright-core's source**: `storageState()` opens a *temporary page* for every visited origin whose page is gone, and that page is created without `background`. Root-caused and fixed here in 0.4.2; see [Cause 3](#cause-3--the-login-state-export-opened-a-storage-page).
 
 And one case that is *not* the plugin's to fix: a page-side `target="_blank"` link or `window.open()` restores a minimized window, because Chromium's default is that a new tab must be selected **and shown**.
 
-**一句话**：headful + 最小化窗口 + 下列三者之一 = 窗口被弹回来。前两条是插件自己的代码（上游就有），第三条只在这个 fork 上出现过、且最小复现里复现不出。最后一条 `target="_blank"` 是 Chromium 自己的默认行为，插件无权干预。
+**一句话**：headful + 最小化窗口 + 下列三者之一 = 窗口被弹回来。这三条**根因都是同一个**：Chromium 建标签必激活窗口，而 `Target.createTarget` 不带 `background` —— 前两条是插件（和上游）自己发的，第三条是 Playwright 内部为了读登录态悄悄发的。三条现在都在本仓库内修掉了。最后一条 `target="_blank"` 是 Chromium 自己的默认行为，插件无权干预。
 
 ---
 
@@ -73,12 +73,14 @@ RAISES   context.newPage()                              before=minimized after=n
 safe     CDP Target.createTarget({background:true})     before=minimized after=minimized
 RAISES   page.bringToFront()                            before=minimized after=normal
 safe     context.newCDPSession(anchor)                  before=minimized after=minimized
-safe     context.storageState()                         before=minimized after=minimized
+safe     context.storageState()                         before=minimized after=minimized   ← safe HERE, see note
 safe     anchor.goto() (same tab)                       before=minimized after=minimized
 safe     anchor.screenshot()                            before=minimized after=minimized
 ```
 
 `PW_MODE=persistent` (the shape this fork uses, `launchPersistentContext`) — **identical results**, every line the same.
+
+**Why `storageState()` came out safe *here* and still raised the window live.** Storage state is not a pure read, but this harness is a **fresh process**: the only origin it ever visited is still covered by an open page, so playwright never enters the branch that opens a temporary page (Cause 3, link 3). Give the context a visited origin whose page is gone — which any long-lived instance has — and that row flips to RAISES.
 
 **未实测项**：本次最小复现只用 CDP 观察者跑过；原始实机调查里，`newPage` 与 `bringToFront` 两条同时被 Win32 `IsIconic` 独立确认过。
 
@@ -129,9 +131,9 @@ Upstream context for this choice: Playwright issue tracker discussion of `newPag
 
 **中文小结**：`context.newPage()` 内部发的 `Target.createTarget` 不带 `background`，Chromium 建标签必激活窗口——这与插件逻辑无关，裸 Playwright 就能复现。改成自己发 `background: true` 即可；实测这个参数只表示"不激活窗口"，不表示"不选中标签"，窗口可见时新标签照常显示且没有后台节流。
 
-## Cause 3 — fork-specific and only half understood
+## Cause 3 — the login-state export opened a storage page
 
-**This is where the evidence is weakest, and it is reported that way.**
+**Root cause found in playwright-core's source and fixed in this fork (0.4.2).** It is the same root as Cause 2 — a tab created through `Target.createTarget` without `background` — with a trigger nobody had suspected: Playwright's own storage bookkeeping.
 
 In the Codex-merged 0.2.0 fork, the worst symptom was: **every** tool call raised a minimized window, including calls that failed before touching the page at all (a `ftp://` navigation rejected by the URL policy, i.e. parameter validation only). Measured with the Win32 poller, minimized by the user:
 
@@ -140,13 +142,29 @@ t=0      … 30015ms   IsIconic=True     ← includes ~8 s after a MARK with zer
 t=30523ms            IsIconic=False    ← only after the read-only browser_tabs call was issued
 ```
 
-The only browser-touching step common to every call is the fork's login-state export, which runs after **every** operation (`endOp` → `persistStateSoon` → `context.storageState()`, writes `dsh-storage-state.json` atomically, throttled to 1/s). Gating it on "window minimized" made the raise disappear (A/B on the live instance): read-only calls, pre-navigation failures, scroll, `goto`, `switchTab`, `openTab` all stopped raising.
+The only browser-touching step common to every call is the fork's login-state export, which runs after **every** operation (`endOp` → `persistStateSoon` → `context.storageState()`, writes `dsh-storage-state.json` atomically, throttled to 1/s). Gating it on "window minimized" made the raise disappear (A/B on the live instance) — but that was the symptom going away, not the cause.
 
-**But the minimal harness above cannot reproduce it**: `context.storageState()` is safe when minimized, in both `launch` and `persistent` modes, in a fresh process. So either the trigger needs the long-lived multi-tab instance (renderer/CDP state accumulated over hours), or the A/B was confounded by something else that changed at the same time.
+**The mechanism — four links, each with its source line** (`playwright-core@1.62.1`, `lib/coreBundle.js`):
 
-**Conclusion:** treat the gate as a *mitigation* that demonstrably stopped the symptom on the affected instance, not as a root-cause fix. No root cause was found, and we are not asking anyone to look for one: the fork gates the export while minimized and the symptom stays away.
+| # | Link | Evidence |
+|---|---|---|
+| 1 | Every navigation records its origin, and the set only grows for the life of the context | `frameNavigatedToNewDocument` → `addVisitedOrigin` (`:22350-22352`); `addVisitedOrigin` adds to `_origins` (`:51634`), and only `setStorageState` ever resets it (`:51737`) |
+| 2 | That export ran after every call, including calls that never reached the page | `endOp` → `persistStateSoon` (`src/playwright.ts:526,533`), throttled to 1/s |
+| 3 | `storageState()` collects origins that no open page covers by opening a **temporary page**, navigating it to each leftover origin, then closing it | `if (originsToSave.size)` → `newPage(progress, true)` (`:51663-51668`), `gotoImpl` per origin (`:51676`), `page.close` (`:51682`). Cookies are collected separately and never need a page (`:51639`) |
+| 4 | That page is created without `background`, and Chromium activates the window on tab creation | `doCreateNewPage` → `Target.createTarget({ url: "about:blank", browserContextId })` (`:38340-38342`) |
 
-**中文小结**：这个 fork 上最严重的症状是"**每次**调用都弹窗，连参数校验就失败的调用也弹"。唯一每次都跑的浏览器动作是"操作后导出登录态"。把它在最小化时跳过，症状消失（实机 A/B）；但最小复现里 `storageState()` 是安全的，所以这只能算**缓解**而非根治，机制仍未知。
+**This accounts for all four things the earlier write-up could not:**
+
+- **Only long-lived instances**: `_origins` needs time to accumulate origins whose page is gone.
+- **Why the minimal harness was clean**: in a fresh process every visited origin is still covered by an open page, so link 3 is never entered — `context.storageState()` really is safe there.
+- **Why every call raised, even pre-navigation failures**: link 2 is unconditional.
+- **Why gating on "minimized" made it disappear**: the gate removed link 2, so the temporary page was never created. The earlier alternative ("the A/B may have been confounded") can be dropped: the trigger is the long-lived multi-tab instance.
+
+**Fix (0.4.2), inside this plugin — no upstream change needed:** when the window is minimized, or its state cannot be read, export **cookies only** (`context.cookies()`; cookies never open a page). The full `context.storageState()` is used only when the window is positively visible, where a temporary page disturbs nobody. This is strictly better than the gate it replaces: the old gate *skipped* the export while minimized, leaving the session-cookie fallback with a hole exactly for the user most likely to close the window by hand. Nothing durable is lost — localStorage already lives in the persistent profile, and `restoreState` is unchanged.
+
+**How to see it yourself** (no plugin required): in one context visit two origins, close one of their tabs so the origin is left uncovered, then call `context.storageState()` while watching CDP `Target.targetCreated` — an `about:blank` target appears and is closed again immediately. That is links 3 and 4 in a single observation. Call `storageState()` **directly**; routing it through the plugin's throttled export is a different code path.
+
+**中文小结**：根因找到了，四个环节都有源码行号（见上表）：导航记录 origin 且只增不减 → 导出每次调用都跑 → `storageState()` 为「访问过但页面已关」的 origin 临时开一个标签去读存储 → 那个标签不带 `background`，建标签即激活窗口。所以最小复现是干净的（新进程里 origin 都被开着的页面覆盖，根本不进那条分支），而长寿命实例必中；这也和 Cause 2 是同一个根。修法在插件内：最小化（或读不出窗口状态）时只导 cookie，窗口可见时才用完整 `storageState()` —— 顺带把「最小化时干脆不导」那个兜底漏洞也补上了。
 
 ## Remaining — `target="_blank"` / `window.open()`
 
@@ -177,11 +195,12 @@ Since 0.3.0 they are ordinary typed source in `src/playwright.ts`, covered by th
 
 | Location | Change |
 |---|---|
-| `src/playwright.ts:210` `isWindowMinimized(page)` | CDP `Browser.getWindowForTarget` + `Browser.getWindowBounds`; returns `true` when unreadable (never gamble with the user's desktop) |
-| `src/playwright.ts:234` `createBackgroundPage(context)` | Arm `waitForEvent('page')`, send `Target.createTarget({ background: true })`, fall back to `newPage()` on any failure |
-| `src/playwright.ts:1684` (`switchTab`) | `bringToFront()` is skipped while the window is minimized; behaviour when visible is unchanged |
-| `src/playwright.ts:1695` (`openTab`) | Uses `createBackgroundPage()` |
-| `src/playwright.ts:681` (`persistStateSoon`) | Login-state export is skipped while the window is minimized (see Cause 3 — a mitigation, not a root-cause fix) |
+| `src/playwright.ts:240` `isWindowMinimized(page)` | CDP `Browser.getWindowForTarget` + `Browser.getWindowBounds`; returns `true` when unreadable (never gamble with the user's desktop) |
+| `src/playwright.ts:264` `createBackgroundPage(context)` | Arm `waitForEvent('page')`, send `Target.createTarget({ background: true })`, fall back to `newPage()` on any failure |
+| `src/playwright.ts:1916` (`switchTab`) | `bringToFront()` is skipped while the window is minimized; behaviour when visible is unchanged |
+| `src/playwright.ts:1934` (`openTab`) | Uses `createBackgroundPage()` |
+| `src/playwright.ts:708` (`collectLoginState`) | Minimized or unreadable window → cookies only, so no temporary storage page is ever opened; the full `storageState()` runs only while the window is visible (Cause 3 — root-caused and fixed in 0.4.2) |
+| `src/playwright.ts:736` (`persistStateSoon`) | Throttled export after every operation; no longer skips while minimized, so the session-cookie fallback has no hole |
 
 Verification on the live instance, window minimized throughout, judged by Win32 `IsIconic` (0 = not minimized):
 
