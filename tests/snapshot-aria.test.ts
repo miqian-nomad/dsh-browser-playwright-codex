@@ -188,3 +188,36 @@ test('truncation is not a misalignment', () => {
   assert.equal(built.truncated, true)
   assert.equal(built.misaligned, false)
 })
+
+// ---------------------------------------------------------------------------
+// Parser coverage for the two shapes that made smart mode a lie on real pages
+// ---------------------------------------------------------------------------
+
+test('parseAriaSnapshot tolerates attribute lines it does not model', () => {
+  // Measured 2026-10-02: an input with a placeholder produced '- /placeholder: …',
+  // the parser counted it as format drift, and the capture layer refused the whole
+  // tree — so every page with a placeholder silently fell back to the legacy engine
+  // while Settings still said "smart mode". Attribute lines carry no tree
+  // structure, so an unknown one is safe to ignore.
+  const yaml = '- textbox [ref=e1]:\n  - /placeholder: 在这里输入\n  - /fact-from-a-newer-playwright: whatever\n'
+  const stats = parseAriaSnapshotWithStats(yaml)
+  assert.deepEqual(stats.unparsed, [])
+  assert.equal(stats.roots[0].placeholder, '在这里输入')
+})
+
+test('parseAriaSnapshot reads an inline name that follows the flags', () => {
+  // '- paragraph [ref=e5]: (未点)' — the text after the flags is the node's name.
+  // Dropping it left the paragraph nameless, and nameless childless nodes are
+  // pruned, so in smart mode every paragraph lost its text.
+  const yaml = '- generic:\n  - paragraph [ref=e1]: (未点)\n  - generic [ref=e2]:\n'
+  const roots = parseAriaSnapshot(yaml)
+  assert.equal(roots[0].children[0].name, '(未点)')
+  assert.equal(roots[0].children[1].name, '', 'a bare trailing colon must stay nameless')
+})
+
+test('ariaTreeToBrowserNodes names an input from its placeholder, like the legacy walker', () => {
+  const yaml = '- textbox [ref=e1]:\n  - /placeholder: 在这里输入\n'
+  const built = ariaTreeToBrowserNodes(parseAriaSnapshot(yaml), OPTS, ['e1'], ['textbox'])
+  assert.equal(built.nodes[0].name, '在这里输入')
+  assert.equal(built.misaligned, false)
+})

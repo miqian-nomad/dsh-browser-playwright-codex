@@ -38,6 +38,8 @@ export interface AriaNode {
     readonly selected?: boolean;
     readonly disabled?: boolean;
     readonly href?: string;
+    /** `/placeholder:` attribute line: names an input the same way the legacy walker does. */
+    readonly placeholder?: string;
     readonly children: readonly AriaNode[];
 }
 /** Parsed tree plus the lines the parser could not read (format drift). */

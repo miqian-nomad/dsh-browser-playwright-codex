@@ -35,13 +35,32 @@
     - id: browser-tool
       name: 'dsh-browser-playwright-codex/tool'
       config:
-        # Arbitrary page JavaScript (browser_evaluate) is a powerful backdoor:
-        # it can read anything in the page and act on the user's logged-in
-        # sites. Off by default; user explicitly enabled it (2026-09-04).
-        allowEvaluate: true
-        # Raw CDP inspection (browser_cdp) is a kernel-level remote control.
-        # Only inspection + input-simulation methods pass the allow-list
-        # (lib/cdp-policy.js); network/storage/cookie/security commands are
-        # blocked regardless. Off by default; user explicitly enabled it
-        # (2026-09-04). Requires a full DSH restart.
-        allowCdp: true
+        # This file ships INSIDE the package, so it must not turn anything on for
+        # the people who install it. It used to: an earlier revision carried the
+        # author's own `allowEvaluate: true` / `allowCdp: true` (2026-09-04) into
+        # every download, which is how a package ends up handing each installer a
+        # backdoor they never asked for — and it is what a third-party scanner
+        # reads as "dynamic code execution, critical".
+        #
+        # Both are OFF here (matching the code defaults in src/tool.ts, and the
+        # README's own configuration example). Opt in per deployment, in YOUR
+        # profile patch — never in the package:
+        #
+        #   # ~/.dsh/profiles/<name>/cordis.patch.yml
+        #   # NOTE: dsh replaces an entry's config object wholesale, so list every
+        #   # key you rely on, not just the one you are changing.
+        #   - id: browser-tool
+        #     config:
+        #       toolPrefix: 'browser_'
+        #       allowEvaluate: true    # registers browser_evaluate
+        #       allowCdp: true         # registers browser_cdp (needs a DSH restart)
+        #       registerDisabledTools: false
+        #       maxWaitMs: 60000
+        #
+        # browser_evaluate runs arbitrary page JavaScript: it can read anything in
+        # the page and act on the user's logged-in sites. browser_cdp is CDP with
+        # an allow-list — only inspection and input simulation pass
+        # (lib/cdp-policy.js); network/storage/cookie/security commands never do.
+        # Neither tool is registered at all while its gate is false.
+        allowEvaluate: false
+        allowCdp: false

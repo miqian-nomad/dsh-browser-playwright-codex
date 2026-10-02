@@ -3,7 +3,42 @@
 Bilingual by intent: the version headings and the summary of each release are given in both
 languages, the individual entries follow the language the surrounding code and docs use.
 
-一句话摘要：**日志不再跨标签页混流** —— `browser_console_messages` / `browser_network_requests` 承诺给的是「当前这个标签页」的日志，实际给的是整个会话里所有标签页混在一起的大锅；现在只报当前页，并明确写出「另有 N 条来自其它标签页、已排除」。顺带修掉新开标签页**第一段导航完全没有日志采集**的问题。
+一句话摘要：**智能模式原来几乎从未真正生效** —— 解析器把 `/placeholder:` 这类属性行当成「格式漂移」，于是**任何带输入框提示语的页面都静默退回兼容模式**；同时「先 flags 后跟冒号」的内联文字被丢掉，导致段落文字整条消失。两个都修了，并给智能模式补上端到端验收与「已回退」明示。另外：**包里不再默认打开 `browser_evaluate` / `browser_cdp`**（那是发给每个安装者的后门），本机授权改由 profile 配置承担。
+
+## 0.4.7
+
+一句话摘要（0.4.6）：**日志不再跨标签页混流** —— `browser_console_messages` / `browser_network_requests` 承诺给的是「当前这个标签页」的日志，实际给的是整个会话里所有标签页混在一起的大锅；现在只报当前页，并明确写出「另有 N 条来自其它标签页、已排除」。顺带修掉新开标签页**第一段导航完全没有日志采集**的问题。
+
+### Fixed
+
+- **Smart mode almost never actually ran, and said nothing.** The aria parser treated any
+  attribute line other than `/url:` as format drift; an input with a `placeholder` produces
+  `- /placeholder: …`, so the capture layer refused the whole tree and fell back to the legacy
+  engine — silently, on most real pages (measured 2026-10-02: the Settings switch said
+  "smart mode" while the engine never got to run). Attribute lines carry no tree structure, so
+  they are now parsed (`/placeholder` names the input the same way the legacy walker does) and
+  unknown ones are ignored instead of refused.
+- **Inline text after flags was dropped, so paragraphs lost their text.** `- paragraph [ref=e5]: (未点)`
+  parsed to a nameless, childless node — and nameless childless nodes are pruned, so in smart mode
+  every paragraph rendered without its content. The text after the last `]` is now the node's name.
+- **The fallback is no longer silent.** When the configured reader cannot read a page, the snapshot
+  carries a `[page reader]` line saying the tree came from the compatible engine (and that refs below
+  belong to it). A user who explicitly picked smart mode now sees when it is not what they are reading.
+- **The package no longer ships the power gates on.** `cordis.patch.yml` travels inside the package, so
+  the `allowEvaluate: true` / `allowCdp: true` it used to carry (one machine's 2026-09-04 choice) was
+  handed to **every installer** — arbitrary page JavaScript plus raw CDP, on by default. Both gates now
+  ship `false` (matching the code defaults and this README's own example), and per-deployment opt-in
+  lives in that deployment's profile patch. This is also what a third-party scanner reads as
+  "dynamic code execution, critical": their finding was right about the capability, and the packaging
+  was what made it everyone's default.
+
+### Added
+
+- **Smart-mode end-to-end acceptance** (`npm run verify`, phase `[8]`): a page with hidden actionable
+  elements *before* the form — the exact shape that used to shift every ref — is read with the aria
+  engine, then the ref from that snapshot must click the element it names (and must not touch the
+  hidden element ahead of it). The acceptance suite is now 57 checks and covers both engines.
+- Guard tests for both parser bugs, plus the earlier ref-alignment guards.
 
 ## 0.4.6
 

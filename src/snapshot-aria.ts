@@ -150,6 +150,8 @@ export interface AriaNode {
   readonly selected?: boolean
   readonly disabled?: boolean
   readonly href?: string
+  /** `/placeholder:` attribute line: names an input the same way the legacy walker does. */
+  readonly placeholder?: string
   readonly children: readonly AriaNode[]
 }
 
@@ -163,6 +165,7 @@ interface MutableAriaNode {
   selected?: boolean
   disabled?: boolean
   href?: string
+  placeholder?: string
   children: MutableAriaNode[]
 }
 
@@ -243,13 +246,27 @@ export function parseAriaSnapshotWithStats(yaml: string): AriaParseResult {
     }
     const indent = Math.floor((m[1] ?? '').length / 2)
     const body = m[2] ?? ''
-    // Href child line: it belongs to the node declared on the previous line.
-    // `javascript:` targets carry no navigable URL, so they are not exposed.
-    if (body.startsWith('/url:')) {
+    // Attribute child lines describe the node declared above: '- /url: /one',
+    // '- /placeholder: Search'. Playwright adds facts over time, and an attribute
+    // line carries no tree structure — so an unknown one is safe to ignore.
+    // Refusing the whole tree over one is what silently turned EVERY page with a
+    // placeholder input into a legacy fallback (measured 2026-10-02: the mode
+    // selector said smart mode while the engine never got to run).
+    if (body.startsWith('/')) {
       const owner = stack[stack.length - 1]
-      const value = body.slice('/url:'.length).trim()
-      if (owner === undefined || value === '') unparsed.push(trimmed)
-      else if (!value.startsWith('javascript:')) owner.node.href = value
+      const colon = body.indexOf(':')
+      const key = (colon === -1 ? body.slice(1) : body.slice(1, colon)).trim()
+      const value = colon === -1 ? '' : body.slice(colon + 1).trim()
+      if (owner === undefined || (key === 'url' && value === '')) {
+        unparsed.push(trimmed)
+        continue
+      }
+      // `javascript:` targets carry no navigable URL, so they are not exposed.
+      if (key === 'url') {
+        if (!value.startsWith('javascript:')) owner.node.href = value
+      } else if (key === 'placeholder') {
+        owner.node.placeholder = value
+      }
       continue
     }
     // Text-content line: '- text: <value>'.
@@ -288,6 +305,20 @@ export function parseAriaSnapshotWithStats(yaml: string): AriaParseResult {
         else if (key === 'checked') node.checked = true
         else if (key === 'selected') node.selected = true
         else if (key === 'disabled') node.disabled = true
+      }
+    }
+    // Inline name AFTER the flags: '- paragraph [ref=e5]: (未点)'. The trailing ':'
+    // normally marks children, but whatever follows it is the node's own text.
+    // Ignoring it lost page content (measured 2026-10-02: in smart mode every
+    // paragraph rendered nameless, and nameless childless nodes are pruned — the
+    // text simply never reached the model). Only text after the last ']' counts,
+    // so a colon inside a flag value can never be mistaken for a name.
+    if (node.name === '') {
+      const lastBracket = rest.lastIndexOf(']')
+      const tail = (lastBracket === -1 ? rest : rest.slice(lastBracket + 1)).trim()
+      if (tail.startsWith(':')) {
+        const inline = tail.slice(1).trim()
+        if (inline !== '') node.name = inline
       }
     }
     push(indent, node)
@@ -368,9 +399,13 @@ function convertAriaNode(
     state.truncated = true
     return null
   }
+  // Name fallback: an input Playwright names by its placeholder (`/placeholder:`)
+  // must read the same here as it does in the legacy walker, or the same page
+  // gets two different trees depending on the mode.
+  const rawName = node.name !== '' ? node.name : (node.placeholder ?? '')
   const out: MutableBrowserNode = {
     role: node.role,
-    name: node.name.length > opts.maxNameLength ? node.name.slice(0, opts.maxNameLength) + '…' : node.name,
+    name: rawName.length > opts.maxNameLength ? rawName.slice(0, opts.maxNameLength) + '…' : rawName,
     children: [],
   }
   if (actionable) {

@@ -345,6 +345,13 @@ declare class PlaywrightSession {
     captureAria(page: Page, opts: {
         interactiveOnly?: boolean;
     } | undefined): Promise<{
+        engineNote: string;
+        url: string;
+        title: string;
+        nodes: BrowserNode[];
+        totalRefs: number;
+        truncated: boolean;
+    } | {
         url: string;
         title: string;
         nodes: BrowserNode[];

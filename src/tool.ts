@@ -269,6 +269,11 @@ function snapshotValue(snapshot: BrowserSnapshot): SnapshotValue {
   if (dialog !== undefined && dialog !== '') notes.push(dialog)
   const landing = snapshot.landingNote
   if (landing !== undefined && landing !== '') notes.push(landing)
+  // Engine fallback disclosure. The user explicitly chose a page-reading mode in
+  // Settings; when the provider has to serve the other engine's tree, saying so
+  // is the difference between a checked assumption and a silent one.
+  const engine = snapshot.engineNote
+  if (engine !== undefined && engine !== '') notes.push('[page reader] ' + engine)
   const head = notes.length > 0 ? notes.join('\n\n') + '\n\n' : ''
   // Incremental diff rides along when the provider computed one (snapshot.diff).
   const diffBlock = snapshot.diff !== undefined ? '\n\n' + renderSnapshotDiff(snapshot.diff) : ''

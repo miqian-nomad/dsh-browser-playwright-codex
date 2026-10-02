@@ -25,12 +25,15 @@ import os from 'node:os'
 import path from 'node:path'
 import { Config as ConfigSchema, PlaywrightProvider } from '../lib/playwright.js'
 import { renderSnapshot } from '../lib/snapshot-render.js'
+import { getEffectiveEngine, setSnapshotEngine } from '../lib/runtime-state.js'
 
 // 验收必须只看代码，不看这台机器上用户的选择。
 // 设置页的「页面识别方式」存在 ~/.dsh/dsh-browser-playwright.state.json，运行时状态层
 // 允许用 DSH_BROWSER_STATE_FILE 把它指向别处（src/runtime-state.ts 里为测试留的开关）。
 // 指向一个不存在的文件 = engine 回到配置默认值 legacy，本脚本的期望值就是按它写的。
-// 不隔离的话：用户把开关拨到「智能模式」，这份 52 项验收就会假失败（2026-10-01 实测）。
+// 不隔离的话：用户把开关拨到「智能模式」，这份 57 项验收就会假失败（2026-10-01 实测）。
+// 注意 [1]–[7] 因此都跑在兼容模式下；智能模式由 [8] 显式切过去跑（隔离状态文件里切，
+// 不碰用户的真实选择）。
 process.env.DSH_BROWSER_STATE_FILE = path.join(os.tmpdir(), 'dsh-browser-verify-state-isolated.json')
 
 let pass = 0
@@ -90,12 +93,32 @@ document.getElementById('del').addEventListener('click', () => {
 document.getElementById('ask').addEventListener('click', () => { window.alert('操作成功'); });
 </script></body></html>`
 
+// [8] 用的页面：故意在输入框与按钮之前排两个「可交互但不可见」的元素。
+// 这正是旧版智能模式会整体错位的形态：DOM 侧按文档顺序给每一个可交互元素编号
+// （含隐藏的），aria 树里只有可见节点，于是后面每个 ref 都错位一格 ——
+// 实测 2026-10-02 在 dsh-plugin.market 上就是这样把「输入框」指成了一个 0×0 的隐藏链接。
+const ARIA_HTML = `<!doctype html><html><head><meta charset="utf-8"><title>v</title></head><body>
+<h1>aria</h1>
+<button id="evil" style="display:none" onclick="document.title='HIDDEN-WRONG'">隐藏按钮</button>
+<a href="#x" hidden>隐藏链接</a>
+<span id="settings2">设置</span>
+<label for="field">昵称</label>
+<input id="field" placeholder="在这里输入">
+<button id="ok">ARIA 提交</button>
+<p id="res">(未点)</p>
+<script>
+document.getElementById('ok').addEventListener('click', () => {
+  document.getElementById('res').textContent = 'ARIA-CLICK-OK';
+});
+</script></body></html>`
+
 const server = http.createServer((req, res) => {
   res.setHeader('content-type', 'text/html; charset=utf-8')
-  res.end(HTML)
+  res.end(req.url && req.url.startsWith('/aria') ? ARIA_HTML : HTML)
 })
 await new Promise((r) => server.listen(0, '127.0.0.1', r))
 const URL_ = 'http://127.0.0.1:' + server.address().port + '/'
+const ARIA_URL_ = URL_ + 'aria'
 const provider = new PlaywrightProvider(
   ConfigSchema({ launch: { headless: true, persistent: false, navigationTimeoutMs: 20000 }, idleTimeoutMs: 0 }),
 )
@@ -395,6 +418,37 @@ const cdpReply = await session
   .then((reply) => (reply === null || typeof reply !== 'object' ? null : reply.root))
   .catch(() => null)
 check('session.cdp 允许的方法可用（绑定调用）', cdpReply !== null && cdpReply.nodeName === '#document')
+
+// ---------------------------------------------------------------------------
+// [8] 智能模式（aria 引擎）端到端：ref 必须指回它命名的那个元素
+// ---------------------------------------------------------------------------
+// 上面 [1]–[7] 全跑在兼容模式下（隔离状态文件 + engine 默认 legacy）。这一段把开关
+// 切到 aria，检查的是 2026-10-02 修掉的那个真 bug：ref 可能「名字对一个元素、解析到
+// 另一个元素」。运行时状态层每次取快照都重读开关，所以这里切完立刻生效；
+// 状态文件是隔离的临时文件，不碰用户真实的选择。
+console.log('[8] 智能模式（aria 引擎）端到端')
+setSnapshotEngine('aria')
+check('运行时开关可切到 aria', getEffectiveEngine() === 'aria', getEffectiveEngine())
+
+const ariaSnap = await session.navigate(ARIA_URL_, 'load')
+const ariaTree = renderSnapshot(ariaSnap)
+// engineNote 只在「读不出来、退回兼容模式」时出现：它缺席 + 树里有 textbox，
+// 才说明这一步真的走了智能模式，而不是悄悄回退（回退现在会明说，见 snapshotValue）。
+check(
+  '智能模式读得出来（未回退，且明说规则未触发）',
+  ariaSnap.engineNote === undefined && has(ariaTree, 'textbox'),
+  ariaSnap.engineNote ?? ariaTree.slice(0, 160),
+)
+const ariaBtnLine = ariaTree.split('\n').find((l) => l.includes('button "ARIA 提交"'))
+const ariaBtnRef = ariaBtnLine === undefined ? null : ((ariaBtnLine.match(/ref=([^\]\s]+)/) ?? [])[1] ?? null)
+check('树里能找到「ARIA 提交」的 ref', ariaBtnRef !== null, ariaBtnLine ?? '(no line)')
+if (ariaBtnRef !== null) {
+  const afterClick = renderSnapshot(await session.click(ariaBtnRef, undefined))
+  check('按 ref 点击命中它命名的那个元素', has(afterClick, 'ARIA-CLICK-OK'), afterClick.slice(0, 200))
+  // 排在它前面的隐藏按钮如果被「按位置」错配走这个 ref，就会触发它的处理函数。
+  check('没有把点击落到排在前面的隐藏元素上', !has(afterClick, 'HIDDEN-WRONG'))
+}
+setSnapshotEngine('legacy')
 
 await provider.dispose()
 server.close()

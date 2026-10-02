@@ -54,6 +54,12 @@ export interface BrowserSnapshot {
    * absence means "not reported", never "landed on the target".
    */
   landingNote?: string
+  /**
+   * Set when the configured page reader could not read this page and the
+   * provider degraded to the other engine. Without it the fallback was silent,
+   * and a user who picked smart mode kept believing it was running.
+   */
+  engineNote?: string
 }
 
 /** One element that entered the tree since the previous snapshot. */
