@@ -17,6 +17,13 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { bundleConfig } from '../scripts/shipped-gates.mjs'
+import {
+  CONFIG_DEFAULTS,
+  shippedConfig,
+  everythingConfig,
+  measureSurface,
+  approxTokens,
+} from '../scripts/prompt-cost.mjs'
 import { registeredToolNames, type ToolSurfaceConfig } from '../src/contract.ts'
 import { CDP_ALLOW_PREFIXES } from '../src/cdp-policy.ts'
 
@@ -27,6 +34,7 @@ const DOCS = ['README.md', 'PLUGIN-README.md', '中文说明.md', 'SECURITY.md']
 
 /** 出厂闸门的**期望值**：包里的默认值改了，就改这一处（并同步文档）。 */
 const EXPECTED_SHIPPED_GATES = { allowEvaluate: false, allowCdp: false }
+const ANY_SHIPPED_GATE_ON = EXPECTED_SHIPPED_GATES.allowEvaluate || EXPECTED_SHIPPED_GATES.allowCdp
 
 const SURFACE_OFF: ToolSurfaceConfig = {
   allowEvaluate: false,
@@ -188,8 +196,12 @@ test('docs: the cost script does not carry a stale claim about the shipped bundl
     assert.ok(!script.includes(stale), `measure-prompt-cost.mjs still claims: ${stale}`)
   }
   assert.ok(
-    script.includes("from './shipped-gates.mjs'"),
-    'the cost script should use the shared shipped-gates parser rather than its own',
+    script.includes("from './prompt-cost.mjs'"),
+    'the cost script should use the shared measurement module rather than its own copy',
+  )
+  assert.ok(
+    read('scripts/prompt-cost.mjs').includes("from './shipped-gates.mjs'"),
+    'the shared measurement should take the shipped gates from shipped-gates.mjs',
   )
 })
 
@@ -215,4 +227,118 @@ test('docs: a quoted suite total cannot rot into an understated number', () => {
         }
       })
   }
+})
+
+// ---------------------------------------------------------------------------
+// The token-effect table: measured, not eyeballed
+// ---------------------------------------------------------------------------
+// Scoping by keyword was the original mistake here: the guard looked at "the line containing
+// `npm run cost`" (the caption) while the numbers live in table rows two lines below, so a row
+// could say "evaluate + cdp on, 22 tools, 17,430 chars" long after the gates shipped off.
+// These values are COMPUTABLE (measureSurface assembles the tool surface without opening a
+// browser), so they are pinned to the measurement instead of to a pattern.
+//
+// Deliberately out of scope: historical deltas ("18,065 →", "-390 characters", "+211"). They
+// describe a change that already happened and cannot rot; pinning them would be noise.
+
+test('docs: the token-effect table quotes measured values for every layer', async () => {
+  const [def, ship, all] = await Promise.all([
+    measureSurface(CONFIG_DEFAULTS),
+    measureSurface(shippedConfig()),
+    measureSurface(everythingConfig()),
+  ])
+  const expected = [
+    { label: /Schema defaults/i, surface: def },
+    { label: /Shipped bundle/i, surface: ship },
+    { label: /Everything registered/i, surface: all },
+  ]
+
+  for (const doc of ['README.md', 'PLUGIN-README.md']) {
+    const lines = read(doc).split('\n')
+    const header = lines.findIndex((line) => /^\|\s*Surface\s*\|\s*Tools\s*\|/.test(line.trim()))
+    assert.ok(header >= 0, `${doc}: the token-effect table header is gone`)
+    const rows = lines
+      .slice(header + 2)
+      .filter((line) => line.trim().startsWith('|'))
+      .slice(0, expected.length)
+    assert.equal(rows.length, expected.length, `${doc}: expected ${expected.length} surface rows`)
+
+    rows.forEach((row, i) => {
+      const cells = row.split('|').map((c) => c.trim())
+      const want = expected[i] as (typeof expected)[number]
+      assert.ok(want.label.test(row), `${doc}: row ${i + 1} should describe ${want.label}: ${row.trim()}`)
+      const tools = Number(cells[2])
+      const chars = Number((cells[3] ?? '').replace(/,/g, ''))
+      const tokens = Number((cells[4] ?? '').replace(/[^\d]/g, ''))
+      assert.equal(
+        tools,
+        want.surface.rows.length,
+        `${doc}: row ${i + 1} quotes ${tools} tools; measured ${want.surface.rows.length}: ${row.trim()}`,
+      )
+      assert.equal(
+        chars,
+        want.surface.total,
+        `${doc}: row ${i + 1} quotes ${chars} characters; measured ${want.surface.total}: ${row.trim()}`,
+      )
+      assert.equal(
+        tokens,
+        approxTokens(want.surface.total),
+        `${doc}: row ${i + 1} quotes ≈${tokens} tokens; measured ≈${approxTokens(want.surface.total)}: ${row.trim()}`,
+      )
+      // The row's own wording must not contradict the gates it describes. Kept to the phrasing that
+      // actually went stale ("evaluate + cdp on") — a broad "allowCdp … true" check would flag the
+      // legitimate sentence "browser_cdp stays off until `allowCdp: true`".
+      if (i === 1 && !ANY_SHIPPED_GATE_ON) {
+        assert.ok(
+          !/evaluate\s*\+\s*cdp\s*on|闸门[^|]{0,10}开|都开着/i.test(row),
+          `${doc}: the shipped row says the gates are on while they ship off: ${row.trim()}`,
+        )
+      }
+    })
+  }
+})
+
+test('docs: prose about the shipped layer agrees with the shipped surface', () => {
+  // The narrow keyword net (the table above is the structured one): any line that talks about the
+  // shipped layer and names a tool count must name the real one. The gate wording is checked in the
+  // table test instead — a broad "allowCdp … true" rule here would flag the legitimate sentence
+  // "browser_cdp stays off until `allowCdp: true`".
+  const off = registeredToolNames('browser_', SURFACE_OFF).length
+  for (const doc of [...DOCS, '对比与优势.md']) {
+    read(doc)
+      .split('\n')
+      .forEach((line, i) => {
+        if (!/shipped (bundle )?layer|出厂 bundle|出厂层/i.test(line)) return
+        for (const m of line.matchAll(/(\d+)\s*(?:工具|tools?)(?!\w)/g)) {
+          assert.equal(
+            Number(m[1]),
+            off,
+            `${doc}:${i + 1} says the shipped layer has ${m[1]} tools; it has ${off}: ${line.trim()}`,
+          )
+        }
+      })
+  }
+})
+
+test('docs: every file quotes the same acceptance count', () => {
+  // Not derivable without running the acceptance suite (which needs a browser), so this only pins
+  // the files to each other — enough to catch "one file updated, the others left behind".
+  const claims = new Map<number, string[]>()
+  for (const doc of [...DOCS, '对比与优势.md']) {
+    read(doc)
+      .split('\n')
+      .forEach((line, i) => {
+        for (const m of line.matchAll(/(\d+)\s*(?:项自包含验收|self-contained acceptance checks?)/g)) {
+          const n = Number(m[1])
+          const list = claims.get(n) ?? []
+          list.push(`${doc}:${i + 1}`)
+          claims.set(n, list)
+        }
+      })
+  }
+  assert.ok(
+    claims.size <= 1,
+    'the acceptance count is quoted differently across files: ' +
+      JSON.stringify([...claims].map(([n, where]) => `${n} @ ${where.join(', ')}`)),
+  )
 })

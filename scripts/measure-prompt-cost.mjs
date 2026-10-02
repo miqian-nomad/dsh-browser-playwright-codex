@@ -16,67 +16,16 @@
  *   ③ 全量注册（再加 registerDisabledTools: true）
  *
  * 注意：唯一会抬高这个数字的动作是「注册新工具」。文档、脚本、git 都不进 prompt。
+ *
+ * 测量实现放在 scripts/prompt-cost.mjs：脚本与文档守卫测试（tests/docs-consistency）
+ * 共用一份，免得两边各写一遍再各自漂移。
  */
-import { readFileSync } from 'node:fs'
-import { Context } from '@deepseek-ai/cordis'
-import ToolRuntime from '@deepseek-ai/dsh-tools'
-import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
-import BrowserRuntime from '../src/service.ts'
-import { PlaywrightProvider } from '../src/playwright.ts'
-import * as browserTool from '../src/tool.ts'
-import { bundleConfig } from './shipped-gates.mjs'
-
-const pwConfig = {
-  launch: {
-    channel: 'chrome',
-    headless: true,
-    viewport: { width: 1280, height: 800 },
-    navigationTimeoutMs: 5000,
-    ignoreHTTPSErrors: false,
-  },
-  idleTimeoutMs: 0,
-  maxSessions: 2,
-  snapshot: { maxNodes: 200, maxNameLength: 120, maxTextLength: 300 },
-}
-
-const baseConfig = {
-  toolPrefix: 'browser_',
-  allowEvaluate: false,
-  allowCdp: false,
-  registerDisabledTools: false,
-  maxWaitMs: 60000,
-  interactiveOnlyDefault: false,
-}
-
-/**
- * Read the shipped bundle layer: what a deployment actually gets. The parser lives in
- * `shipped-gates.mjs` because it is the one place that must not be fooled by the opt-in
- * example in the patch file's comments, and a guard test pins it (tests/docs-consistency).
- */
-
-/** Assemble one tool surface and return its per-schema wire sizes. */
-async function surface(config) {
-  const root = new Context()
-  await root.plugin(SystemPrompt)
-  await root.plugin(ToolRuntime)
-  await root.plugin(BrowserRuntime)
-  root.browser.registerProvider(new PlaywrightProvider(pwConfig))
-  browserTool.apply(root, config)
-  const rows = root.tools
-    .schemas()
-    .map((s) => [
-      s.name,
-      JSON.stringify({ name: s.name, description: s.description, parameters: s.parameters }).length,
-      s.description.length,
-    ])
-    .sort((a, b) => b[1] - a[1])
-  return { rows, total: rows.reduce((n, r) => n + r[1], 0) }
-}
+import { CONFIG_DEFAULTS, shippedConfig, everythingConfig, measureSurface, approxTokens } from './prompt-cost.mjs'
 
 function report(label, { rows, total }) {
   console.log('')
   console.log(label)
-  console.log('  工具数: ' + rows.length + '   wire 字符总数: ' + total + '   粗估 token: ~' + Math.round(total / 3.6))
+  console.log('  工具数: ' + rows.length + '   wire 字符总数: ' + total + '   粗估 token: ~' + approxTokens(total))
   console.log('  最贵的 5 个:')
   for (const [name, wire, desc] of rows.slice(0, 5)) {
     console.log('    ' + name.padEnd(26) + ' wire ' + String(wire).padStart(5) + '  (描述 ' + desc + ')')
@@ -85,27 +34,24 @@ function report(label, { rows, total }) {
 }
 
 console.log('常驻 prompt 成本体检（工具 schema 每轮都在系统提示里）')
-const t0 = report('① 配置默认值 Config({})', await surface(baseConfig))
-const shipped = { ...baseConfig, ...bundleConfig() }
+const t0 = report('① 配置默认值 Config({})', await measureSurface(CONFIG_DEFAULTS))
+const shipped = shippedConfig()
 const t1 = report(
   '② 出厂 bundle 层（cordis.patch.yml：allowEvaluate=' +
     shipped.allowEvaluate +
     ', allowCdp=' +
     shipped.allowCdp +
     '）',
-  await surface(shipped),
+  await measureSurface(shipped),
 )
-const t2 = report(
-  '③ 全量注册（registerDisabledTools: true，再加 extract）',
-  await surface({ ...shipped, registerDisabledTools: true }),
-)
+const t2 = report('③ 全量注册（registerDisabledTools: true，再加 extract）', await measureSurface(everythingConfig()))
 
 console.log('')
 console.log(
-  '② → ③ 的差 = 被能力开关挡住却没关掉的那些 schema：' +
+  '② → ③ 的差 = 被能力开关挡住、没有关掉的那些 schema：' +
     (t2 - t1) +
     ' 字符 ≈ ' +
-    Math.round((t2 - t1) / 3.6) +
+    approxTokens(t2 - t1) +
     ' token/轮。',
 )
 console.log('想让这个数字更小，就在 cordis.patch.yml 里把用不上的能力关掉（关掉即不注册）。')

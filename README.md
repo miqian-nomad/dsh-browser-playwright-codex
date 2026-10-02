@@ -179,7 +179,7 @@ Other providers (remote browsers, Browserbase, Steel, …) can register into `ct
 npm install
 npm test           # full suite: engine/action integration on real Chrome, policy, rendering,
                    # schema assembly, plus the realistic scenario suites below
-npm run verify     # the naming/folding + click/hover/dialog regression script (50 checks)
+npm run verify     # naming/folding + click/hover/dialog acceptance; self-contained, prints its own count
 npm run verify:live  # same, plus a live sample of a real page (needs network)
 npm run doctor     # does the installed harness still export everything this plugin imports?
 npm run cost       # resident prompt cost of the tool schemas, per surface
@@ -220,10 +220,10 @@ Measured with ``npm run cost`` (per-turn, resident in the system prompt):
 | Surface | Tools | Schema characters | ≈ tokens/turn |
 |---|---|---|---|
 | Schema defaults (`Config({})`, no patch layer) | 20 | 15,033 | ≈ 4,176 |
-| Shipped bundle layer (this package's `cordis.patch.yml`: evaluate + cdp on) | 22 | 17,430 | ≈ 4,842 |
+| Shipped bundle layer (this package's `cordis.patch.yml`: both power gates off) | 20 | 15,033 | ≈ 4,176 |
 | Everything registered (`registerDisabledTools: true`, plus `extract`) | 23 | 17,886 | ≈ 4,968 |
 
-Three things changed here, and only one of them was about size. (1) The click family was rewritten so each rule is stated once instead of three times: -390 characters, with every rule, example and rationale pinned by `tests/tool-descriptions.test.ts`, so a trim that eats one fails the build. (2) A gated tool is registered only while its capability is live — `browser_extract` on this deployment: -456 characters ≈ 127 tokens/turn. (3) Four descriptions were corrected to match the code they describe (dialog blocking, the gated diagnostics `browser_fill` points at, persistent-mode `browser_close`, and `browser_click_at`'s landing note), which added 211 characters back because the old wording promised behaviour the implementation did not have. Net: 18,065 → 17,886 characters with everything registered, and 17,609 → 17,430 in this deployment's configuration. What is left is per-tool prose rather than repetition, so a further cut trades away real guidance.
+Three things changed here, and only one of them was about size. (1) The click family was rewritten so each rule is stated once instead of three times: -390 characters, with every rule, example and rationale pinned by `tests/tool-descriptions.test.ts`, so a trim that eats one fails the build. (2) A gated tool is registered only while its capability is live — `browser_extract` on this deployment: -456 characters ≈ 127 tokens/turn. (3) Four descriptions were corrected to match the code they describe (dialog blocking, the gated diagnostics `browser_fill` points at, persistent-mode `browser_close`, and `browser_click_at`'s landing note), which added 211 characters back because the old wording promised behaviour the implementation did not have. Net: 18,065 → 17,886 characters with everything registered; the shipped layer's total is identical to the schema-defaults row above, because it keeps both power gates off — those schemas are not registered at all and cost nothing. What is left is per-tool prose rather than repetition, so a further cut trades away real guidance.
 
 #### KV Cache effect
 
