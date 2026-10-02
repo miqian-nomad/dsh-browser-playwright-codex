@@ -89,10 +89,11 @@ export declare function ariaTreeToBrowserNodes(nodes: readonly AriaNode[], opts:
     maxNameLength: number;
     maxTextLength: number;
     interactiveOnly?: boolean;
-}, refs: readonly string[]): {
+}, refs: readonly string[], roles?: readonly string[]): {
     nodes: BrowserNode[];
     truncated: boolean;
     totalRefs: number;
+    misaligned: boolean;
 };
 /**
  * Capture one aria snapshot from a live page: official ariaSnapshot(mode:'ai')

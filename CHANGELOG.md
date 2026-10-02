@@ -3,7 +3,39 @@
 Bilingual by intent: the version headings and the summary of each release are given in both
 languages, the individual entries follow the language the surrounding code and docs use.
 
-一句话摘要：**撤回 0.4.3 加的 SPDX 行** —— 实测它反而让 dsh.so 的「许可证」字段从 `MIT` 变成 `NOASSERTION`（他们的匹配器是整文模板比对，多一行就失配）。`LICENSE` 恢复原样，许可条款从未改变。
+一句话摘要：**修掉智能模式下的 ref 指错元素** —— 它按「位置」把 DOM 里所有可交互元素（含隐藏的）贴到 aria 树里只有可见的节点上，页面上一有隐藏副本就整体错位；模型照着快照里的 ref 操作，可能命中另一个元素。
+
+## 0.4.5
+
+一句话摘要（0.4.4）：**撤回 0.4.3 加的 SPDX 行** —— 实测它反而让 dsh.so 的「许可证」字段从 `MIT` 变成 `NOASSERTION`（他们的匹配器是整文模板比对，多一行就失配）。`LICENSE` 恢复原样，许可条款从未改变。
+
+### Fixed
+
+- **Smart mode could hand the model a ref that names one element and resolves to another.** The aria
+  engine paired two independently produced lists **by position**: the DOM walk mints a ref for every
+  actionable element in document order, while the accessibility tree contains only what a screen
+  reader can reach. A single element the tree cannot see (a hidden menu copy, a 0×0 leftover from a
+  re-render) shifts every later ref onto a different element — and a click on such a ref can land on
+  another element **with no error at all**, which is precisely what this plugin promises never
+  happens ("a stale ref can never silently match a different element").
+  - Measured 2026-10-02 on `dsh-plugin.market/submit` (a React page): 7 hidden copies of the header
+    nav sat ahead of the form, so the tree reported the search box as `…411` while `…411` was an
+    invisible 0×0 link and the real input held `…423`. Both symptoms that started this investigation
+    — "the element is not visible" and "could not find an unobstructed click point" — were this bug,
+    not occlusion.
+  - **Fix, part 1 — stop minting refs for elements the tree cannot see.** The DOM-side ref walk now
+    skips the hidden attribute, `aria-hidden="true"`, `display:none`/`visibility:hidden` and
+    zero-size elements (`display:contents` keeps its slot, because its children lay out normally).
+    On the page above that turns 24 minted refs into the 17 the tree actually has, and the two
+    sequences line up exactly (verified live, including the textbox landing at slot 11).
+  - **Fix, part 2 — verify identity instead of assuming order.** Each consumed ref now carries the
+    walker's role and must match the node's role (with aliases for `textarea`→`textbox`,
+    `summary`/`image`→`button`), and leftover ref slots are refused when the tree was not truncated.
+    Any mismatch discards the capture (`missing`), so the provider falls back to the legacy engine —
+    which mints refs while it walks and therefore cannot drift. A ref is never guessed; the worst
+    case is an honest fallback.
+  - Guarded by four new tests: an aligned list passes, a shifted list is refused, leftover slots are
+    refused, and deliberate truncation is **not** mistaken for drift.
 
 ## 0.4.4
 

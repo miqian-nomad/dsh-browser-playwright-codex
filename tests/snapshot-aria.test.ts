@@ -145,3 +145,46 @@ test('ariaTreeToBrowserNodes with interactiveOnly keeps only actionable refs', (
   assert.ok(roles.includes('button'))
   assert.ok(!roles.includes('heading'))
 })
+
+// ---------------------------------------------------------------------------
+// Ref-identity guard: positional pairing is only trusted when the two lists
+// provably describe the same elements
+// ---------------------------------------------------------------------------
+
+/** The DOM-side walker's roles for REAL_YAML, in document order. */
+const ALIGNED_ROLES = ['link', 'link', 'textbox', 'checkbox', 'combobox', 'option', 'option', 'button', 'button']
+
+test('ariaTreeToBrowserNodes accepts a role list that lines up', () => {
+  const refs = Array.from({ length: 9 }, (_, i) => 'e71207380' + String(41 + i))
+  const built = ariaTreeToBrowserNodes(parseAriaSnapshot(REAL_YAML), OPTS, refs, ALIGNED_ROLES)
+  assert.equal(built.misaligned, false)
+  assert.equal(built.totalRefs, 9)
+})
+
+test('ariaTreeToBrowserNodes refuses a ref list whose roles do not line up', () => {
+  // The shape that shipped broken until 2026-10-02: the DOM walker minted a ref
+  // for a hidden element the accessibility tree cannot see, so every later ref
+  // sat one slot off. Pairing it anyway told the model "the search box is e43"
+  // while e43 belonged to a link — a click on it could land on another element
+  // with no error at all. A mismatch must refuse the capture, never guess.
+  const refs = Array.from({ length: 9 }, (_, i) => 'e71207380' + String(41 + i))
+  const shifted = ['link', 'link', 'link', 'textbox', 'checkbox', 'combobox', 'option', 'option', 'button']
+  const built = ariaTreeToBrowserNodes(parseAriaSnapshot(REAL_YAML), OPTS, refs, shifted)
+  assert.equal(built.misaligned, true)
+})
+
+test('ariaTreeToBrowserNodes refuses leftover ref slots', () => {
+  // One extra ref means the DOM minted an element the tree never consumed: the
+  // lists differ even though every consumed pair looked right.
+  const refs = Array.from({ length: 10 }, (_, i) => 'e71207380' + String(41 + i))
+  const built = ariaTreeToBrowserNodes(parseAriaSnapshot(REAL_YAML), OPTS, refs, [...ALIGNED_ROLES, 'link'])
+  assert.equal(built.misaligned, true)
+})
+
+test('truncation is not a misalignment', () => {
+  // A deliberately partial tree stops consuming refs early; that is not drift.
+  const refs = Array.from({ length: 9 }, (_, i) => 'e71207380' + String(41 + i))
+  const built = ariaTreeToBrowserNodes(parseAriaSnapshot(REAL_YAML), { ...OPTS, maxNodes: 2 }, refs, ALIGNED_ROLES)
+  assert.equal(built.truncated, true)
+  assert.equal(built.misaligned, false)
+})

@@ -52,7 +52,11 @@ const ACTIONABLE_ROLES = new Set([
  */
 export const ARIA_REF_SCRIPT = String.raw`
 ;(() => {
-  if (window.__dshAriaRefs) return window.__dshAriaRefs()
+  // Versioned install guard: a page that already ran an older revision of this
+  // script keeps the old closure (and its ref list) otherwise, and a stale
+  // closure would silently skip the role verification below.
+  if (window.__dshAriaRefsV === 2) return window.__dshAriaRefs()
+  window.__dshAriaRefsV = 2
   const INTERACTIVE = new Set(['button','link','checkbox','radio','menuitem','menuitemcheckbox','menuitemradio','tab','switch','combobox','listbox','option','textbox','searchbox','slider','spinbutton','row','gridcell'])
   const TAGS = new Set(['a','button','select','textarea','option','summary'])
   const INPUT_ROLE = { checkbox:'checkbox', radio:'radio', button:'button', submit:'button', reset:'button', image:'button', range:'slider', search:'searchbox', hidden:'null' }
@@ -79,6 +83,26 @@ export const ARIA_REF_SCRIPT = String.raw`
     if (tag === 'input' && role !== 'null') return true
     return INTERACTIVE.has(role)
   }
+  // Visibility must agree with the accessibility tree, or the two lists drift.
+  // The tree only contains what a screen reader can reach, so an actionable
+  // element the tree cannot see (a hidden menu copy, a 0x0 leftover from a
+  // re-render) must not consume a ref slot here: one extra element ahead of a
+  // node shifts every later ref onto the wrong element (measured 2026-10-02 on
+  // dsh-plugin.market: 7 hidden nav copies moved the textbox's ref 12 slots).
+  const isVisible = (el) => {
+    try {
+      if (el.getAttribute('hidden') !== null || el.getAttribute('aria-hidden') === 'true') return false
+      const style = getComputedStyle(el)
+      if (style.display === 'none' || style.visibility === 'hidden') return false
+      // A 'display: contents' box has no rect of its own but lays its children
+      // out normally — it belongs to the tree, so it keeps its slot.
+      if (style.display === 'contents') return true
+      const rect = el.getBoundingClientRect()
+      return rect.width > 0 || rect.height > 0
+    } catch (_) {
+      return false
+    }
+  }
   const assignRef = (el) => {
     const existing = el.getAttribute('data-dsh-ref')
     if (existing !== null) return existing
@@ -88,12 +112,18 @@ export const ARIA_REF_SCRIPT = String.raw`
   }
   window.__dshAriaRefs = () => {
     const refs = []
+    // Role of each ref, in the same order, so the alignment layer can verify
+    // that ref k really belongs to the node it is about to be pasted onto.
+    const roles = []
     const walk = (root) => {
       for (const el of root.children || []) {
         if (el.tagName) {
           const tag = el.tagName.toLowerCase()
           if (tag === 'script' || tag === 'style' || tag === 'noscript' || tag === 'template') continue
-          if (isActionable(el)) refs.push(assignRef(el))
+          if (isActionable(el) && isVisible(el)) {
+            refs.push(assignRef(el))
+            roles.push(roleOf(el))
+          }
         }
         if (el.contentDocument && el.contentDocument.body) {
           walk(el.contentDocument.body)
@@ -103,7 +133,7 @@ export const ARIA_REF_SCRIPT = String.raw`
       }
     }
     if (document.body) walk(document.body)
-    return { refs, nonce: DOC_NONCE }
+    return { refs, roles, nonce: DOC_NONCE }
   }
   return window.__dshAriaRefs()
 })()
@@ -280,6 +310,8 @@ interface BuildState {
   count: number
   truncated: boolean
   refIndex: number
+  /** True once the DOM ref list and the tree's actionable nodes cannot be paired. */
+  misaligned: boolean
 }
 
 /** Mutable build shape during conversion (BrowserNode fields are readonly). */
@@ -300,17 +332,33 @@ export function isActionableRole(role: string): boolean {
   return ACTIONABLE_ROLES.has(role)
 }
 
+/**
+ * Role names the DOM-side walker and the accessibility tree spell differently.
+ * Everything the walker reports must compare equal to the tree's spelling, or
+ * the alignment below would refuse perfectly good trees.
+ */
+const ROLE_ALIAS: Record<string, string> = {
+  textarea: 'textbox',
+  summary: 'button',
+  image: 'button',
+}
+
+function normalizeRole(role: string): string {
+  return ROLE_ALIAS[role] ?? role
+}
+
 function convertAriaNode(
   node: AriaNode,
   opts: { maxNodes: number; maxNameLength: number; maxTextLength: number; interactiveOnly?: boolean },
   refs: readonly string[],
+  roles: readonly string[] | undefined,
   state: BuildState,
 ): MutableBrowserNode | null {
   const actionable = isActionableRole(node.role)
   if (opts.interactiveOnly === true && !actionable) {
     const kids: MutableBrowserNode[] = []
     for (const child of node.children) {
-      const sub = convertAriaNode(child, opts, refs, state)
+      const sub = convertAriaNode(child, opts, refs, roles, state)
       if (sub) kids.push(sub)
     }
     return kids.length ? { role: 'generic', name: '', children: kids } : null
@@ -325,11 +373,25 @@ function convertAriaNode(
     name: node.name.length > opts.maxNameLength ? node.name.slice(0, opts.maxNameLength) + '…' : node.name,
     children: [],
   }
-  if (actionable && state.refIndex < refs.length) {
-    const r = refs[state.refIndex]
-    if (r !== undefined) {
-      out.ref = r
-      state.refIndex += 1
+  if (actionable) {
+    if (state.refIndex >= refs.length) {
+      // More actionable nodes in the tree than ref slots minted in the DOM: the
+      // two sequences are not the same list, so nothing below can be paired.
+      state.misaligned = true
+    } else {
+      const r = refs[state.refIndex]
+      const domRole = roles?.[state.refIndex]
+      // Identity check. Positional pairing alone is a guess: one element the
+      // tree cannot see (a hidden menu copy, a 0x0 re-render leftover) shifts
+      // every later ref onto a different element. Comparing the walker's role
+      // with the node's role catches exactly that, and a mismatch means we must
+      // not hand the model a ref at all.
+      if (roles !== undefined && domRole !== undefined && normalizeRole(domRole) !== normalizeRole(node.role)) {
+        state.misaligned = true
+      } else if (r !== undefined) {
+        out.ref = r
+        state.refIndex += 1
+      }
     }
   }
   if (node.level !== undefined) out.level = node.level
@@ -338,7 +400,7 @@ function convertAriaNode(
   if (node.disabled === true) out.disabled = true
   if (node.href !== undefined) out.href = node.href
   for (const child of node.children) {
-    const sub = convertAriaNode(child, opts, refs, state)
+    const sub = convertAriaNode(child, opts, refs, roles, state)
     if (sub) out.children.push(sub)
   }
   if (
@@ -366,14 +428,19 @@ export function ariaTreeToBrowserNodes(
   nodes: readonly AriaNode[],
   opts: { maxNodes: number; maxNameLength: number; maxTextLength: number; interactiveOnly?: boolean },
   refs: readonly string[],
-): { nodes: BrowserNode[]; truncated: boolean; totalRefs: number } {
-  const state: BuildState = { count: 0, truncated: false, refIndex: 0 }
+  roles?: readonly string[],
+): { nodes: BrowserNode[]; truncated: boolean; totalRefs: number; misaligned: boolean } {
+  const state: BuildState = { count: 0, truncated: false, refIndex: 0, misaligned: false }
   const out: BrowserNode[] = []
   for (const node of nodes) {
-    const sub = convertAriaNode(node, opts, refs, state)
+    const sub = convertAriaNode(node, opts, refs, roles, state)
     if (sub) out.push(sub as unknown as BrowserNode)
   }
-  return { nodes: out, truncated: state.truncated, totalRefs: refs.length }
+  // Leftover ref slots mean the DOM minted elements the tree never consumed: the
+  // two lists are not the same list, so the pairing above cannot be trusted.
+  // Truncation is the one legitimate reason to stop consuming early.
+  if (roles !== undefined && !state.truncated && state.refIndex !== refs.length) state.misaligned = true
+  return { nodes: out, truncated: state.truncated, totalRefs: refs.length, misaligned: state.misaligned }
 }
 
 /**
@@ -404,13 +471,14 @@ export async function captureAriaSnapshot(
     return { nodes: [], truncated: false, totalRefs: 0, missing: true }
   }
   if (aria === '') return { nodes: [], truncated: false, totalRefs: 0, missing: true }
-  let assigned: { refs: string[]; nonce: string } | undefined
+  let assigned: { refs: string[]; roles: string[]; nonce: string } | undefined
   try {
     assigned = await page.evaluate(ARIA_REF_SCRIPT)
   } catch {
     return { nodes: [], truncated: false, totalRefs: 0, missing: true }
   }
-  if (!assigned || !Array.isArray(assigned.refs)) {
+  // No roles means no way to verify the pairing — refuse rather than guess.
+  if (!assigned || !Array.isArray(assigned.refs) || !Array.isArray(assigned.roles)) {
     return { nodes: [], truncated: false, totalRefs: 0, missing: true }
   }
   const parsed = parseAriaSnapshotWithStats(aria)
@@ -421,7 +489,18 @@ export async function captureAriaSnapshot(
   if (parsed.unparsed.length > 0) {
     return { nodes: [], truncated: false, totalRefs: 0, missing: true }
   }
-  const built = ariaTreeToBrowserNodes(parsed.roots, o, assigned.refs)
+  const built = ariaTreeToBrowserNodes(parsed.roots, o, assigned.refs, assigned.roles)
+  // Ref-identity guard. The alignment pairs two independently produced lists
+  // (DOM walk order vs accessibility-tree order); when they disagree the refs
+  // would name one element and resolve to another, and a click on such a ref
+  // could land on a different element without any error. Measured 2026-10-02:
+  // a page with 7 hidden nav copies shifted every ref after them, so the model
+  // was told the search box was the ref of an invisible link. Refuse the whole
+  // capture instead — the legacy engine mints refs while it walks, so it cannot
+  // drift.
+  if (built.misaligned) {
+    return { nodes: [], truncated: false, totalRefs: 0, missing: true }
+  }
   // A tree with no nodes while the DOM minted refs means the semantic tree lost
   // everything actionable: refuse it rather than hand the model an empty page.
   if (built.nodes.length === 0 && assigned.refs.length > 0) {
