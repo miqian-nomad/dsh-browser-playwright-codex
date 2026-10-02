@@ -105,8 +105,12 @@ user settings file.
   (registry returns 404), so that one-liner could never have installed anything. It now shows the
   GitHub specifier this repository is actually distributed by, plus the `link:` form for a local
   checkout, and states that a fresh clone needs no build. The dsh.so install-verification badge is
-  back at the top of the README, pointing at [the artifact page](https://www.dsh.so/zh/artifact/dsh-browser-playwright-codex/)
-  (its recorded verification is still the older `v0.3.1`, so the badge does not claim 0.4.1).
+  back at the top of the README, pointing at [the artifact page](https://www.dsh.so/zh/artifact/dsh-browser-playwright-codex/).
+  The version inside that badge URL is the **dsh** version it was verified against, not the plugin
+  version — corrected on 2026-10-02, when the badge was moved from `0.1.7-rc.2` to `0.2.0-rc.1`
+  (dsh.so's newest verified row, 2026-09-30) and the risk badge was added. dsh.so's L4/L5
+  *install* verification artifact is still `v0.3.1` while its security scan already reads `0.4.1`;
+  both of those are theirs to refresh.
 
 ### Notes
 

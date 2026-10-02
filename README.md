@@ -1,6 +1,6 @@
 # dsh-browser-playwright-codex
 
-> [![dsh.so 安装验证](https://www.dsh.so/badge/install/dsh-browser-playwright-codex@0.1.7-rc.2.svg)](https://www.dsh.so/zh/artifact/dsh-browser-playwright-codex/)
+> [![dsh.so 安装验证 · dsh 0.2.0-rc.1](https://www.dsh.so/badge/install/dsh-browser-playwright-codex@0.2.0-rc.1.svg)](https://www.dsh.so/zh/artifact/dsh-browser-playwright-codex/) [![dsh.so 风险](https://www.dsh.so/badge/dsh-browser-playwright-codex.svg)](https://www.dsh.so/zh/artifact/dsh-browser-playwright-codex/)
 
 Playwright-powered browser capability for [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness): the agent drives a **visible, profile-backed browser window** through accessibility snapshots with stable element refs — no CSS-selector guessing, no full-DOM dumps. Login state survives window close and harness restarts (Codex-style personal browser), tabs, screenshots as durable image attachments, structured extraction, gated JavaScript evaluation, and Codex-inspired reliability guards (bounded render-stability waits, post-action verification, fast-fail actionability checks, crash auto-recovery) and native-dialog handling (alert/confirm/prompt/beforeunload are parked as a pending state, reported to the model, and answered only by an explicit `browser_dialog` call — never auto-accepted; see [DIALOG-POLICY.md](DIALOG-POLICY.md)).
 
