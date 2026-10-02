@@ -20,7 +20,12 @@ const context = await chromium.launchPersistentContext(profile, {
   channel: process.env.CHANNEL || undefined,
   viewport: null,
   ignoreDefaultArgs: ['--enable-automation'],
-  args: ['--no-first-run', '--no-default-browser-check', '--start-maximized', '--disable-blink-features=AutomationControlled'],
+  args: [
+    '--no-first-run',
+    '--no-default-browser-check',
+    '--start-maximized',
+    '--disable-blink-features=AutomationControlled',
+  ],
 })
 const page = context.pages()[0] ?? (await context.newPage())
 const out = {}

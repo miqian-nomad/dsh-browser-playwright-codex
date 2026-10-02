@@ -45,7 +45,9 @@ try {
 const dialogLog = []
 page.on('dialog', async (d) => {
   dialogLog.push({ type: d.type(), message: d.message() })
-  await d.accept('typed-by-test').catch(async () => { await d.dismiss().catch(() => {}) })
+  await d.accept('typed-by-test').catch(async () => {
+    await d.dismiss().catch(() => {})
+  })
 })
 
 async function dialogRoundTrip() {

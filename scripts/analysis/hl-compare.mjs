@@ -60,13 +60,19 @@ if (process.env.PHASE === 'check') {
   await page.goto('https://example.com', { waitUntil: 'domcontentloaded' }).catch(() => {})
   const cookies = await context.cookies('https://example.com')
   const ls = await page.evaluate(() => localStorage.getItem('switch-probe')).catch(() => null)
-  console.log(JSON.stringify({
-    mode: MODE,
-    phase: 'check',
-    sessionCookie: cookies.find((c) => c.name === 'switch-session')?.value ?? null,
-    durableCookie: cookies.find((c) => c.name === 'switch-durable')?.value ?? null,
-    localStorage: ls,
-  }, null, 2))
+  console.log(
+    JSON.stringify(
+      {
+        mode: MODE,
+        phase: 'check',
+        sessionCookie: cookies.find((c) => c.name === 'switch-session')?.value ?? null,
+        durableCookie: cookies.find((c) => c.name === 'switch-durable')?.value ?? null,
+        localStorage: ls,
+      },
+      null,
+      2,
+    ),
+  )
   await context.close()
   process.exit(0)
 }
@@ -126,12 +132,18 @@ const png = fs.readFileSync(path.join(path.dirname(profile), `shot-${MODE}.png`)
 const shotW = png.readUInt32BE(16)
 const shotH = png.readUInt32BE(20)
 
-console.log(JSON.stringify({
-  mode: MODE,
-  headless,
-  ...measured,
-  screenshotBytes: shot.length,
-  screenshotSize: [shotW, shotH],
-}, null, 2))
+console.log(
+  JSON.stringify(
+    {
+      mode: MODE,
+      headless,
+      ...measured,
+      screenshotBytes: shot.length,
+      screenshotSize: [shotW, shotH],
+    },
+    null,
+    2,
+  ),
+)
 
 await context.close()

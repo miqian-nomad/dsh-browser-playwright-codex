@@ -1,0 +1,75 @@
+# CI: the suite this repository has always had — run by a machine instead of by hand.
+#
+# Why it exists. The tests were good before CI was, and that is exactly how an afternoon got
+# lost: flipping the settings-page switch to 智能模式 turned `npm test` red while the code had
+# not changed. Nothing caught it because nothing ran. The suite has since grown a fix for that
+# (tests no longer read the real user state file) — this workflow is what keeps the suite honest
+# from now on.
+#
+# Deliberate choices:
+#   * Two runners. The plugin is Windows-first (its whole focus-stealing story is a Windows
+#     window) but nothing in the suite is Windows-only, so running both catches a platform
+#     assumption the day it appears.
+#   * `npm ci` against the committed package-lock.json, with the harness packages pinned exactly
+#     in package.json. These must be pinned: `@deepseek-ai/dsh-*` publish a *lower* `latest` than
+#     the versions this tree is tested against (e.g. dsh-tools latest = 0.0.1-rc.1, tested =
+#     0.2.0-rc.1), so a bare `*` installs a tree whose imports the tests cannot even resolve.
+#     `playwright-core` is pinned to `~1.62.1` because FOCUS-STEALING.md cites 1.62.1 internals
+#     by line number.
+#   * The live-internet tests stay skipped by design (they need DSH_BROWSER_LIVE=1).
+
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: test (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies (locked)
+        run: npm ci
+
+      - name: Provide a Chromium-family browser
+        shell: bash
+        run: |
+          # The provider probes chromium -> chrome -> msedge -> edge. Installing the
+          # Playwright-managed Chromium makes the suite independent of whatever browser the
+          # runner image happens to ship.
+          node node_modules/playwright-core/cli.js install chromium
+          if [ "$RUNNER_OS" = "Linux" ]; then
+            node node_modules/playwright-core/cli.js install-deps chromium
+          fi
+
+      - name: Unit + scenario tests
+        run: npm test
+
+      - name: Self-contained acceptance (52 checks)
+        run: npm run verify
+
+      - name: Formatting
+        run: npm run format:check
+
+      - name: Host API drift (doctor)
+        run: npm run doctor

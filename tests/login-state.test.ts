@@ -125,7 +125,10 @@ test('unreadable window state is treated as minimized (the safe direction)', asy
     await provider.persistState(fakeContext('unreadable', calls))
     assert.equal(calls.storageState, 0, 'an unreadable window must never gamble with the user desktop')
     assert.equal(calls.cookies, 1)
-    assert.deepEqual(readState(provider).cookies.map((c) => c.name), ['sid'])
+    assert.deepEqual(
+      readState(provider).cookies.map((c) => c.name),
+      ['sid'],
+    )
   } finally {
     fs.rmSync(dir, { recursive: true, force: true })
   }

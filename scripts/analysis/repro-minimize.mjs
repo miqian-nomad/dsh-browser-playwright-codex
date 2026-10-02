@@ -54,8 +54,7 @@ await sleep(500)
 
 const cdp = await context.newCDPSession(anchor)
 const windowId = async () => (await cdp.send('Browser.getWindowForTarget')).windowId
-const state = async () =>
-  (await cdp.send('Browser.getWindowBounds', { windowId: await windowId() })).bounds.windowState
+const state = async () => (await cdp.send('Browser.getWindowBounds', { windowId: await windowId() })).bounds.windowState
 const setState = async (windowState) => {
   const id = await windowId()
   return cdp.send('Browser.setWindowBounds', { windowId: id, bounds: { windowState } })
