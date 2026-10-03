@@ -391,6 +391,9 @@ test('the changelog heading and package.json version agree', () => {
   // A version bump that forgets the CHANGELOG (or the reverse) is exactly the kind of drift the other
   // guards here exist to catch, and it stays invisible until someone reads both files side by side.
   const version = (JSON.parse(read('package.json')) as { version: string }).version
-  const heading = /^## (\d+\.\d+\.\d+)/m.exec(read('CHANGELOG.md'))?.[1]
+  // Tolerant of a Keep-a-Changelog style heading (`## [1.2.3] - 2026-10-03`), so a future reformat cannot
+  // turn this into a confusing "undefined !== 0.5.0"; a missing heading is reported as such.
+  const heading = /^## \[?(\d+\.\d+\.\d+)\]?/m.exec(read('CHANGELOG.md'))?.[1]
+  assert.ok(heading, 'CHANGELOG.md needs a version heading near the top (## 1.2.3 or ## [1.2.3])')
   assert.equal(heading, version, `CHANGELOG's top section (${heading}) must be the package version (${version})`)
 })
