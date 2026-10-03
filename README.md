@@ -1,6 +1,6 @@
 # dsh-browser-playwright-codex
 
-> [![dsh.so 安装验证 · dsh 0.2.0-rc.1](https://www.dsh.so/badge/install/dsh-browser-playwright-codex@0.2.0-rc.1.svg)](https://www.dsh.so/zh/artifact/dsh-browser-playwright-codex/) [![dsh.so 风险](https://www.dsh.so/badge/dsh-browser-playwright-codex.svg)](https://www.dsh.so/zh/artifact/dsh-browser-playwright-codex/)
+> [![dsh.so 安装验证 · harness 0.2.0-rc.1](https://www.dsh.so/badge/install/dsh-browser-playwright-codex@0.2.0-rc.1.svg)](https://www.dsh.so/zh/artifact/dsh-browser-playwright-codex/) [![dsh.so 风险](https://www.dsh.so/badge/dsh-browser-playwright-codex.svg)](https://www.dsh.so/zh/artifact/dsh-browser-playwright-codex/)
 
 **一句话**：让 AI 用你**已经登录的账号**替你上网办事 —— 窗口就在你桌面上、你随时看得见；遇到登录、验证码、原生弹框，它会**停下来等你**，绝不替你点「确定」。
 
@@ -287,6 +287,12 @@ MIT
 <!-- changelog:today -->
 ## 更新记录
 
+### 0.5.0（2026-10-03）
+
+- **CDP 白名单改为精确逐条列举（破坏性）**：`DOM.get` / `DOM.query` 这两个**家族前缀**不再放行任何东西 —— 它们此前多授权了 9 个 DOM 调用（`getAnchorElement`、`getDetachedDomNodes`、`getSearchResults` 等），而且会放行这两个家族**将来新增**的每一个方法。现在这份名单是 19 条完整方法名 + 等号匹配：**名单没听过的名字一律拒绝，不需要有人注意到它出现了**。同时经复核收回 9 条更早**手工列上**的调试器内部特性（`performSearch`、`requestNode`、`getRelayoutBoundary` 等）—— 那是有意选择，所以收它们是政策决定，不是修前缀溢出。允许面**只收不放**；插件自己的后台建页与窗口探测走内部会话，不受影响。
+- **测试从"钉例子"改成"钉性质"**：测试里写一份**独立**的同一份名单，与源码表**双向相等**（加一条/删一条都必须同时改两处，任何放宽都会出现在 diff 里）；再加 9 类探针（大写/小写/数字/点号后缀、大小写互换、截断、尾空格、整域前缀）过真函数，断言"被接受的集合恰好等于复审名单"。**测试先行**：旧实现下这 3 条会红（`DOM.getDocumentZzz` 骑进白名单、`DOM.getAnchorElement` 被放行、两份名单不一致）。
+- **升级提示**：如果你的脚本用 `browser_cdp` 调过被收回的那 18 个方法，会开始收到 `CDP_DENIED`；要加回来是"改代码 + 改测试"两处，**不是改配置**。
+
 ### 0.4.0（2026-09-30）
 
 - **设置页多了一组选择**：在「允许 AI 操作网页」开关下面，多了「页面识别方式」——**兼容模式**（插件自己找按钮输入框，用得最久）与**智能模式**（用浏览器官方的"页面说明书"，复杂页面通常更准；读不出来会自动退回兼容模式）。选完**下一步操作就生效，不用重启、不用改配置文件**；卡片底部写着"当前：X（你选的 / 默认）"。多选一用的是和"搜索提供方"卡片一样的单选行，不是开关，一眼看去是同一套。
@@ -298,7 +304,6 @@ MIT
 - **修掉第一版 aria 引擎的真实缺陷**：解析器按自造方言写（`- role "name" -> href`、行尾无其他内容），而真实输出每个容器行都以 `:` 结尾、href 走更深的 `- /url:` 子行、文本是 `- text: …`。16 个节点的页面只解析出 5 个 —— **层级与链接全丢，却仍报成功**（所以不会回退）。已用真实页面实测前后对比。
 - **格式漂移现在会大声失败**：读不懂的行会被收集（`parseAriaSnapshotWithStats`）并让本次捕获返回 `missing: true`，`captureAria` 随即回退 legacy DOM 引擎，绝不把空树交给模型。
 - **aria 测试改用真实抓取的 YAML**（2026-09-30 从 playwright-core 1.62 实抓），不再用解析器自己方言手写的 fixture。
-- **CDP 白名单改为精确逐条列举（0.5.0）**：`DOM.get` / `DOM.query` 两个家族前缀不再放行任何东西 —— 它们此前多授权了 9 个 DOM 调用（`getAnchorElement`、`getDetachedDomNodes`、`getSearchResults` 等），并且会授权这两个家族**将来**新增的成员。同时经复核收回 9 条更早**手工列上**的调试器内部特性（`performSearch`、`requestNode`、`getRelayoutBoundary` 等）。允许面**只收不放**（终表 19 条原本都已放行）；测试从"钉例子"改成"钉性质"：测试里有一份**独立手写的同一份名单**与源码表双向相等，再加探针集合比对（大写/小写/数字/点号后缀、大小写互换、截断、整域前缀），任何更宽的匹配规则都会让测试挂。
 - **CDP 白名单收紧为逐方法列举**：去掉 `Input.` 族前缀，只留 `Input.dispatchMouseEvent` / `dispatchKeyEvent` / `dispatchTouchEvent` / `insertText`；`Input.setIgnoreInputEvents`、`synthesizeScrollGesture`、`dispatchDragEvent` 及未来的 `Input.*` 默认拒绝，并新增守卫测试断言**任何**条目都不得以 `.` 结尾（旧的守卫恰好允许了一条）。
 
 ### 0.3.0（2026-09-26）

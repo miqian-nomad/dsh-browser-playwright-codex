@@ -397,3 +397,25 @@ test('the changelog heading and package.json version agree', () => {
   assert.ok(heading, 'CHANGELOG.md needs a version heading near the top (## 1.2.3 or ## [1.2.3])')
   assert.equal(heading, version, `CHANGELOG's top section (${heading}) must be the package version (${version})`)
 })
+
+test('the README update log opens with the newest minor release', () => {
+  // The 更新记录 section in README.md is the first thing a visitor reads, and it is hand-written. When
+  // the 0.5.0 bullet was filed under the 0.4.0 heading, the repository looked like it had stopped at
+  // 0.4.0 while the release list said v0.5.0 was latest. Only the opening entry is asserted: the log
+  // deliberately keeps a curated set of milestones (0.2.0 is in CHANGELOG.md and not listed here).
+  const section = read('README.md')
+    .split(/^## /m)
+    .find((part) => part.startsWith('更新记录'))
+  assert.ok(section, 'README.md lost its 更新记录 section')
+  const listed = [...section.matchAll(/^### (\d+\.\d+\.\d+)/gm)].map((m) => m[1])
+  assert.ok(listed.length > 0, 'the 更新记录 section lists no versions')
+  const released = new Set([...read('CHANGELOG.md').matchAll(/^## (\d+\.\d+\.\d+)/gm)].map((m) => m[1]))
+  for (const version of listed) {
+    assert.ok(released.has(version), `README.md logs ${version}, which is not in CHANGELOG.md`)
+  }
+  const newest = [...released]
+    .filter((version) => version.endsWith('.0'))
+    .sort((a, b) => a.localeCompare(b, undefined, { numeric: true }))
+    .at(-1)
+  assert.equal(listed[0], newest, `the README update log must open with ${newest}, not ${listed[0]}`)
+})
