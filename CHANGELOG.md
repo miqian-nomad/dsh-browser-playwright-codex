@@ -33,6 +33,15 @@ languages, the individual entries follow the language the surrounding code and d
   looser matching rule fails the suite. Written test-first: against the old implementation these cases
   fail (`DOM.getDocumentZzz` rode in; `DOM.getAnchorElement` was allowed; the two lists disagreed).
 
+### Fixed
+
+- **The README update log was missing this version's heading** (docs). The 0.5.0 entry had been filed
+  under the 0.4.0 heading, so the first thing a visitor read — in the repository `v0.5.0` points at —
+  said the project stopped at 0.4.0 while the release list showed v0.5.0 as latest. The entry now opens
+  its own section, and a guard asserts that the opening entry is always the newest minor release
+  (`tests/docs-consistency.test.ts`). No runtime code changed for this fix: `src/` and `lib/` are
+  identical to the earlier 0.5.0 commit, which is why the tag was moved instead of a 0.5.1 being cut.
+
 ## 0.4.10
 
 一句话摘要（0.4.9）：**文档对齐 + 指向配套件** —— README 里那句「出厂 patch 把两个闸门打开」在 0.4.7 之后已经过期（现在包里保持关闭），改成事实；同时指向新的配套仓库 `dsh-browser-toggle`（设置页卡片，那两个开关就在上面）。
