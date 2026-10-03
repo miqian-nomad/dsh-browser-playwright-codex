@@ -25,7 +25,7 @@ import {
   approxTokens,
 } from '../scripts/prompt-cost.mjs'
 import { registeredToolNames, type ToolSurfaceConfig } from '../src/contract.ts'
-import { CDP_ALLOW_PREFIXES } from '../src/cdp-policy.ts'
+import { CDP_ALLOWED_METHODS } from '../src/cdp-policy.ts'
 
 const read = (rel: string) => readFileSync(new URL('../' + rel, import.meta.url), 'utf8')
 
@@ -153,7 +153,7 @@ test('docs: the tool counts quoted next to `npm run cost` come from contract.ts'
 })
 
 test('docs: CDP domains are only advertised as allowed when they are in the allow-list', () => {
-  const allowed = (domain: string) => CDP_ALLOW_PREFIXES.some((p) => p.startsWith(domain + '.'))
+  const allowed = (domain: string) => CDP_ALLOWED_METHODS.some((p) => p.startsWith(domain + '.'))
   const deniedWord = /拒绝|denied|rejected|not allowed|不在/
 
   for (const doc of DOCS) {
@@ -161,7 +161,7 @@ test('docs: CDP domains are only advertised as allowed when they are in the allo
       .split('\n')
       .forEach((line, i) => {
         // `Accessibility.` is NOT in the allow-list. The doc used to list it as allowed; if it
-        // ever becomes allowed, add it to CDP_ALLOW_PREFIXES and delete this guard.
+        // ever becomes allowed, add it to CDP_ALLOWED_METHODS and delete this guard.
         if (line.includes('Accessibility.')) {
           assert.fail(
             `${doc}:${i + 1} mentions the Accessibility domain, which the CDP allow-list does not contain: ${line.trim()}`,
@@ -385,4 +385,12 @@ test("docs: the registry entry matches the code and opens with the user's words"
       `the pitch should not open with implementation jargon (${jargon}): ${firstSentence}`,
     )
   }
+})
+
+test('the changelog heading and package.json version agree', () => {
+  // A version bump that forgets the CHANGELOG (or the reverse) is exactly the kind of drift the other
+  // guards here exist to catch, and it stays invisible until someone reads both files side by side.
+  const version = (JSON.parse(read('package.json')) as { version: string }).version
+  const heading = /^## (\d+\.\d+\.\d+)/m.exec(read('CHANGELOG.md'))?.[1]
+  assert.equal(heading, version, `CHANGELOG's top section (${heading}) must be the package version (${version})`)
 })

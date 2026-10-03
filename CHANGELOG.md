@@ -5,6 +5,34 @@ languages, the individual entries follow the language the surrounding code and d
 
 一句话摘要：**把「看着危险」变成「说得清楚」** —— 新增 `SECURITY.md`，把 dsh.so 扫描报的 **2 Critical / 5 Warning / 26 Info** 逐条对上：那 2 个 Critical 就是 `browser_evaluate` 的实现，而**包里默认关闭**（关着时工具根本不注册）。README 第一屏重写（中文一句话 + 一条命令安装 + 五条差异点 + 安全入口），并又清掉两处「出厂开启闸门」的过期说法。
 
+## 0.5.0
+
+一句话摘要：**CDP 白名单从「家族前缀匹配」收紧为「精确逐条列举」** —— `DOM.get` / `DOM.query` 两个前缀不再放行任何东西（它们此前多授权了 9 个 DOM 调用，并且会授权这两个家族将来新增的成员）；同时经复核收回 9 条更早手工列上、现已判定不需要的调试器/UA 内部特性。允许面**只收不放**：终表 19 条全部是原本就已放行的权限，插件自己的后台建页与窗口探测走内部会话、不受影响。
+
+### Changed
+
+- **The CDP allow-list matches exact names only** — breaking for agent-issued CDP.
+  `DOM.get` / `DOM.query` were matched as families, which authorised nine DOM calls beyond the
+  reviewed list (`getAnchorElement`, `getDetachedDomNodes`, `getElementByRelation`, `getFileInfo`,
+  `getFlattenedDocument`, `getImplicitAnchorCandidates`, `getNodeStackTraces`, `getSearchResults`,
+  `getTopLayerElements`) and would have authorised every future member of those families without
+  anyone noticing. The policy is now 19 full method names (`CDP_ALLOWED_METHODS`, frozen) compared
+  by equality, so an unknown name is denied by construction.
+- **Nine more DOM methods were reviewed out** (hand-listed earlier, not prefix spill):
+  `collectClassNamesFromSubtree`, `getContainerForNode`, `getFrameOwner`,
+  `getNodesForSubtreeByStyle`, `getQueryingDescendantsForContainer`, `getRelayoutBoundary`,
+  `performSearch`, `requestChildNodes`, `requestNode`. All eighteen stay denied and stay listed as
+  denied in the tests: bringing one back is a policy decision, not a bug fix.
+- **Nothing gained:** every one of the 19 allowed names was already allowed before this change, and the
+  plugin's own `Target.createTarget` / `Browser.getWindowForTarget` calls use the internal session, so
+  background tabs and the window probe are unaffected.
+- **The tests pin the property, not examples.** `tests/cdp-policy.test.ts` writes the reviewed list out
+  independently and asserts it equals the source (so widening the policy takes two edits and shows up in
+  review), and a probe set — uppercase/lowercase/digit/dot suffixes, case flips, truncation, trailing
+  space, whole-domain prefixes — is filtered through the real matcher and compared as a set, so any
+  looser matching rule fails the suite. Written test-first: against the old implementation these cases
+  fail (`DOM.getDocumentZzz` rode in; `DOM.getAnchorElement` was allowed; the two lists disagreed).
+
 ## 0.4.10
 
 一句话摘要（0.4.9）：**文档对齐 + 指向配套件** —— README 里那句「出厂 patch 把两个闸门打开」在 0.4.7 之后已经过期（现在包里保持关闭），改成事实；同时指向新的配套仓库 `dsh-browser-toggle`（设置页卡片，那两个开关就在上面）。

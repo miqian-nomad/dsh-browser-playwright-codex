@@ -7,80 +7,91 @@
  * beyond what an agent should reach through a web tool. This module answers
  * one question: may an agent send this CDP method?
  *
- * Default-deny. Only the method families below are allowed:
- *   - DOM inspection / query: geometry (getBoxModel, getNodeForLocation,
- *     getContentQuads), node lookup (querySelector, describeNode, resolveNode,
- *     requestNode) and attribute reads. All DOM.get* are read-only.
- *   - Input simulation, method-explicit only: Input.dispatchMouseEvent /
- *     Input.dispatchKeyEvent / Input.dispatchTouchEvent / Input.insertText —
+ * Default-deny, by exact name. Every allowed entry is a full method name and
+ * matching is plain equality, so a method this list has never heard of — a
+ * future Chromium command, a forged suffix, a whole-domain prefix — is denied
+ * without anyone having to notice it was added. The earlier policy matched
+ * `DOM.get` / `DOM.query` as families, which quietly authorised nine more DOM
+ * calls than the reviewed list and would have authorised every future member of
+ * those families as well.
+ *
+ * What is allowed, and why:
+ *   - DOM reads: geometry (getBoxModel, getContentQuads, getNodeForLocation),
+ *     node lookup (querySelector[All], describeNode, resolveNode), markup and
+ *     attribute reads (getOuterHTML, getAttributes) and the root tree.
+ *   - One DOM action: focus. It moves focus, the same class of effect as the
+ *     input events below, so it is a deliberate allow rather than a read.
+ *   - Input simulation, four methods only: Input.dispatchMouseEvent,
+ *     Input.dispatchKeyEvent, Input.dispatchTouchEvent, Input.insertText —
  *     CDP-native trusted events. The Input domain as a whole is NOT allowed:
- *     no family-wide 'Input.' prefix, so Input.setIgnoreInputEvents and other
- *     future/untracked Input.* mutations stay denied by default.
- *   - A few read-only Page helpers (layout metrics, navigation history,
- *     frame tree) and CSS computed-style reads.
+ *     no family prefix, so Input.setIgnoreInputEvents, the gesture
+ *     synthesizers and any future Input.* mutation stay denied by default.
+ *   - Read-only helpers: Page.getLayoutMetrics, Page.getNavigationHistory,
+ *     Page.getFrameTree, CSS.getComputedStyleForNode.
+ *
  * Everything else — Network.*, Storage.*, Security.*, Fetch.*, Target.*,
- * Browser.*, Emulation.*, Runtime.evaluate, DOM.setFileInputFiles, etc. — is
- * rejected with CDP_DENIED.
+ * Browser.*, Emulation.*, Runtime.evaluate, Page.navigate,
+ * Page.getResourceContent (it reads any frame's resource body),
+ * DOM.setFileInputFiles, the debugger-internal DOM calls (getDetachedDomNodes,
+ * getNodeStackTraces, getRelayoutBoundary, the container-query and anchor
+ * helpers …) — is rejected with CDP_DENIED. Growing this list is meant to be
+ * work: add the name here, add it to the reviewed list in
+ * tests/cdp-policy.test.ts (which asserts the two are equal), and say why.
  * @module dsh-browser-playwright-codex/cdp-policy
  */
 
-/** Method prefixes the allow-list accepts. Keep this explicit and reviewable. */
-export const CDP_ALLOW_PREFIXES: readonly string[] = [
-  // DOM inspection: geometry + node/attribute reads (all read-only).
-  'DOM.get',
-  'DOM.query',
+/**
+ * The allowed CDP methods, as exact names. Keep this explicit and reviewable:
+ * nothing here may be a family or domain prefix, and every entry must also
+ * appear in the reviewed list in tests/cdp-policy.test.ts.
+ *
+ * Frozen as a speed bump against accidental in-place edits at runtime. It is
+ * not a security boundary — the boundary is the matching rule below plus the
+ * tests that pin it; freezing only stops a typo from widening the list.
+ */
+export const CDP_ALLOWED_METHODS: readonly string[] = Object.freeze([
+  // DOM reads.
+  'DOM.getDocument',
+  'DOM.getBoxModel',
+  'DOM.getNodeForLocation',
+  'DOM.getContentQuads',
+  'DOM.getOuterHTML',
+  'DOM.getAttributes',
+  'DOM.querySelector',
+  'DOM.querySelectorAll',
   'DOM.describeNode',
-  'DOM.requestNode',
   'DOM.resolveNode',
-  'DOM.performSearch',
+  // The one allowed DOM action (moves focus).
   'DOM.focus',
-  'DOM.collectClassNamesFromSubtree',
-  'DOM.getRelayoutBoundary',
-  'DOM.getFrameOwner',
-  'DOM.requestChildNodes',
-  'DOM.getContainerForNode',
-  'DOM.getQueryingDescendantsForContainer',
-  'DOM.getNodesForSubtreeByStyle',
-  // Input simulation: the four trusted CDP-native input events, enumerated
-  // explicitly. No 'Input.' family prefix: future Input.* methods (e.g.
-  // setIgnoreInputEvents, synthesizeScrollGesture) are denied by default.
+  // Input simulation: method-explicit, no family prefix.
   'Input.dispatchMouseEvent',
   'Input.dispatchKeyEvent',
   'Input.dispatchTouchEvent',
   'Input.insertText',
-  // Read-only page layout / history helpers.
+  // Read-only page layout / history helpers and computed style.
   'Page.getLayoutMetrics',
   'Page.getNavigationHistory',
   'Page.getFrameTree',
-  // Read-only computed style lookup.
   'CSS.getComputedStyleForNode',
-]
+])
 
 /** Human summary for the tool description and denial diagnostics. */
 export const CDP_ALLOW_SUMMARY =
-  'DOM inspection (geometry / node lookup / attributes) and trusted input events (Input.dispatchMouseEvent / Input.dispatchKeyEvent / Input.dispatchTouchEvent / Input.insertText) only'
+  'DOM inspection (geometry / node lookup / attributes / markup) plus the four trusted input events (Input.dispatchMouseEvent / Input.dispatchKeyEvent / Input.dispatchTouchEvent / Input.insertText) and read-only Page / CSS helpers, matched by exact name with no family prefixes'
 
 /**
  * Decide whether an agent may send the given CDP method.
  *
- * Matching rules keep the list method-explicit:
- *   - a prefix ending in '.' (none today — the widening guard forbids it)
- *     would open the whole family;
- *   - 'DOM.get' / 'DOM.query' are read-only families matched on their Pascal
- *     segment (e.g. DOM.getDocument), never on a forged lower-case suffix;
- *   - every other entry is an exact full method name, so a forged suffix like
- *     'Input.dispatchMouseEvent2' or 'Input.insertText.extra' cannot ride the
- *     allow-list.
+ * Exact equality only. The shape check comes first, so a non-string (an object
+ * with a toString, a number, a null) is denied without ever being evaluated.
+ * There is deliberately no prefix, family or suffix rule: a name that is not
+ * written out above does not pass, no matter who adds it to Chromium.
  * @param method - CDP method name, e.g. "DOM.getNodeForLocation".
- * @returns true when the method is inside the allow-list.
+ * @returns true when the method is exactly one of the allowed names.
  */
 export function isCdpMethodAllowed(method: unknown): boolean {
   if (typeof method !== 'string' || method.length === 0) return false
-  return CDP_ALLOW_PREFIXES.some((prefix) => {
-    if (prefix.endsWith('.')) return method.startsWith(prefix)
-    if (method === prefix) return true
-    return method.startsWith(prefix) && /^[A-Z]/.test(method.slice(prefix.length))
-  })
+  return CDP_ALLOWED_METHODS.includes(method)
 }
 
 /**

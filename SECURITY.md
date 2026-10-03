@@ -35,11 +35,14 @@ raw coordinates) and `browser_switch_tab`. It is **not** a sandbox: a page's own
 open (the agent simply refuses to drive it). For hard isolation, put an external network guard around
 it.
 
-**`browser_cdp` is CDP with an allow-list.** Only DOM inspection (geometry, node lookup, attributes)
-and trusted input simulation (`Input.dispatchMouseEvent` / `dispatchKeyEvent` / `dispatchTouchEvent`
-/ `insertText`) pass. Network, storage, cookie, security and arbitrary-JS (`Runtime.evaluate`)
-commands are rejected before they reach the browser — the list lives in `lib/cdp-policy.js` and has
-its own test file.
+**`browser_cdp` is CDP with an allow-list.** Nineteen methods pass, matched by **exact name with no
+family prefixes**: DOM reads (geometry, node lookup, attributes, markup), one focus action, the four
+trusted input events (`Input.dispatchMouseEvent` / `dispatchKeyEvent` / `dispatchTouchEvent` /
+`insertText`) and read-only Page / CSS helpers. Network, storage, cookie, security, arbitrary-JS
+(`Runtime.evaluate`), `Page.navigate`, `Page.getResourceContent` and the debugger-internal DOM
+commands are rejected before they reach the browser. The list lives in `src/cdp-policy.ts`, is frozen,
+and has its own adversarial test file: a method it has never heard of is denied, so a future Chromium
+command cannot widen the surface on its own.
 
 **The two power tools are off in the package.**
 

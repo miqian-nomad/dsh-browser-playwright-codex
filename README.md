@@ -298,6 +298,7 @@ MIT
 - **修掉第一版 aria 引擎的真实缺陷**：解析器按自造方言写（`- role "name" -> href`、行尾无其他内容），而真实输出每个容器行都以 `:` 结尾、href 走更深的 `- /url:` 子行、文本是 `- text: …`。16 个节点的页面只解析出 5 个 —— **层级与链接全丢，却仍报成功**（所以不会回退）。已用真实页面实测前后对比。
 - **格式漂移现在会大声失败**：读不懂的行会被收集（`parseAriaSnapshotWithStats`）并让本次捕获返回 `missing: true`，`captureAria` 随即回退 legacy DOM 引擎，绝不把空树交给模型。
 - **aria 测试改用真实抓取的 YAML**（2026-09-30 从 playwright-core 1.62 实抓），不再用解析器自己方言手写的 fixture。
+- **CDP 白名单改为精确逐条列举（0.5.0）**：`DOM.get` / `DOM.query` 两个家族前缀不再放行任何东西 —— 它们此前多授权了 9 个 DOM 调用（`getAnchorElement`、`getDetachedDomNodes`、`getSearchResults` 等），并且会授权这两个家族**将来**新增的成员。同时经复核收回 9 条更早**手工列上**的调试器内部特性（`performSearch`、`requestNode`、`getRelayoutBoundary` 等）。允许面**只收不放**（终表 19 条原本都已放行）；测试从"钉例子"改成"钉性质"：测试里有一份**独立手写的同一份名单**与源码表双向相等，再加探针集合比对（大写/小写/数字/点号后缀、大小写互换、截断、整域前缀），任何更宽的匹配规则都会让测试挂。
 - **CDP 白名单收紧为逐方法列举**：去掉 `Input.` 族前缀，只留 `Input.dispatchMouseEvent` / `dispatchKeyEvent` / `dispatchTouchEvent` / `insertText`；`Input.setIgnoreInputEvents`、`synthesizeScrollGesture`、`dispatchDragEvent` 及未来的 `Input.*` 默认拒绝，并新增守卫测试断言**任何**条目都不得以 `.` 结尾（旧的守卫恰好允许了一条）。
 
 ### 0.3.0（2026-09-26）
