@@ -544,6 +544,14 @@ declare class PlaywrightSession {
     }>;
     openTab(url: string, waitUntil: LoadState, signal: AbortSignal | undefined): Promise<BrowserSnapshot>;
     closeTab(index: number, signal: AbortSignal | undefined): Promise<void>;
+    /**
+     * Screenshots get their own floor instead of reusing the navigation budget: a
+     * full-page capture is sized by the page and encoded by the CPU, so a loaded machine
+     * legitimately needs seconds (2026-10-05: the Windows runner blew through the 2500ms
+     * navigation timeout while encoding a full-page PNG — a slow runner, not a defect).
+     * The floor only bounds failures; a capture that is ready returns immediately.
+     */
+    screenshotTimeoutMs(): number;
     screenshot(opts: {
         fullPage?: boolean;
         ref?: string;

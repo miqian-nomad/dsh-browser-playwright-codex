@@ -2068,6 +2068,16 @@ class PlaywrightSession {
       this.currentIndex = Math.min(this.currentIndex, this.context.pages().length - 1)
     })
   }
+  /**
+   * Screenshots get their own floor instead of reusing the navigation budget: a
+   * full-page capture is sized by the page and encoded by the CPU, so a loaded machine
+   * legitimately needs seconds (2026-10-05: the Windows runner blew through the 2500ms
+   * navigation timeout while encoding a full-page PNG — a slow runner, not a defect).
+   * The floor only bounds failures; a capture that is ready returns immediately.
+   */
+  screenshotTimeoutMs() {
+    return Math.max(this.timeoutMs(), 10_000)
+  }
   async screenshot(opts: { fullPage?: boolean; ref?: string } | undefined, signal: AbortSignal | undefined) {
     return this.run(async () => {
       this.assertLive()
@@ -2075,7 +2085,7 @@ class PlaywrightSession {
       const page = await this.ensurePage()
       if (opts?.ref !== undefined) {
         const bytes = await withAbort(
-          (await this.refLocator(opts.ref)).screenshot({ type: 'png', timeout: this.timeoutMs() }),
+          (await this.refLocator(opts.ref)).screenshot({ type: 'png', timeout: this.screenshotTimeoutMs() }),
           signal,
         )
         return { mime: 'image/png' as const, bytes }
@@ -2086,7 +2096,7 @@ class PlaywrightSession {
           fullPage: opts?.fullPage ?? false,
           animations: 'disabled',
           caret: 'hide',
-          timeout: this.timeoutMs(),
+          timeout: this.screenshotTimeoutMs(),
         }),
         signal,
       )

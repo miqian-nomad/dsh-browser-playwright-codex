@@ -15,6 +15,7 @@ languages, the individual entries follow the language the surrounding code and d
 - **测试运行器换成 Node 原生类型剥离**（`node --test "tests/*.test.ts"`，CI 用 Node 24，引擎要求 `^22.19 || >=24`）。这从根上移除了整类陷阱：同一个测试在 tsx 下红、在原生下绿（已实测）。`tsx` 仍是 devDependency（`cost` 等脚本还在用），只是测试不再经过它。
 - **失败原因不再被丢弃。** 原循环的判断读的是 `lastReason === null`，而变量初值是 `undefined`，所以那个分支**从未执行过**：瞬时失败一律伪装成 "could not find an unobstructed click point"。现在按信息量排序记录原因、在错误里点名、连探测抛出的**错误文本**也带上（正是它让我看到 `__name`）。
 - **点击探测点改为取「元素 ∩ 视口」的中心**。`elementFromPoint()` 对视口外坐标返回 `null`，而原先取元素自身中心 —— 比视口高的元素、或中心落在折线以下的元素会三个对齐档全败。现在取可见交集中心；**完全不在屏幕上**给出独立的 `off-screen` 原因。
+- **截图改用独立的超时下限**（`Math.max(timeoutMs, 10s)`）：全页截图的耗时由页面大小与 CPU 编码决定，复用"导航超时"（2500ms）会让慢机器把一次成功捕获判成失败 —— 2026-10-05 的 windows runner 正是这样挂的（`page.screenshot: Timeout 2500ms exceeded`）。这个下限只约束失败路径，拍好即返回。
 - **每个对齐档允许有限重采样**（三次、间隔 60ms，稳定性等待只在第一次前做一次）。
 
 ### Tests
