@@ -2,11 +2,12 @@
 
 > [![dsh.so 安装验证 · harness 0.2.0-rc.1](https://www.dsh.so/badge/install/dsh-browser-playwright-codex@0.2.0-rc.1.svg)](https://www.dsh.so/zh/artifact/dsh-browser-playwright-codex/) [![dsh.so 风险](https://www.dsh.so/badge/dsh-browser-playwright-codex.svg)](https://www.dsh.so/zh/artifact/dsh-browser-playwright-codex/)
 
-**一句话**：让 AI 用你**已经登录的账号**替你上网办事 —— 窗口就在你桌面上、你随时看得见；遇到登录、验证码、原生弹框，它会**停下来等你**，绝不替你点「确定」。
+**一句话**：让 AI 用你**已经登录的账号**在真实网页上干活 —— 填表、抓取列表、多标签查后台；浏览器窗口就在你桌面上、你随时看得见；遇到登录、验证码、原生弹框，它会**停下来等你**，绝不替你点「确定」。
 
 **In one line**: the agent drives a **visible, profile-backed browser window** with the logins you
-already have, through accessibility snapshots with stable element refs — and it stops for logins,
-captchas and native dialogs instead of guessing. No CSS-selector guessing, no full-DOM dumps.
+already have — filling in forms, scraping lists and working across tabs in real pages — through
+accessibility snapshots with stable element refs, and it stops for logins, captchas and native dialogs
+instead of guessing. No CSS-selector guessing, no full-DOM dumps.
 
 ```sh
 dsh plugin --profile <name> add github:miqian-nomad/dsh-browser-playwright-codex
@@ -286,6 +287,8 @@ MIT
 
 <!-- changelog:today -->
 ## 更新记录
+
+（此列表只记 **minor 里程碑**；每个补丁版本见 [CHANGELOG.md](CHANGELOG.md)。）
 
 ### 0.5.0（2026-10-03）
 

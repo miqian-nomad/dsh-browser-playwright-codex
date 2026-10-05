@@ -5,6 +5,30 @@ languages, the individual entries follow the language the surrounding code and d
 
 一句话摘要：**把「看着危险」变成「说得清楚」** —— 新增 `SECURITY.md`，把 dsh.so 扫描报的 **2 Critical / 5 Warning / 26 Info** 逐条对上：那 2 个 Critical 就是 `browser_evaluate` 的实现，而**包里默认关闭**（关着时工具根本不注册）。README 第一屏重写（中文一句话 + 一条命令安装 + 五条差异点 + 安全入口），并又清掉两处「出厂开启闸门」的过期说法。
 
+## 0.5.1
+
+一句话摘要：**npm 首发 + 元数据写成用户会搜的词** —— 包以 `dsh-browser-playwright-codex` 发布到 npm，于是安装可以只写包名；同时把 `package.json` 的 description / keywords 从术语改成需求词，补上 `repository` / `homepage`，并加 `prepublishOnly`（发布前强制 build + test）。**运行时一行未改。**
+
+### Changed
+
+- **Package metadata is written for search, not for maintainers.** The npm description used to open
+  with "accessibility-snapshot interaction with stable element refs" — precise, and useless in a search
+  box. It now opens with what a user does (fill in forms, scrape lists, work across tabs, using the
+  logins you already have); keywords gained `automation`, `browser-automation`, `web-scraping`,
+  `form-filling`, `deepseek`, `ai-agent`, `rpa`; `repository` and `homepage` were missing entirely, so
+  the npm page had no link back to its source.
+- **The README first screen carries the same words** (Chinese and English), because it is the other half
+  of the same search surface — the Chinese one-liner used to say "上网办事", which nobody searches for.
+- **GitHub topics gained the single-word head terms** (`browser`, `automation`, `web-automation`,
+  `browser-automation`, `web-scraping`, `form-filling`, `rpa`, `ai-agent`, `deepseek`), because the
+  repository search weights topics heavily.
+- **`prepublishOnly: npm run build && npm test`** — a publish can no longer ship a `lib/` older than
+  `src/`, which is the one way this package could go out subtly broken.
+- **The README 更新记录 now states it lists minor milestones only**, so a patch release cannot make the
+  log look like the project stopped at the previous version.
+- **No runtime change:** `src/` and `lib/` are untouched; tools, gates and the CDP policy are exactly
+  what 0.5.0 shipped.
+
 ## 0.5.0
 
 一句话摘要：**CDP 白名单从「家族前缀匹配」收紧为「精确逐条列举」** —— `DOM.get` / `DOM.query` 两个前缀不再放行任何东西（它们此前多授权了 9 个 DOM 调用，并且会授权这两个家族将来新增的成员）；同时经复核收回 9 条更早手工列上、现已判定不需要的调试器/UA 内部特性。允许面**只收不放**：终表 19 条全部是原本就已放行的权限，插件自己的后台建页与窗口探测走内部会话、不受影响。
