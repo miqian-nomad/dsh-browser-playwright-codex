@@ -10,6 +10,10 @@ accessibility snapshots with stable element refs, and it stops for logins, captc
 instead of guessing. No CSS-selector guessing, no full-DOM dumps.
 
 ```sh
+# from npm
+dsh plugin --profile <name> add dsh-browser-playwright-codex
+
+# or straight from the repository
 dsh plugin --profile <name> add github:miqian-nomad/dsh-browser-playwright-codex
 ```
 
