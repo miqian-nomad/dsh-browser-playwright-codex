@@ -25,9 +25,10 @@ languages, the individual entries follow the language the surrounding code and d
 - `click by ref reaches an element taller than the viewport`、`an element that is never on screen is reported as off-screen` —— 夹视口与原因措辞的回归用例。
 - `stale-ref journey` 改用**不在 `#recent` 里**的商品做断言：`#recent` 异步插入 `CATALOG.slice(0,4)`，其中恰好含原先那个商品，于是"链接数 === 0"只在竞态窗口内成立 —— 慢一点的点击就会输掉这个竞态（这正是本次调查中先撞上的那条失败）。
 
-### Known, not fixed here
+### Hardened afterwards
 
-- `elementStabilityProbe` / `pageStabilityProbe` / `labelTargetProbe` 里仍有命名内部函数 —— 在**原生运行器**下它们工作正常 ✓，但若有人**自行用开了 keepNames 的打包器转译 `src/`**，同样会中招。安全写法已实测（数组解构 `const [a, b] = [() => …, () => …]` ✓、数组元素 ✓、立即调用 ✓），需要时可逐个改写。
+- **三个同类页内函数（`elementStabilityProbe` / `pageStabilityProbe` / `labelTargetProbe`，含 `labelOf` 内部的 `attr`）也改成对转译器免疫的写法。** 用的是实测安全的数组解构：`const [sig, tick] = [() => …, () => …]` —— 初始值是数组字面量而不是函数字面量，所以不会被 `__name` 包，而且两个函数仍可互相调用（自递归也验过）。
+  验证方式很直接：同一批测试**在 tsx 下也变绿**。加固前 `click by visible label` 在 tsx 下红、原生下绿；加固后两种运行器全绿（本地全套 117 / 114 pass / 0 fail / 3 skipped，verify 57 项）。
 
 ## 0.5.1
 
