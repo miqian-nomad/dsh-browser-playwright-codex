@@ -1323,36 +1323,69 @@ class PlaywrightSession {
       { block: 'end', inline: 'end' },
       { block: 'start', inline: 'start' },
     ]
-    const hitTest = (el: Element) => {
+    /** What the in-page probe answers. A discriminated union so the caller can switch on it. */
+    type ClickProbe =
+      | { ok: true; x: number; y: number; hitDesc: string; hitSelf: boolean }
+      | {
+          ok: false
+          reason: 'zero-size' | 'off-screen' | 'nothing-at-point' | 'intercepted'
+          x: number
+          y: number
+          geometry: string
+          by?: string
+        }
+    const hitTest = (el: Element): ClickProbe => {
       const r = el.getBoundingClientRect()
-      const x = Math.max(0, r.left + r.width / 2)
-      const y = Math.max(0, r.top + r.height / 2)
       const w = r.width
       const h = r.height
-      if (w <= 0 || h <= 0) return { ok: false, reason: 'zero-size', x, y }
-      const describe = (n: Element | null) => {
-        if (!n) return '(nothing)'
-        const cls =
-          typeof n.className === 'string' && n.className.trim()
-            ? '.' + n.className.trim().split(/\s+/).filter(Boolean).join('.')
-            : ''
-        const role = n.getAttribute && n.getAttribute('role')
-        const text = n.childElementCount === 0 && n.textContent ? ' "' + n.textContent.trim().slice(0, 24) + '"' : ''
-        return (
-          (n.tagName ? n.tagName.toLowerCase() : n.nodeName) +
-          (n.id ? '#' + n.id : '') +
-          cls +
-          (role ? '[role=' + role + ']' : '') +
-          text
-        )
+      const geometry =
+        'rect ' + Math.round(r.left) + ',' + Math.round(r.top) + ' ' + Math.round(w) + 'x' + Math.round(h)
+      if (w <= 0 || h <= 0) return { ok: false, reason: 'zero-size', x: r.left, y: r.top, geometry }
+      // The probe must sit inside the element AND inside the viewport:
+      // elementFromPoint() answers null for coordinates outside the viewport, so
+      // sampling the element's own centre missed any target taller than the viewport
+      // (or one whose centre was below the fold) even when most of it was plainly
+      // clickable. Aim at the centre of the visible intersection instead.
+      const view = (el.ownerDocument && el.ownerDocument.defaultView) || window
+      const left = Math.max(r.left, 0)
+      const top = Math.max(r.top, 0)
+      const right = Math.min(r.right, view.innerWidth)
+      const bottom = Math.min(r.bottom, view.innerHeight)
+      if (right - left <= 0 || bottom - top <= 0) {
+        return {
+          ok: false,
+          reason: 'off-screen',
+          x: r.left,
+          y: r.top,
+          geometry: geometry + ' viewport ' + view.innerWidth + 'x' + view.innerHeight,
+        }
       }
+      const x = (left + right) / 2
+      const y = (top + bottom) / 2
       let hit = null
       try {
         hit = document.elementFromPoint(x, y)
       } catch {
         hit = null
       }
-      if (!hit) return { ok: false, reason: 'nothing-at-point', x, y }
+      if (!hit) return { ok: false, reason: 'nothing-at-point', x, y, geometry }
+      // Describe the hit inline, as a string: this function is serialized into the
+      // page, so it must be self-contained. A transpiler that keeps function names
+      // (esbuild/tsx, through its `__name` helper) rewrites a named inner binding
+      // like `const describe = (…) => …` into a call to a helper that exists only in
+      // module scope — and the page has no such helper, so the probe would throw
+      // ReferenceError and every click would silently fall back to Playwright's
+      // actionability click (3s cap). That is what made the Windows runner flaky
+      // until 2026-10-05; the test runner now strips types natively, and keeping the
+      // probe free of inner function bindings protects anyone who transpiles src/.
+      const hitDesc =
+        (hit.tagName ? hit.tagName.toLowerCase() : hit.nodeName) +
+        (hit.id ? '#' + hit.id : '') +
+        (typeof hit.className === 'string' && hit.className.trim()
+          ? '.' + hit.className.trim().split(/\s+/).filter(Boolean).join('.')
+          : '') +
+        (hit.getAttribute && hit.getAttribute('role') ? '[role=' + hit.getAttribute('role') + ']' : '') +
+        (hit.childElementCount === 0 && hit.textContent ? ' "' + hit.textContent.trim().slice(0, 24) + '"' : '')
       let belongs = false
       if (hit === el || el.contains(hit)) {
         belongs = true
@@ -1374,11 +1407,34 @@ class PlaywrightSession {
         }
       }
       return belongs
-        ? { ok: true, x, y, hitDesc: describe(hit), hitSelf: hit === el }
-        : { ok: false, reason: 'intercepted', x, y, by: describe(hit) }
+        ? { ok: true, x, y, hitDesc, hitSelf: hit === el }
+        : { ok: false, reason: 'intercepted', x, y, by: hitDesc, geometry }
     }
     let lastBlockedBy: string | undefined
     let lastReason: string | undefined
+    let lastGeometry: string | undefined
+    /** Message from the most recent probe that threw, so the failure names its cause. */
+    let probeError: string | undefined
+    // 2026-10-05: the first version of this loop dropped the probe's reason on the
+    // floor — the guard below read `lastReason === null` while the variable started
+    // as `undefined`, so it never ran and every transient miss came out as "could not
+    // find an unobstructed click point" with nothing to act on. That message is what
+    // the slower Windows runner produced while ubuntu and local runs passed, and it
+    // cost a debugging session to learn what it actually meant. Record the reason and
+    // keep the most informative one.
+    const rank: Record<string, number> = {
+      intercepted: 5,
+      'zero-size': 4,
+      'off-screen': 3,
+      'nothing-at-point': 2,
+      unreachable: 1,
+    }
+    const record = (reason: string, geometry?: string) => {
+      if (lastReason === undefined || (rank[reason] ?? 0) > (rank[lastReason] ?? 0)) {
+        lastReason = reason
+        lastGeometry = geometry
+      }
+    }
     for (const align of alignments) {
       try {
         // Native scroll so block alignment is honoured; Playwright's
@@ -1393,15 +1449,30 @@ class PlaywrightSession {
       } catch {
         /* try the next alignment */
       }
-      // Wait out layout shifts before sampling the centre point.
-      await this.waitForElementStable(locator)
-      const probe = await withAbort(locator.evaluate(hitTest), signal).catch(() => null)
-      if (probe && probe.ok) return { x: probe.x, y: probe.y, hitDesc: probe.hitDesc, hitSelf: probe.hitSelf }
-      if (probe && probe.reason === 'intercepted') {
-        lastBlockedBy = probe.by
-        lastReason = 'intercepted'
-      } else if (lastReason === null) {
-        lastReason = probe ? probe.reason : 'unreachable'
+      // Sample a few times per alignment: a page that is still laying out can move the
+      // element between the scroll and the probe, and the first sample then misses even
+      // though a later one is fine. Retries are bounded and cheap — the stability wait
+      // only runs before the first sample, and the extra samples are 60ms apart.
+      for (let attempt = 0; attempt < 3; attempt += 1) {
+        if (attempt === 0) await this.waitForElementStable(locator)
+        else await new Promise((resolve) => setTimeout(resolve, 60))
+        const probe = await withAbort(locator.evaluate(hitTest), signal).catch((error: unknown) => {
+          // Keep the message. "unreachable" on its own told nobody anything, and
+          // swallowing the error here is exactly what let a broken probe look like an
+          // obstructed element for a whole debugging session.
+          probeError = error instanceof Error ? error.message : String(error)
+          return null
+        })
+        if (probe !== null && probe.ok)
+          return { x: probe.x, y: probe.y, hitDesc: probe.hitDesc, hitSelf: probe.hitSelf }
+        if (probe === null) record('unreachable', probeError)
+        else {
+          record(probe.reason, probe.geometry)
+          if (probe.reason === 'intercepted') lastBlockedBy = probe.by
+        }
+        // Interception is a property of the page, not of the moment: re-sampling cannot
+        // clear it, so spend the remaining budget on the next alignment instead.
+        if (probe !== null && probe.reason === 'intercepted') break
       }
     }
     if (lastReason === 'intercepted') {
@@ -1412,6 +1483,14 @@ class PlaywrightSession {
           ' intercepts the click (tried centre / end / start alignment)',
       )
     }
+    if (lastReason === 'off-screen') {
+      throw new BrowserError(
+        'ELEMENT_NOT_ACTIONABLE',
+        'the element is outside the viewport even after scrolling it into view; nothing of it is on screen' +
+          (lastGeometry === undefined ? '' : ' (' + lastGeometry + ')') +
+          '; take a fresh browser_snapshot',
+      )
+    }
     if (lastReason === 'zero-size') {
       throw new BrowserError(
         'ELEMENT_NOT_ACTIONABLE',
@@ -1420,7 +1499,10 @@ class PlaywrightSession {
     }
     throw new BrowserError(
       'ELEMENT_NOT_ACTIONABLE',
-      'could not find an unobstructed click point for the ref; take a fresh browser_snapshot',
+      'could not find an unobstructed click point for the ref (last probe: ' +
+        (lastReason ?? 'no probe completed') +
+        (lastGeometry === undefined ? '' : ' — ' + lastGeometry) +
+        '); take a fresh browser_snapshot',
     )
   }
   async click(ref: string, signal: AbortSignal | undefined) {

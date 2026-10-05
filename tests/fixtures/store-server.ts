@@ -462,6 +462,44 @@ async function handle(req: IncomingMessage, res: ServerResponse, orders: Map<str
     send(res, 200, HTML, pageShell('Docs', '<main><h1>Docs</h1><p>External documentation placeholder.</p></main>'))
     return
   }
+  if (path === '/tall-fixed') {
+    // A fixed target taller than the viewport (800px): its own centre is below the
+    // fold, and elementFromPoint() answers null for coordinates outside the viewport.
+    // A large part of it is on screen and clickable — which is what a person would
+    // click. This is the shape that used to fail every alignment and surface as the
+    // generic "could not find an unobstructed click point" (2026-10-05: only on the
+    // slower Windows CI runner, never on ubuntu or locally).
+    send(
+      res,
+      200,
+      HTML,
+      pageShell(
+        'Tall fixed target',
+        '<main><h1>Tall fixed target</h1>' +
+          '<button id="tall-btn" style="position:fixed;left:0;top:0;width:100%;height:2000px" ' +
+          "onclick=\"document.getElementById('tall-result').textContent='clicked'\">Tall banner button</button>" +
+          '<p id="tall-result">idle</p></main>',
+      ),
+    )
+    return
+  }
+  if (path === '/offscreen-fixed') {
+    // Entirely below the fold and fixed, so no scroll can reveal it: the click must
+    // fail — and say why (it used to collapse into the generic message, which is what
+    // made the Windows flake so hard to read).
+    send(
+      res,
+      200,
+      HTML,
+      pageShell(
+        'Off-screen target',
+        '<main><h1>Off-screen target</h1>' +
+          '<button id="offscreen-btn" style="position:fixed;left:0;top:820px;width:200px;height:40px">Never visible</button>' +
+          '<p id="offscreen-result">idle</p></main>',
+      ),
+    )
+    return
+  }
   if (path === '/policy') {
     // Same trick as the storefront footer: the localhost hostname is a distinct
     // host from 127.0.0.1, so an allow-list of ['127.0.0.1'] excludes it.

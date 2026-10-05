@@ -188,6 +188,51 @@ async function waitFor(
 const text = (snap: BrowserSnapshot): string => JSON.stringify(snap)
 
 // ---------------------------------------------------------------------------
+// Scenario: click geometry when only part of the target is on screen
+// ---------------------------------------------------------------------------
+
+test('click by ref reaches an element taller than the viewport', async () => {
+  // Regression (2026-10-05): the click-point probe sampled the element's own centre.
+  // For a target taller than the viewport that centre can sit outside the viewport
+  // — and elementFromPoint() returns null for coordinates outside it — so all three
+  // alignments failed and the tool threw the generic "could not find an unobstructed
+  // click point". The slower Windows CI runner hit it; ubuntu and local runs did not.
+  const s = await provider.acquire('tall-target')
+  await s.navigate(store.base + '/tall-fixed', 'load')
+  const tall = await refOf(s, { role: 'button', nameIncludes: 'Tall banner button' }, 'tall banner button')
+  const after = await s.click(tall)
+  assert.ok(
+    text(after).includes('clicked'),
+    'the click must land on the visible part of the tall element — url: ' +
+      after.url +
+      ' — text: ' +
+      text(after).slice(0, 200),
+  )
+})
+
+test('an element that is never on screen is reported as off-screen', async () => {
+  // The same bookkeeping bug hid the reason: the final error claimed no unobstructed
+  // point existed without ever saying the element was outside the viewport, which is
+  // what actually happened. A model reading that cannot tell "obstructed" from
+  // "off-screen", and neither could a maintainer reading CI.
+  const s = await provider.acquire('offscreen-target')
+  await s.navigate(store.base + '/offscreen-fixed', 'load')
+  const off = await refOf(s, { role: 'button', nameIncludes: 'Never visible' }, 'off-screen button')
+  await assert.rejects(
+    () => s.click(off),
+    (error: unknown) => {
+      assert.ok(error instanceof BrowserError, 'expected a BrowserError, got ' + String(error))
+      assert.match(
+        error.message,
+        /outside the viewport/i,
+        'the error must name the real reason (outside the viewport): ' + error.message,
+      )
+      return true
+    },
+  )
+})
+
+// ---------------------------------------------------------------------------
 // Scenario: guest checkout journey
 // ---------------------------------------------------------------------------
 
@@ -382,15 +427,18 @@ test('stale-ref journey: filter re-render invalidates refs; a fresh snapshot rec
   const s = await provider.acquire('stale-ref')
 
   await s.navigate(store.base + '/?nopromo=1', 'load')
-  const keyboardRef = await refOf(s, { role: 'link', name: 'Mechanical Keyboard' }, 'electronics product link')
+  // Key the assertions on a product the "Recently viewed" section cannot re-introduce:
+  // that section renders CATALOG.slice(0, 4) once its fetch lands (200ms of server
+  // latency), so a product from the first four is back in the tree a few hundred
+  // milliseconds later and "count === 0" would only hold inside a race window — which
+  // is exactly how this test failed on 2026-10-05 while a slower click path was in play.
+  const removable = CATALOG.slice(4).find((product) => product.category !== 'Kitchen')
+  assert.ok(removable !== undefined, 'the fixture needs a non-Kitchen product outside the first four')
+  const keyboardRef = await refOf(s, { role: 'link', name: removable.name }, 'filterable product link')
 
   // Re-render the grid with a category filter: old refs die with the old DOM.
   await s.click(await refOf(s, { role: 'button', name: 'Kitchen' }, 'kitchen filter'))
-  await waitFor(
-    s,
-    (snap) => countNodes(snap.nodes, { role: 'link', name: 'Mechanical Keyboard' }) === 0,
-    'filtered grid',
-  )
+  await waitFor(s, (snap) => countNodes(snap.nodes, { role: 'link', name: removable.name }) === 0, 'filtered grid')
 
   // Ref numbers are unique per snapshot (a nonce prefixes every ref), so
   // after the re-render the stale ref matches nothing and fails fast with

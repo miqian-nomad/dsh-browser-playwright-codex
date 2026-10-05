@@ -409,8 +409,8 @@ declare class PlaywrightSession {
     resolveClickPoint(locator: Locator, signal: AbortSignal | undefined): Promise<{
         x: number;
         y: number;
-        hitDesc: string | undefined;
-        hitSelf: boolean | undefined;
+        hitDesc: string;
+        hitSelf: boolean;
     }>;
     click(ref: string, signal: AbortSignal | undefined): Promise<BrowserSnapshot | {
         url: string;

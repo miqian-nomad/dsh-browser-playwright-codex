@@ -199,3 +199,47 @@ function findRef(nodes: readonly BrowserNode[], match: (node: BrowserNode) => bo
   }
   return undefined
 }
+
+test('the click geometry pipeline itself delivers the click, not the fallback', async () => {
+  // Regression (found 2026-10-05 while chasing Windows CI flakiness): every page-side
+  // probe here is serialized into the browser, and a transpiler that keeps function
+  // names — tsx/esbuild, through its `__name` helper — rewrote the probes' inner named
+  // arrows into calls to a helper that only exists in the module scope. Every probe
+  // therefore threw ReferenceError in the page, the error was swallowed, and every
+  // click silently degraded to Playwright's actionability click with a 3s cap. That
+  // cap is what the slower Windows runner exceeded, surfacing the geometry path's
+  // (misleading) error instead. The landing note names which path ran, so this asserts
+  // the pipeline itself rather than "a click happened".
+  const s = await provider.acquire('t-geometry')
+  await s.navigate(base + '/page.html', 'load')
+  const button = findRef((await s.snapshot()).nodes, (node) => node.role === 'button' && node.name === 'Count clicks')
+  assert.ok(button !== undefined, 'count button ref missing')
+  const snap = await s.click(button)
+  assert.match(
+    String(snap.landingNote),
+    /click delivered at/,
+    'the geometry path must deliver the click; got: ' + String(snap.landingNote),
+  )
+  assert.doesNotMatch(
+    String(snap.landingNote),
+    /actionability click delivered/,
+    'the click must not fall back to Playwright actionability; got: ' + String(snap.landingNote),
+  )
+  assert.match(JSON.stringify(snap), /clicks: 1/)
+})
+
+test('click by visible label reaches the element through the page-side probe', async () => {
+  // The label probe is serialized into the page as well, so it obeys the same
+  // self-containment rule as the geometry probe above — and until this test existed
+  // nothing exercised it at all: a broken label probe only surfaced as
+  // CLICK_TARGET_NOT_FOUND for a label that plainly exists on the page.
+  const s = await provider.acquire('t-label')
+  await s.navigate(base + '/page.html', 'load')
+  const snap = await s.clickText('Count clicks')
+  assert.match(
+    String(snap.landingNote),
+    /Count clicks/,
+    'the landing note should name the clicked label; got: ' + String(snap.landingNote),
+  )
+  assert.match(JSON.stringify(snap), /clicks: 1/)
+})

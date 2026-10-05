@@ -41,9 +41,9 @@
   ],
   "scripts": {
     "build": "node node_modules/typescript/bin/tsc -p tsconfig.json",
-    "test": "node node_modules/tsx/dist/cli.mjs --test \"tests/*.test.ts\"",
-    "test:scenarios": "node node_modules/tsx/dist/cli.mjs --test tests/scenarios.test.ts tests/tool-scenarios.test.ts",
-    "test:live": "node node_modules/tsx/dist/cli.mjs --test tests/live-smoke.test.ts",
+    "test": "node --test \"tests/*.test.ts\"",
+    "test:scenarios": "node --test tests/scenarios.test.ts tests/tool-scenarios.test.ts",
+    "test:live": "node --test tests/live-smoke.test.ts",
     "verify": "npm run build && node scripts/dsh-browser-verify.mjs",
     "verify:live": "npm run build && node scripts/dsh-browser-verify.mjs --live",
     "doctor": "node scripts/doctor.mjs",

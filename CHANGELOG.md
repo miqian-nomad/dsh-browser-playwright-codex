@@ -5,6 +5,29 @@ languages, the individual entries follow the language the surrounding code and d
 
 一句话摘要：**把「看着危险」变成「说得清楚」** —— 新增 `SECURITY.md`，把 dsh.so 扫描报的 **2 Critical / 5 Warning / 26 Info** 逐条对上：那 2 个 Critical 就是 `browser_evaluate` 的实现，而**包里默认关闭**（关着时工具根本不注册）。README 第一屏重写（中文一句话 + 一条命令安装 + 五条差异点 + 安全入口），并又清掉两处「出厂开启闸门」的过期说法。
 
+## Unreleased
+
+一句话摘要：**查出 Windows CI 抖动的真正根因并修掉**（尚未发版）—— 测试用的转译器 tsx/esbuild 会开启 `keepNames`，把"要送进浏览器执行"的页内函数里的**命名内部函数**改写成 `__name(fn, "名字")`，而 `__name` 只存在于模块作用域、页面里没有 → 探测每次抛 `ReferenceError`，且被 `catch` 吞成无声的 `unreachable`。后果是**几何点击路径从来没工作过**：所有点击都退化成 Playwright 兜底点击（上限 3 秒），慢速 Windows runner 一超时，就把几何路径那句**误导性**的错误抛了出来。
+
+### Fixed
+
+- **根因：页内探测函数必须自包含。** `hitTest` 里那个 `const describe = (…) => …` 被 esbuild 包成 `__name(...)`，序列化进页面后直接抛 `ReferenceError: __name is not defined`（用 `fn.toString()` 在 tsx 下实测确认）。改为内联成字符串计算 —— 函数体里不再有任何函数字面量。
+- **测试运行器换成 Node 原生类型剥离**（`node --test "tests/*.test.ts"`，CI 用 Node 24，引擎要求 `^22.19 || >=24`）。这从根上移除了整类陷阱：同一个测试在 tsx 下红、在原生下绿（已实测）。`tsx` 仍是 devDependency（`cost` 等脚本还在用），只是测试不再经过它。
+- **失败原因不再被丢弃。** 原循环的判断读的是 `lastReason === null`，而变量初值是 `undefined`，所以那个分支**从未执行过**：瞬时失败一律伪装成 "could not find an unobstructed click point"。现在按信息量排序记录原因、在错误里点名、连探测抛出的**错误文本**也带上（正是它让我看到 `__name`）。
+- **点击探测点改为取「元素 ∩ 视口」的中心**。`elementFromPoint()` 对视口外坐标返回 `null`，而原先取元素自身中心 —— 比视口高的元素、或中心落在折线以下的元素会三个对齐档全败。现在取可见交集中心；**完全不在屏幕上**给出独立的 `off-screen` 原因。
+- **每个对齐档允许有限重采样**（三次、间隔 60ms，稳定性等待只在第一次前做一次）。
+
+### Tests
+
+- `the click geometry pipeline itself delivers the click, not the fallback` —— **先写测试**并在旧源码上验红（红的时候它打印出的正是 `got: playwright actionability click delivered …`），在修复后转绿。它断言的是**哪条路径送出的点击**，所以能挡住这一类回归。
+- `click by visible label reaches the element through the page-side probe` —— 新覆盖：此前**整套测试从未调用过** `clickText`，而它的页内探测（`labelTargetProbe`）同样被 `__name` 破坏，只会以"找不到这个文字"的形式表现出来。这条在 tsx 下红、原生下绿。
+- `click by ref reaches an element taller than the viewport`、`an element that is never on screen is reported as off-screen` —— 夹视口与原因措辞的回归用例。
+- `stale-ref journey` 改用**不在 `#recent` 里**的商品做断言：`#recent` 异步插入 `CATALOG.slice(0,4)`，其中恰好含原先那个商品，于是"链接数 === 0"只在竞态窗口内成立 —— 慢一点的点击就会输掉这个竞态（这正是本次调查中先撞上的那条失败）。
+
+### Known, not fixed here
+
+- `elementStabilityProbe` / `pageStabilityProbe` / `labelTargetProbe` 里仍有命名内部函数 —— 在**原生运行器**下它们工作正常 ✓，但若有人**自行用开了 keepNames 的打包器转译 `src/`**，同样会中招。安全写法已实测（数组解构 `const [a, b] = [() => …, () => …]` ✓、数组元素 ✓、立即调用 ✓），需要时可逐个改写。
+
 ## 0.5.1
 
 一句话摘要：**npm 首发 + 元数据写成用户会搜的词** —— 包以 `dsh-browser-playwright-codex` 发布到 npm，于是安装可以只写包名；同时把 `package.json` 的 description / keywords 从术语改成需求词，补上 `repository` / `homepage`，并加 `prepublishOnly`（发布前强制 build + test）。**运行时一行未改。**
