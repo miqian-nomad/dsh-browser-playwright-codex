@@ -3,11 +3,9 @@
 Bilingual by intent: the version headings and the summary of each release are given in both
 languages, the individual entries follow the language the surrounding code and docs use.
 
-一句话摘要：**把「看着危险」变成「说得清楚」** —— 新增 `SECURITY.md`，把 dsh.so 扫描报的 **2 Critical / 5 Warning / 26 Info** 逐条对上：那 2 个 Critical 就是 `browser_evaluate` 的实现，而**包里默认关闭**（关着时工具根本不注册）。README 第一屏重写（中文一句话 + 一条命令安装 + 五条差异点 + 安全入口），并又清掉两处「出厂开启闸门」的过期说法。
+## 0.5.2
 
-## Unreleased
-
-一句话摘要：**查出 Windows CI 抖动的真正根因并修掉**（尚未发版）—— 测试用的转译器 tsx/esbuild 会开启 `keepNames`，把"要送进浏览器执行"的页内函数里的**命名内部函数**改写成 `__name(fn, "名字")`，而 `__name` 只存在于模块作用域、页面里没有 → 探测每次抛 `ReferenceError`，且被 `catch` 吞成无声的 `unreachable`。后果是**几何点击路径从来没工作过**：所有点击都退化成 Playwright 兜底点击（上限 3 秒），慢速 Windows runner 一超时，就把几何路径那句**误导性**的错误抛了出来。
+一句话摘要：**查出 Windows CI 抖动的真正根因并修掉**—— 测试用的转译器 tsx/esbuild 会开启 `keepNames`，把"要送进浏览器执行"的页内函数里的**命名内部函数**改写成 `__name(fn, "名字")`，而 `__name` 只存在于模块作用域、页面里没有 → 探测每次抛 `ReferenceError`，且被 `catch` 吞成无声的 `unreachable`。后果是**几何点击路径从来没工作过**：所有点击都退化成 Playwright 兜底点击（上限 3 秒），慢速 Windows runner 一超时，就把几何路径那句**误导性**的错误抛了出来。
 
 ### Fixed
 
