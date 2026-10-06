@@ -1,6 +1,6 @@
 {
   "name": "dsh-browser-playwright-codex",
-  "version": "0.5.2",
+  "version": "0.5.3",
   "description": "Browser automation for DeepSeek Harness: fill in forms, scrape lists and work across tabs in real pages, using the logins you already have. Runs in a visible window that stays quiet when minimised, and stops for sign-ins, CAPTCHAs and native dialogs instead of confirming for you.",
   "license": "MIT",
   "type": "module",

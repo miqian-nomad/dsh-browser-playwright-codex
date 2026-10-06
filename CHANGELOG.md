@@ -3,30 +3,35 @@
 Bilingual by intent: the version headings and the summary of each release are given in both
 languages, the individual entries follow the language the surrounding code and docs use.
 
-## Unreleased
+## 0.5.3
 
-一句话摘要：**修掉中文说明里一处会让人误判权限状态的过期说法**，并把守卫的洞补上 —— 原文写"本包自带的 bundle 层是… `allowEvaluate`/`allowCdp` 打开"，而出厂配置是 `false`/`false`。用户读到这里会以为"页面任意 JS / 原始 CDP"默认可用。
-
-### Fixed
-
-- **`中文说明.md` 现在写明两个闸门出厂关闭**，并指向 §4.6 说明为什么（要开就在你自己的 profile patch 里开）。
-- **守卫补洞（`tests/docs-consistency.test.ts`）**：原来那条"不得声称出厂开启"的规则要求行内出现 `: true|false`，而"措辞检查"写在这个提前返回**之后** —— 于是"…`allowEvaluate`/`allowCdp` 打开"这种写法**永远走不进检查**。现在改成两条带邻近性的规则：①"发货词 + 显式闸门值"必须与实际一致；②"发货词 + 闸门名 + 近旁 on 词（且同一窗口内没有 off 词）"必须为真。
-  负向自检三种坏写法（`打开` / `开启` / `allowEvaluate: true`）**全部被抓住**；而 `SECURITY.md` 里那句合法表述「Only when `allowEvaluate: true`. **The package ships `false`**」**不会被误报**（规则从"发货词"起锚，且要求闸门名紧跟其后）。
+一句话摘要：**源码按职责拆开、可维护性大幅提升，并修掉拆分过程中暴露的三处隐患** —— 对用户可见的行为零变化：工具面、配置接口、出厂默认值全部不动。本版同时修掉中文说明里一处会让人误判权限状态的过期说法。
 
 ### Changed
 
-- **源码按职责拆开：`playwright.ts` 从 2,727 行降到 73 行**，对外零变化（loader 三行、`package.json` exports、工具面、`lib/` 入口全部不变）。做法是"纯搬运、一次一个接缝"：每步 `npm test` + `npm run verify` + 解析一致性脚本全绿才提交，共 10 个提交，任何一步不绿就当场回退。
-  - `playwright.ts`（73 行）：只留 `apply()` 装配。
-  - `provider.ts`（580）：PlaywrightProvider —— profile/context 生命周期、会话注册、空闲回收、弹窗登记、标签记账。
-  - `session.ts`（675）：会话骨架与其余交互。
-  - `page-actions.ts`（869）：点击（含几何阶梯）、填充、按键、悬停、滚动、历史、标签。
-  - `page-snapshot.ts`（335）：采集、稳定等待、ref 签名与差异、ref 解析与存活校验。
-  - `page-diagnostics.ts`（198）：控制台消息、页面错误、网络请求的有界记录。
-  - `page-probes.ts`（195）：4 个页内探测（必须自包含，新增测试守卫）。
-  - `login-state.ts`：登录态导出/恢复（窗口最小化时只取 cookies）。
-  - `browser-lifecycle.ts`：启动/复用持久化 context、清理 Chrome 锁、窗口最小化判定、后台页创建。
-  - `config.ts` / `url-policy.ts` / `challenge.ts` / `extract.ts` / `tool-types.ts` / `tool-schemas.ts` / `tool-render.ts`：配置与常量、URL 策略、验证码识别、提取工具、工具面类型/schema/渲染。
-  - 拆开过程中暴露并修掉 3 个真隐患：`WeakMap<Request>` 实际落在浏览器内置的 DOM `Request` 上（类型身份不一致）、`provider.ts` ⇄ `session.ts` 的**运行时**循环依赖（多个测试文件直接加载失败）、以及测试与脚本仍在旧路径引用搬走的符号。
+- 源码按职责拆开：`playwright.ts` **2,727 → 55 行**，只剩注册入口 `apply()` 与一张给来访者的模块地图；对外零变化（loader 三行、`package.json` exports、`lib/` 入口、工具面全都不动）。做法是"纯搬运、一次一个接缝"：每步 `npm test` + `npm run verify` + 解析一致性脚本全绿才提交，任何一步不绿就当场回退（过程中真回退过一次：拆 `tool.ts` 时用启发式切错边界，回退后改用 TypeScript 解析器取精确范围）。
+  - `provider.ts`（370 行）：profile/context 生命周期、会话注册、空闲回收、弹窗登记、标签记账。
+  - `session.ts`（668）：会话骨架 —— 持有 page/context，处理弹窗、截图、页面数据、evaluate/CDP，并把动作/快照/诊断转发给对应模块。
+  - `page-actions.ts`（786）：可点击性检查、点击（几何阶梯 + Playwright 兜底）、填充与写后核对、按键、悬停、滚动、前进后退、标签切换。
+  - `page-snapshot.ts`（335）：等页面稳定、兼容/智能两种采集、ref 签名与差异、ref 解析与存活校验。
+  - `page-diagnostics.ts`（198）：控制台消息、页面错误、网络请求的有界记录 + 失败原因归类。
+  - `page-probes.ts`（288）：会被序列化进浏览器的页内函数（铁律：必须自包含）。
+  - `window-focus.ts`（56）：承载窗口是否最小化、后台建标签 —— 只为了让窗口/标签不打扰用户。
+  - `browser-lifecycle.ts`（183）：启动/复用持久化 context、清理 Chrome 锁、启动与 profile 参数。
+  - `login-state.ts`（90）：登录态导出/恢复（窗口最小化读不到状态时只取 cookies）。
+  - `config.ts` / `url-policy.ts` / `challenge.ts` / `extract.ts` / `tool-types.ts` / `tool-schemas.ts` / `tool-render.ts`：配置与常量、URL 策略、人机验证识别、提取工具辅助、工具面类型/schema/渲染。
+- 12 个模块的文件说明与内容对齐（此前 6 处内容变了没改、5 处还留着拆分当天的占位文案）。
+
+### Fixed
+
+- **入口子路径恢复 `Config` 导出**（`./playwright`）：拆分时 schema 被搬进 `config.ts` 而入口忘了转出 —— Cordis 因此不会补默认值，而配置块里没有 `snapshot`，provider 又直接读 `config.snapshot.engine`，**下次重启就起不来**。该回归只存在于 main、从未随版本发布。现已补上入口契约测试：从 `src` 与 `lib` 两条路检查导出、校验 schema 补出默认值、复现"不含 `snapshot` 的 profile 配置"这一故障场景，并断言 `lib/` 与 `src/` 行为一致（防漂移）。
+- **页内探测守卫覆盖不到 `hitTest`**：它原本是 `resolveClickPoint` 里的嵌套命名函数（同样会被 `keepNames` 改写成 `__name`），现已搬进 `page-probes.ts`；守卫从"手写 4 个函数"改成**枚举该模块所有函数导出**（并断言至少 5 个，避免空跑）。
+- **中文说明写明两个闸门出厂关闭**：原文写"本包自带的 bundle 层是… `allowEvaluate`/`allowCdp` 打开"，与出厂 `false`/`false` 矛盾，读者会以为"页面任意 JS / 原始 CDP"默认可用。现在写明出厂关闭并指向 §4.6。
+- **文档守卫补洞**：原规则要求行内出现 `: true|false`，而措辞检查写在这个提前返回**之后** → "…`allowCdp` 打开"这类写法永远走不进检查。现改为两条带邻近性的规则；负向自检三种坏写法全部被抓住，且 `SECURITY.md` 里那句合法表述不被误报。
+- **新增两条守卫**：模块文件说明不得留下拆分脚本的占位文案；页内函数必须自包含（第 5 个函数 `hitTest` 因此归位）。
+- **测试的导航预算 2500ms → 15s**：冷启动的 windows runner 连加载本机 fixture 页都超时（`page.goto: Timeout 2500ms exceeded`），一次挂掉 4 条与超时无关的用例；没有任何测试断言导航超时行为，journeys 另有 25s 兜底。
+- **拆分过程中暴露的 3 处隐患**：`WeakMap<Request>` 实际落在浏览器内置的 DOM `Request`（两个类型身份）、`provider.ts` ⇄ `session.ts` 的**运行时**循环依赖（多个测试文件直接加载失败，用例从 119 掉到 46）、测试与脚本仍在旧路径引用搬走的符号。
+- 清掉搬迁后残留的未使用 import/参数（以 `tsc --noUnusedLocals --noUnusedParameters` 为裁判，28 处 → 0）。
 
 ## 0.5.2
 
