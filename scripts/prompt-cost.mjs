@@ -12,7 +12,7 @@ import { Context } from '@deepseek-ai/cordis'
 import ToolRuntime from '@deepseek-ai/dsh-tools'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import BrowserRuntime from '../src/service.ts'
-import { PlaywrightProvider } from '../src/playwright.ts'
+import { PlaywrightProvider } from '../src/provider.ts'
 import * as browserTool from '../src/tool.ts'
 import { bundleConfig } from './shipped-gates.mjs'
 

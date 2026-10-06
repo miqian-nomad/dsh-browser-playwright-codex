@@ -21,7 +21,7 @@ import assert from 'node:assert/strict'
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
-import { PlaywrightProvider } from '../src/playwright.ts'
+import { PlaywrightProvider } from '../src/provider.ts'
 import type { PlaywrightConfig } from '../src/config.ts'
 
 // 隔离设置页的真实用户状态：这些用例的期望值与引擎选择无关，但读真实状态会让结果随用户设置漂移。

@@ -14,7 +14,7 @@ export { SNAPSHOT_SCRIPT } from './injected.ts';
 export type { SnapshotOptions, PageDataOptions } from './injected.ts';
 export { default as BrowserRuntime } from './service.ts';
 export type { BrowserRuntimeConfig } from './service.ts';
-export { PlaywrightProvider } from './playwright.ts';
+export { PlaywrightProvider } from './provider.ts';
 export { assertAllowedUrl } from './url-policy.ts';
 export { Config as PlaywrightConfigSchema } from './config.ts';
 export type { PlaywrightConfig, PageData } from './config.ts';
