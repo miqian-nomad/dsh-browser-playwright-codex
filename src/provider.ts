@@ -4,16 +4,14 @@
  */
 import { persistState, restoreState } from './login-state.ts'
 import { clearChromeLocks, ensureBrowser, ensureContext } from './browser-lifecycle.ts'
-import { chromium, type Browser, type BrowserContext, type Dialog, type Page } from 'playwright-core'
+import { type Browser, type BrowserContext, type Dialog, type Page } from 'playwright-core'
 import os from 'node:os'
 import path from 'node:path'
-import fs from 'node:fs'
 import { PlaywrightSession } from './session.ts'
 import type { PlaywrightConfig } from './config.ts'
 import { getEnabled, publishConfiguredEngine } from './runtime-state.ts'
-import { BrowserError, launchFailed } from './errors.ts'
+import { BrowserError } from './errors.ts'
 import { SNAPSHOT_SCRIPT } from './injected.ts'
-import { AUTO_CHANNELS, HUMANIZED_LAUNCH } from './config.ts'
 import { isWindowMinimized } from './browser-lifecycle.ts'
 
 /**
@@ -71,7 +69,7 @@ export class PlaywrightProvider {
     // Tell the settings card which page-reading mode this deployment was
     // configured with, so it can show "当前：X（默认）" truthfully instead of
     // assuming the built-in default.
-    publishConfiguredEngine(config.snapshot.engine)
+    publishConfiguredEngine(config.snapshot?.engine ?? 'legacy')
     if (config.launch.persistent) {
       const dir =
         config.launch.profileDir !== undefined && config.launch.profileDir.trim() !== ''

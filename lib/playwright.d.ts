@@ -9,4 +9,8 @@ export declare const inject: string[];
  * @param ctx - plugin context carrying the browser runtime.
  * @param config - launch and fleet configuration.
  */
+export { Config, type PageData, type PlaywrightConfig } from './config.ts';
+export { PlaywrightProvider } from './provider.ts';
+export { assertAllowedUrl } from './url-policy.ts';
+export { resolveSnapshotEngine } from './page-snapshot.ts';
 export declare function apply(ctx: Context, config: PlaywrightConfig): void;

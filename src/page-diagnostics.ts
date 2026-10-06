@@ -2,7 +2,7 @@
  * 失败诊断：把 Playwright 抛出的错误归类成可读的原因。
  * @module dsh-browser-playwright-codex/page-diagnostics
  */
-import type { Page, Request } from 'playwright-core'
+import type { Page } from 'playwright-core'
 import type { PlaywrightSession } from './session.ts'
 import type { DiagnosticsEntry } from './types.ts'
 import { BrowserError } from './errors.ts'

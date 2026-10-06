@@ -12,19 +12,17 @@ import type { Context } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
 import { defineTool, type ToolDefinition, type ToolExecution } from '@deepseek-ai/dsh-tools'
 import { BlockAssembler, createUserMessage } from '@deepseek-ai/dsh-llm'
-import type { ContentBlock, StreamChunk } from '@deepseek-ai/dsh-llm'
 // Type-only: makes the ctx.browser declaration merge visible to this module.
 import type {} from './service.ts'
-import type { BrowserSession, BrowserSnapshot, DiagnosticsValue } from './types.ts'
+import type { BrowserSession, DiagnosticsValue } from './types.ts'
 import { BrowserError } from './errors.ts'
 import { registeredSuffixes, type ToolSuffix, type ToolSurfaceConfig } from './contract.ts'
-import { renderSnapshot, renderSnapshotDiff } from './snapshot-render.ts'
 import { getEnabled, publishGates } from './runtime-state.ts'
 import { isCdpMethodAllowed, cdpDenialMessage } from './cdp-policy.ts'
 import type { AttachmentServiceLike, JsonValue, LlmServiceLike, OptionalServices } from './tool-types.ts'
 import { SCREENSHOT_SCHEMA, SNAPSHOT_SCHEMA, TABS_SCHEMA } from './tool-schemas.ts'
 import { parseJsonText, extractionPrompt } from './extract.ts'
-import { CHALLENGE_NOTE, detectChallenge } from './challenge.ts'
+import { detectChallenge } from './challenge.ts'
 import {
   renderDiagnostics,
   renderScreenshotValue,

@@ -55,3 +55,24 @@ export declare const pageStabilityProbe: (arg: {
     frames: number;
     timeoutMs: number;
 }) => Promise<boolean>;
+/**
+ * The click-point hit test, moved out of the session so it lives with the other page-side
+ * functions: it is serialized into the page by locator.evaluate(), so the same
+ * "no named inner function bindings" rule applies (see the module header, and
+ * tests/page-probes.test.ts which now enumerates this module's exports rather than a hand list).
+ */
+export type ClickProbe = {
+    ok: true;
+    x: number;
+    y: number;
+    hitDesc: string;
+    hitSelf: boolean;
+} | {
+    ok: false;
+    reason: 'zero-size' | 'off-screen' | 'nothing-at-point' | 'intercepted';
+    x: number;
+    y: number;
+    geometry: string;
+    by?: string;
+};
+export declare const hitTest: (el: Element) => ClickProbe;

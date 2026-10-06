@@ -4,12 +4,12 @@
  */
 import type { BrowserContext, CDPSession, Locator, Page, Request } from 'playwright-core'
 import type { PlaywrightProvider } from './provider.ts'
-import type { BrowserNode, BrowserSnapshot, DiagnosticsEntry, LoadState, SnapshotDiffEntry } from './types.ts'
+import type { BrowserNode, BrowserSnapshot, DiagnosticsEntry, LoadState } from './types.ts'
 import type { RefSignature } from './page-snapshot.ts'
 import { BrowserError } from './errors.ts'
 import { asTimeoutError, isAbortError, isContextDestroyed, isCrashError } from './page-diagnostics.ts'
 import { consoleMessages, networkRequests, pageData, trackPage } from './page-diagnostics.ts'
-import { clearLabelTargets, elementStabilityProbe, labelTargetProbe, pageStabilityProbe } from './page-probes.ts'
+import { elementStabilityProbe, pageStabilityProbe } from './page-probes.ts'
 import type { ActionResult, PendingDialogRecord } from './provider.ts'
 import {
   assertActionable,
@@ -22,7 +22,6 @@ import {
   fill,
   forward,
   hoverLocator,
-  hoverNote,
   hoverText,
   navigate,
   openTab,
@@ -40,19 +39,13 @@ import {
   buildRefSignatures,
   captureAria,
   captureLegacy,
-  diffEntry,
-  flagsDeltaOf,
-  flagsOf,
   refLocator,
   resolveSnapshotEngine,
   settleAndSnapshot,
   snapshot,
 } from './page-snapshot.ts'
-import { captureAriaSnapshot } from './snapshot-aria.ts'
-import type { SnapshotOptions } from './injected.ts'
+
 import { assertAllowedUrl } from './url-policy.ts'
-import { createBackgroundPage, isWindowMinimized } from './browser-lifecycle.ts'
-import { REF_PATTERN } from './config.ts'
 
 /** Live session over one browser context owned by one caller. */
 export class PlaywrightSession {

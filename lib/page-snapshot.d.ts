@@ -2,7 +2,7 @@
  * 页面快照：识别模式选择、ref 签名与快照差异计算。
  * @module dsh-browser-playwright-codex/page-snapshot
  */
-import type { Locator, Page } from 'playwright-core';
+import type { Page } from 'playwright-core';
 import type { PlaywrightSession } from './session.ts';
 import type { BrowserNode, BrowserSnapshot } from './types.ts';
 import type { SnapshotDiffEntry } from './types.ts';
@@ -80,7 +80,7 @@ export declare function captureLegacy(session: PlaywrightSession, page: Page, op
  */
 export declare function attachDiff(session: PlaywrightSession, snap: BrowserSnapshot): BrowserSnapshot;
 /** Build ref -> feature signature map from a captured tree, with parent refs. */
-export declare function buildRefSignatures(session: PlaywrightSession, nodes: readonly BrowserNode[]): Map<string, RefSignature>;
+export declare function buildRefSignatures(_session: PlaywrightSession, nodes: readonly BrowserNode[]): Map<string, RefSignature>;
 export declare function snapshot(session: PlaywrightSession, opts?: {
     interactiveOnly?: boolean;
 }): Promise<BrowserSnapshot | {
@@ -91,5 +91,5 @@ export declare function snapshot(session: PlaywrightSession, opts?: {
     truncated: boolean;
     dialogNote: string;
 }>;
-export declare function refLocator(session: PlaywrightSession, ref: string): Promise<Locator>;
+export declare function refLocator(session: PlaywrightSession, ref: string): Promise<import("playwright-core").Locator>;
 export declare function assertLive(session: PlaywrightSession): void;

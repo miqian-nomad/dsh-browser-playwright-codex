@@ -2,7 +2,7 @@
  * 页面快照：识别模式选择、ref 签名与快照差异计算。
  * @module dsh-browser-playwright-codex/page-snapshot
  */
-import type { Locator, Page } from 'playwright-core'
+import type { Page } from 'playwright-core'
 import type { PlaywrightSession } from './session.ts'
 import type { BrowserNode, BrowserSnapshot } from './types.ts'
 import { captureAriaSnapshot } from './snapshot-aria.ts'
@@ -247,7 +247,7 @@ export function attachDiff(session: PlaywrightSession, snap: BrowserSnapshot): B
 
 /** Build ref -> feature signature map from a captured tree, with parent refs. */
 export function buildRefSignatures(
-  session: PlaywrightSession,
+  _session: PlaywrightSession,
   nodes: readonly BrowserNode[],
 ): Map<string, RefSignature> {
   const out = new Map<string, RefSignature>()

@@ -1,7 +1,3 @@
-/**
- * 页面动作的公共管道：可中断等待，以及 hover 结果的措辞。
- * @module dsh-browser-playwright-codex/page-actions
- */
 import type { Locator, Page } from 'playwright-core';
 import type { PlaywrightSession } from './session.ts';
 import type { ActionResult } from './provider.ts';
@@ -21,7 +17,7 @@ export declare function withAbort<T>(promise: Promise<T>, signal: AbortSignal | 
  */
 export declare function hoverNote(target: string, refsBefore: number, refsAfter: number, navigated: boolean): string;
 /** Fast actionability pre-check (visible/enabled/editable) before an action. */
-export declare function assertActionable(session: PlaywrightSession, locator: Locator, options?: {
+export declare function assertActionable(_session: PlaywrightSession, locator: Locator, options?: {
     editable?: boolean;
 }): Promise<void>;
 /**
@@ -100,7 +96,7 @@ export declare function clickAtRef(session: PlaywrightSession, ref: string, sign
 }>;
 export declare function fill(session: PlaywrightSession, ref: string, text: string, signal: AbortSignal | undefined): Promise<import("./types.ts").BrowserSnapshot>;
 /** Read the field back and decide whether the fill landed. */
-export declare function verifyFill(session: PlaywrightSession, locator: Locator, tag: string, text: string): Promise<boolean>;
+export declare function verifyFill(_session: PlaywrightSession, locator: Locator, tag: string, text: string): Promise<boolean>;
 export declare function press(session: PlaywrightSession, ref: string, key: string, signal: AbortSignal | undefined): Promise<import("./types.ts").BrowserSnapshot | {
     url: string;
     title: string;

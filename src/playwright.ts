@@ -1,55 +1,27 @@
 /**
- * Playwright provider for the browser capability: owns the browser binary,
- * one context per owner key, idle disposal, and the snapshot engine.
+ * Registration entry for the browser capability. cordis.patch.yml points its loader row at
+ * \`<pkg>/playwright\`, so this is the module Cordis loads: it must keep exporting \`Config\` (the
+ * schemastery schema for the plugin's config — without it Cordis cannot fill in defaults),
+ * \`name\`/\`inject\`, and \`apply\`, plus the pre-split public surface re-exported below.
+ *
+ * The implementation lives in sibling modules, one per responsibility:
+ *   provider.ts            profile/context lifecycle, session registry, idle disposal
+ *   session.ts             one session's interactions
+ *   page-actions.ts        click / fill / press / hover / scroll / history / tabs
+ *   page-snapshot.ts       capture, ref signatures, ref lookup
+ *   page-diagnostics.ts    console messages, page errors, network records
+ *   browser-lifecycle.ts   launching/reusing the persistent context, window state
+ *   login-state.ts         exporting and restoring login state
  * @module dsh-browser-playwright-codex/playwright
  */
 import { PlaywrightProvider } from './provider.ts'
-import { diffEntry, flagsDeltaOf, flagsOf, resolveSnapshotEngine, type RefSignature } from './page-snapshot.ts'
-import { hoverNote, withAbort } from './page-actions.ts'
-import { asTimeoutError, isAbortError, isContextDestroyed, isCrashError } from './page-diagnostics.ts'
-import { AUTO_CHANNELS, HUMANIZED_LAUNCH, REF_PATTERN, type PageData, type PlaywrightConfig } from './config.ts'
-import { assertAllowedUrl } from './url-policy.ts'
-import { createBackgroundPage, isWindowMinimized } from './browser-lifecycle.ts'
+import { type PlaywrightConfig } from './config.ts'
+
 import type { Context } from '@deepseek-ai/cordis'
-import {
-  chromium,
-  type Browser,
-  type BrowserContext,
-  type CDPSession,
-  type Dialog,
-  type Locator,
-  type Page,
-  type Request,
-} from 'playwright-core'
-import z from '@deepseek-ai/schemastery'
-import os from 'node:os'
-import path from 'node:path'
-import fs from 'node:fs'
-import { BrowserError, launchFailed } from './errors.ts'
-import { SNAPSHOT_SCRIPT, type SnapshotOptions } from './injected.ts'
-import { captureAriaSnapshot } from './snapshot-aria.ts'
-import { clearLabelTargets, elementStabilityProbe, labelTargetProbe, pageStabilityProbe } from './page-probes.ts'
-import {
-  getEnabled,
-  getSnapshotEngine,
-  publishConfiguredEngine,
-  subscribe as subscribeEnabled,
-} from './runtime-state.ts'
+
+import { subscribe as subscribeEnabled } from './runtime-state.ts'
 // Type-only: makes the ctx.browser declaration merge visible to this module.
 import type {} from './service.ts'
-import type {
-  BrowserNode,
-  BrowserProvider,
-  BrowserSession,
-  BrowserSnapshot,
-  DiagnosticsEntry,
-  DiagnosticsValue,
-  LoadState,
-  ScreenshotCapture,
-  SnapshotDiff,
-  SnapshotDiffEntry,
-  TabInfo,
-} from './types.ts'
 /** Cordis plugin name used by loader diagnostics. */
 export const name = 'browser-playwright'
 /** The browser runtime this provider registers into. */
@@ -60,6 +32,16 @@ export const inject = ['browser']
  * @param ctx - plugin context carrying the browser runtime.
  * @param config - launch and fleet configuration.
  */
+// The loader row in cordis.patch.yml points at <pkg>/playwright, so this entry must keep
+// exporting the config schema: without `Config`, Cordis cannot fill in defaults and the
+// provider reads `config.snapshot.engine` off an un-defaulted object (regression 2026-10-06,
+// introduced when the code was split into modules — the schema moved to config.ts and the
+// subpath stopped re-exporting it). The other names keep the pre-split public surface intact.
+export { Config, type PageData, type PlaywrightConfig } from './config.ts'
+export { PlaywrightProvider } from './provider.ts'
+export { assertAllowedUrl } from './url-policy.ts'
+export { resolveSnapshotEngine } from './page-snapshot.ts'
+
 export function apply(ctx: Context, config: PlaywrightConfig) {
   const provider = new PlaywrightProvider(config)
   ctx.browser.registerProvider(provider)

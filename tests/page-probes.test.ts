@@ -17,7 +17,19 @@
 
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { clearLabelTargets, elementStabilityProbe, labelTargetProbe, pageStabilityProbe } from '../src/page-probes.ts'
+import * as probes from '../src/page-probes.ts'
+
+/**
+ * Every function this module exports, whatever it happens to be named. Enumerating the module
+ * instead of a hand-written list is deliberate: `hitTest` lived as a named inner function inside
+ * the session's click code until a reviewer caught it, and a hand list would not have noticed the
+ * next one either (page-actions.ts imports it from here now).
+ */
+function exportedProbes(): Array<[string, (...args: never[]) => unknown]> {
+  return Object.entries(probes).filter(
+    (entry): entry is [string, (...args: never[]) => unknown] => typeof entry[1] === 'function',
+  )
+}
 
 /** Named function bindings inside a function body — the shape a name-preserving transpiler rewrites. */
 function namedInnerBindings(source: string): string[] {
@@ -41,9 +53,14 @@ test('the self-containment rule catches a named inner arrow (this test has teeth
   assert.deepEqual(namedInnerBindings(String(good)), [], 'an array literal is safe: ' + String(good))
 })
 
-test('every page-side probe is self-contained', () => {
-  const probes = { clearLabelTargets, elementStabilityProbe, labelTargetProbe, pageStabilityProbe }
-  for (const [name, fn] of Object.entries(probes)) {
+test('every function this module exports is self-contained', () => {
+  const exported = exportedProbes()
+  // A vacuous pass (nothing exported / renamed away) must not look like coverage.
+  assert.ok(
+    exported.length >= 5,
+    'expected the page-side probes to be exported from this module: ' + exported.map((p) => p[0]).join(', '),
+  )
+  for (const [name, fn] of exported) {
     const source = String(fn)
     assert.deepEqual(
       namedInnerBindings(source),
