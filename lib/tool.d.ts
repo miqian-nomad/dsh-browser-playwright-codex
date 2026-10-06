@@ -10,6 +10,8 @@
  */
 import type { Context } from '@deepseek-ai/cordis';
 import z from '@deepseek-ai/schemastery';
+import { detectChallenge } from './challenge.ts';
+export { detectChallenge };
 /** Cordis plugin name used by loader diagnostics. */
 export declare const name = "browser-tool";
 /** The browser runtime and tool registry this plugin consumes. */
@@ -41,37 +43,11 @@ export interface ToolConfig {
         maxOutputTokens: number;
     };
 }
-/** Minimal node shape the challenge detector walks. */
-interface ChallengeNode {
-    readonly name?: string;
-    readonly children?: readonly ChallengeNode[];
-}
-/** The slice of a snapshot the challenge detector reads. */
-interface ChallengeSnapshot {
-    readonly title?: string;
-    readonly url?: string;
-    readonly nodes?: readonly ChallengeNode[];
-}
-/** What the challenge detector reports when a page is an anti-bot wall. */
-interface ChallengeMatch {
-    engine: string;
-    hint: string;
-}
 /** Schemastery validation for {@link ToolConfig}. */
 export declare const Config: z<ToolConfig>;
-/**
- * Detect anti-bot / human-verification challenge pages (Cloudflare
- * interstitial, Turnstile, reCAPTCHA-style) from a snapshot's title, url and
- * visible text. We do NOT try to solve them: the correct move for an agent is
- * to hand the challenge to the human who can see the open window. Returns the
- * engine name when matched, else null. Matching is conservative to avoid
- * false positives on ordinary pages.
- */
-export declare function detectChallenge(snapshot: ChallengeSnapshot): ChallengeMatch | null;
 /**
  * Register the browser tool family on ctx.tools.
  * @param ctx - plugin context carrying browser, tools, and the optional services.
  * @param config - tool naming and safety configuration.
  */
 export declare function apply(ctx: Context, config: ToolConfig): void;
-export {};
