@@ -3,6 +3,16 @@
 Bilingual by intent: the version headings and the summary of each release are given in both
 languages, the individual entries follow the language the surrounding code and docs use.
 
+## Unreleased
+
+一句话摘要：**修掉中文说明里一处会让人误判权限状态的过期说法**，并把守卫的洞补上 —— 原文写"本包自带的 bundle 层是… `allowEvaluate`/`allowCdp` 打开"，而出厂配置是 `false`/`false`。用户读到这里会以为"页面任意 JS / 原始 CDP"默认可用。
+
+### Fixed
+
+- **`中文说明.md` 现在写明两个闸门出厂关闭**，并指向 §4.6 说明为什么（要开就在你自己的 profile patch 里开）。
+- **守卫补洞（`tests/docs-consistency.test.ts`）**：原来那条"不得声称出厂开启"的规则要求行内出现 `: true|false`，而"措辞检查"写在这个提前返回**之后** —— 于是"…`allowEvaluate`/`allowCdp` 打开"这种写法**永远走不进检查**。现在改成两条带邻近性的规则：①"发货词 + 显式闸门值"必须与实际一致；②"发货词 + 闸门名 + 近旁 on 词（且同一窗口内没有 off 词）"必须为真。
+  负向自检三种坏写法（`打开` / `开启` / `allowEvaluate: true`）**全部被抓住**；而 `SECURITY.md` 里那句合法表述「Only when `allowEvaluate: true`. **The package ships `false`**」**不会被误报**（规则从"发货词"起锚，且要求闸门名紧跟其后）。
+
 ## 0.5.2
 
 一句话摘要：**查出 Windows CI 抖动的真正根因并修掉**—— 测试用的转译器 tsx/esbuild 会开启 `keepNames`，把"要送进浏览器执行"的页内函数里的**命名内部函数**改写成 `__name(fn, "名字")`，而 `__name` 只存在于模块作用域、页面里没有 → 探测每次抛 `ReferenceError`，且被 `catch` 吞成无声的 `unreachable`。后果是**几何点击路径从来没工作过**：所有点击都退化成 Playwright 兜底点击（上限 3 秒），慢速 Windows runner 一超时，就把几何路径那句**误导性**的错误抛了出来。

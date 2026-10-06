@@ -83,29 +83,51 @@ test('shipped gates: the parser reads the file, not the example inside a comment
 
 test('docs: nothing claims the package ships a gate on while it ships it off', () => {
   const on = (v: boolean) => (v ? 'true' : 'false')
+  // Both rules are anchored on a *shipping* word, so ordinary advice stays out of scope
+  // ("opt in with `allowEvaluate: true`" is not a claim about the package). Proximity matters:
+  // SECURITY.md legitimately writes "Only when `allowEvaluate: true`. **The package ships
+  // `false`**" — the value belongs to the reachability condition, not to the shipping claim.
+  const shipped = '(ships?|出厂|随包|包里|本包自?带|bundle 层)'
+  // A: the shipping word is followed by an explicit gate value — "ships `allowEvaluate: false`".
+  const explicit = new RegExp(shipped + '[^\\n]{0,24}allow(Evaluate|Cdp)\\s*:\\s*(true|false)', 'i')
+  // B: the shipping word is followed by a gate named in prose and a nearby "on" word —
+  // "本包自带的 bundle 层是… `allowEvaluate`/`allowCdp` 打开".
+  const prose = new RegExp(
+    shipped + '[^\\n]{0,40}allow(Evaluate|Cdp)[^\\n]{0,24}(打开|开启|启用|默认开|\\bon\\b|enabled)',
+    'i',
+  )
+  const offWord = /(关闭|默认关|\boff\b|disabled)/i
   for (const doc of DOCS) {
-    const lines = read(doc).split('\n')
-    lines.forEach((line, i) => {
-      // "this package ships … allowEvaluate: true" — a claim about what the package does.
-      const claim = /(ships?|出厂|随包|包里)[^\n]{0,80}allow(Evaluate|Cdp):\s*(true|false)/i.exec(line)
-      if (claim === null) return
-      const gate = claim[2] === 'Evaluate' ? 'allowEvaluate' : 'allowCdp'
-      const value = claim[3] === 'true'
-      assert.equal(
-        value,
-        EXPECTED_SHIPPED_GATES[gate as 'allowEvaluate' | 'allowCdp'],
-        `${doc}:${i + 1} claims the package ships ${gate}: ${on(value)} — it ships ${on(
-          EXPECTED_SHIPPED_GATES[gate as 'allowEvaluate' | 'allowCdp'],
-        )}: ${line.trim()}`,
-      )
-      // The sentence must also not say "on" in words while the value is false.
-      if (!value) {
+    read(doc)
+      .split('\n')
+      .forEach((line, i) => {
+        const a = explicit.exec(line)
+        if (a !== null) {
+          const gate = ('allow' + a[2]) as 'allowEvaluate' | 'allowCdp'
+          assert.equal(
+            a[3] === 'true',
+            EXPECTED_SHIPPED_GATES[gate],
+            `${doc}:${i + 1} claims the package ships ${gate}: ${on(a[3] === 'true')} — it ships ${on(
+              EXPECTED_SHIPPED_GATES[gate],
+            )}: ${line.trim()}`,
+          )
+        }
+        const b = prose.exec(line)
+        if (b === null) return
+        // 2026-10-06: the guard used to require an explicit `: true|false` and put the prose check
+        // behind that early return, so 中文说明.md said "本包自带的 bundle 层是… `allowEvaluate`/
+        // `allowCdp` 打开" for two days while the package shipped both off. A sentence that says
+        // "on" without saying "off" has to match what actually ships.
+        const window = line.slice(b.index, b.index + b[0].length)
+        if (offWord.test(window)) return
+        const gate = ('allow' + b[2]) as 'allowEvaluate' | 'allowCdp'
         assert.ok(
-          !/(ships?|出厂|随包)[^\n]{0,60}\*{0,2}(on|打开|开启)\*{0,2}/i.test(line),
-          `${doc}:${i + 1} says the gate is on in prose: ${line.trim()}`,
+          EXPECTED_SHIPPED_GATES[gate],
+          `${doc}:${i + 1} says the package ships ${gate} on, but it ships ${on(
+            EXPECTED_SHIPPED_GATES[gate],
+          )}: ${line.trim()}`,
         )
-      }
-    })
+      })
   }
 })
 
