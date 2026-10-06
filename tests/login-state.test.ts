@@ -39,7 +39,11 @@ function providerInTempProfile(): { provider: PlaywrightProvider; dir: string } 
       persistent: true,
       profileDir: dir,
       viewport: { width: 1280, height: 800 },
-      navigationTimeoutMs: 2500,
+      // 2026-10-06: was 2500. A cold windows-latest runner blew through it loading the *local*
+      // fixture page (page.goto: Timeout 2500ms exceeded) and failed four tests that have nothing
+      // to do with timeouts. No test asserts navigation-timeout behaviour, and the journeys below
+      // carry their own deadlines, so this budget only needs to be realistic, not tight.
+      navigationTimeoutMs: 15_000,
       ignoreHTTPSErrors: false,
     },
     idleTimeoutMs: 0,
