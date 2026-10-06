@@ -13,6 +13,21 @@ languages, the individual entries follow the language the surrounding code and d
 - **守卫补洞（`tests/docs-consistency.test.ts`）**：原来那条"不得声称出厂开启"的规则要求行内出现 `: true|false`，而"措辞检查"写在这个提前返回**之后** —— 于是"…`allowEvaluate`/`allowCdp` 打开"这种写法**永远走不进检查**。现在改成两条带邻近性的规则：①"发货词 + 显式闸门值"必须与实际一致；②"发货词 + 闸门名 + 近旁 on 词（且同一窗口内没有 off 词）"必须为真。
   负向自检三种坏写法（`打开` / `开启` / `allowEvaluate: true`）**全部被抓住**；而 `SECURITY.md` 里那句合法表述「Only when `allowEvaluate: true`. **The package ships `false`**」**不会被误报**（规则从"发货词"起锚，且要求闸门名紧跟其后）。
 
+### Changed
+
+- **源码按职责拆开：`playwright.ts` 从 2,727 行降到 73 行**，对外零变化（loader 三行、`package.json` exports、工具面、`lib/` 入口全部不变）。做法是"纯搬运、一次一个接缝"：每步 `npm test` + `npm run verify` + 解析一致性脚本全绿才提交，共 10 个提交，任何一步不绿就当场回退。
+  - `playwright.ts`（73 行）：只留 `apply()` 装配。
+  - `provider.ts`（580）：PlaywrightProvider —— profile/context 生命周期、会话注册、空闲回收、弹窗登记、标签记账。
+  - `session.ts`（675）：会话骨架与其余交互。
+  - `page-actions.ts`（869）：点击（含几何阶梯）、填充、按键、悬停、滚动、历史、标签。
+  - `page-snapshot.ts`（335）：采集、稳定等待、ref 签名与差异、ref 解析与存活校验。
+  - `page-diagnostics.ts`（198）：控制台消息、页面错误、网络请求的有界记录。
+  - `page-probes.ts`（195）：4 个页内探测（必须自包含，新增测试守卫）。
+  - `login-state.ts`：登录态导出/恢复（窗口最小化时只取 cookies）。
+  - `browser-lifecycle.ts`：启动/复用持久化 context、清理 Chrome 锁、窗口最小化判定、后台页创建。
+  - `config.ts` / `url-policy.ts` / `challenge.ts` / `extract.ts` / `tool-types.ts` / `tool-schemas.ts` / `tool-render.ts`：配置与常量、URL 策略、验证码识别、提取工具、工具面类型/schema/渲染。
+  - 拆开过程中暴露并修掉 3 个真隐患：`WeakMap<Request>` 实际落在浏览器内置的 DOM `Request` 上（类型身份不一致）、`provider.ts` ⇄ `session.ts` 的**运行时**循环依赖（多个测试文件直接加载失败）、以及测试与脚本仍在旧路径引用搬走的符号。
+
 ## 0.5.2
 
 一句话摘要：**查出 Windows CI 抖动的真正根因并修掉**—— 测试用的转译器 tsx/esbuild 会开启 `keepNames`，把"要送进浏览器执行"的页内函数里的**命名内部函数**改写成 `__name(fn, "名字")`，而 `__name` 只存在于模块作用域、页面里没有 → 探测每次抛 `ReferenceError`，且被 `catch` 吞成无声的 `unreachable`。后果是**几何点击路径从来没工作过**：所有点击都退化成 Playwright 兜底点击（上限 3 秒），慢速 Windows runner 一超时，就把几何路径那句**误导性**的错误抛了出来。

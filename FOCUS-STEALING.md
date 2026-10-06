@@ -14,8 +14,8 @@ Every claim below is labelled **measured** or **not measured**. Where the eviden
 
 Headful + a minimized window + any of these three = the window comes back:
 
-1. `switchTab` → `page.bringToFront()` — **measured**, exists in upstream `src/playwright.ts:505`, patched here.
-2. Any tab creation → `context.newPage()` — **measured**, upstream `src/playwright.ts:514/607/614`, patched here. Chromium activates the window on tab creation; sending CDP `Target.createTarget({ background: true })` ourselves avoids it.
+1. `switchTab` → `page.bringToFront()` — **measured**, exists in upstream `src/page-actions.ts`, patched here.
+2. Any tab creation → `context.newPage()` — **measured**, upstream `src/page-actions.ts`, patched here. Chromium activates the window on tab creation; sending CDP `Target.createTarget({ background: true })` ourselves avoids it.
 3. A post-operation login-state export in this fork (`endOp` → `persistStateSoon` → `context.storageState()`) — **measured on one long-lived live instance (A/B), and the cause is now found in playwright-core's source**: `storageState()` opens a *temporary page* for every visited origin whose page is gone, and that page is created without `background`. Root-caused and fixed here in 0.4.2; see [Cause 3](#cause-3--the-login-state-export-opened-a-storage-page).
 
 And one case that is *not* the plugin's to fix: a page-side `target="_blank"` link or `window.open()` restores a minimized window, because Chromium's default is that a new tab must be selected **and shown**.
@@ -62,7 +62,7 @@ set PW_CORE_PATH=<path>\node_modules\playwright-core
 node repro-minimize.mjs
 ```
 
-`PW_MODE=launch` — the shape upstream v0.1.1 uses (`src/playwright.ts:273/283`, `chromium.launch({ channel, headless })`):
+`PW_MODE=launch` — the shape upstream v0.1.1 uses (`src/browser-lifecycle.ts`, `chromium.launch({ channel, headless })`):
 
 ```text
 mode=launch  playwright-core 1.62.1  node v24.16.0
@@ -88,7 +88,7 @@ safe     anchor.screenshot()                            before=minimized after=m
 
 ## Cause 1 — `switchTab` raises the window unconditionally
 
-**Measured.** Upstream `src/playwright.ts:505` (in `switchTab`):
+**Measured.** Upstream `src/page-actions.ts` (in `switchTab`):
 
 ```ts
 this.currentIndex = index
@@ -104,7 +104,7 @@ Tab selection is a **browser-context** concern: `page.bringToFront()` is the onl
 
 ## Cause 2 — tab creation raises the window
 
-**Measured.** Upstream `src/playwright.ts:514` (`openTab`), `:607` and `:614` (`ensurePage`):
+**Measured.** Upstream `src/page-actions.ts` (`openTab`)、`src/session.ts`（`ensurePage`）:
 
 ```ts
 const page = await this.context.newPage()
@@ -149,7 +149,7 @@ The only browser-touching step common to every call is the fork's login-state ex
 | # | Link | Evidence |
 |---|---|---|
 | 1 | Every navigation records its origin, and the set only grows for the life of the context | `frameNavigatedToNewDocument` → `addVisitedOrigin` (`:22350-22352`); `addVisitedOrigin` adds to `_origins` (`:51634`), and only `setStorageState` ever resets it (`:51737`) |
-| 2 | That export ran after every call, including calls that never reached the page | `endOp` → `persistStateSoon` (`src/playwright.ts:526,533`), throttled to 1/s |
+| 2 | That export ran after every call, including calls that never reached the page | `endOp` → `persistStateSoon` (`src/login-state.ts,533`), throttled to 1/s |
 | 3 | `storageState()` collects origins that no open page covers by opening a **temporary page**, navigating it to each leftover origin, then closing it | `if (originsToSave.size)` → `newPage(progress, true)` (`:51663-51668`), `gotoImpl` per origin (`:51676`), `page.close` (`:51682`). Cookies are collected separately and never need a page (`:51639`) |
 | 4 | That page is created without `background`, and Chromium activates the window on tab creation | `doCreateNewPage` → `Target.createTarget({ url: "about:blank", browserContextId })` (`:38340-38342`) |
 
@@ -191,16 +191,16 @@ Recommendation: **document it, and offer opt-in intercepts** — do not silently
 
 ## Where the fixes live now / 这些修法现在在哪
 
-Since 0.3.0 they are ordinary typed source in `src/playwright.ts`, covered by the test suite (`npm test`, `npm run verify`). Before the source tree existed they were hand-patches on the compiled bundle, which a rebuild or an upstream upgrade would have thrown away — that fragility is what the source-release work removed.
+Since 0.3.0 they are ordinary typed source under `src/`, covered by the test suite (`npm test`, `npm run verify`). Before the source tree existed they were hand-patches on the compiled bundle, which a rebuild or an upstream upgrade would have thrown away — that fragility is what the source-release work removed.
 
 | Location | Change |
 |---|---|
-| `src/playwright.ts:240` `isWindowMinimized(page)` | CDP `Browser.getWindowForTarget` + `Browser.getWindowBounds`; returns `true` when unreadable (never gamble with the user's desktop) |
-| `src/playwright.ts:264` `createBackgroundPage(context)` | Arm `waitForEvent('page')`, send `Target.createTarget({ background: true })`, fall back to `newPage()` on any failure |
-| `src/playwright.ts:1916` (`switchTab`) | `bringToFront()` is skipped while the window is minimized; behaviour when visible is unchanged |
-| `src/playwright.ts:1934` (`openTab`) | Uses `createBackgroundPage()` |
-| `src/playwright.ts:708` (`collectLoginState`) | Minimized or unreadable window → cookies only, so no temporary storage page is ever opened; the full `storageState()` runs only while the window is visible (Cause 3 — root-caused and fixed in 0.4.2) |
-| `src/playwright.ts:736` (`persistStateSoon`) | Throttled export after every operation; no longer skips while minimized, so the session-cookie fallback has no hole |
+| `src/browser-lifecycle.ts` `isWindowMinimized(page)` | CDP `Browser.getWindowForTarget` + `Browser.getWindowBounds`; returns `true` when unreadable (never gamble with the user's desktop) |
+| `src/browser-lifecycle.ts` `createBackgroundPage(context)` | Arm `waitForEvent('page')`, send `Target.createTarget({ background: true })`, fall back to `newPage()` on any failure |
+| `src/page-actions.ts` (`switchTab`) | `bringToFront()` is skipped while the window is minimized; behaviour when visible is unchanged |
+| `src/page-actions.ts` (`openTab`) | Uses `createBackgroundPage()` |
+| `src/login-state.ts` (`collectLoginState`) | Minimized or unreadable window → cookies only, so no temporary storage page is ever opened; the full `storageState()` runs only while the window is visible (Cause 3 — root-caused and fixed in 0.4.2) |
+| `src/login-state.ts` (`persistStateSoon`) | Throttled export after every operation; no longer skips while minimized, so the session-cookie fallback has no hole |
 
 Verification on the live instance, window minimized throughout, judged by Win32 `IsIconic` (0 = not minimized):
 
