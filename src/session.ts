@@ -8,6 +8,7 @@ import type { BrowserNode, BrowserSnapshot, DiagnosticsEntry, LoadState, Snapsho
 import type { RefSignature } from './page-snapshot.ts'
 import { BrowserError } from './errors.ts'
 import { asTimeoutError, isAbortError, isContextDestroyed, isCrashError } from './page-diagnostics.ts'
+import { consoleMessages, networkRequests, pageData, trackPage } from './page-diagnostics.ts'
 import { clearLabelTargets, elementStabilityProbe, labelTargetProbe, pageStabilityProbe } from './page-probes.ts'
 import type { ActionResult, PendingDialogRecord } from './provider.ts'
 import { hoverNote, withAbort } from './page-actions.ts'
@@ -1203,26 +1204,7 @@ export class PlaywrightSession {
     })
   }
   async pageData() {
-    return this.run(async () => {
-      this.assertLive()
-      this.provider.touch(this.owner)
-      const page = await this.ensurePage()
-      const read = () => {
-        const fn = (window as unknown as { __dshPageData?: (o: unknown) => unknown }).__dshPageData
-        if (typeof fn !== 'function')
-          return { url: location.href, title: document.title, text: '', truncated: false, links: [], inputs: [] }
-        return fn({ maxTextChars: 30000, maxLinks: 300, maxInputs: 200 })
-      }
-      let data
-      try {
-        data = await page.evaluate(read)
-      } catch (error) {
-        if (!isContextDestroyed(error)) throw error
-        await this.settleNavigation(page)
-        data = await page.evaluate(read)
-      }
-      return data
-    })
+    return pageData(this)
   }
   async evaluate(expression: string, signal: AbortSignal | undefined) {
     return this.run(async () => {
@@ -1330,58 +1312,7 @@ export class PlaywrightSession {
    * otherwise healthy, and it must never grow without a bound.
    */
   trackPage(page: Page) {
-    if (this.trackedPages.has(page)) return
-    this.trackedPages.add(page)
-    const pageId = this.pageIdFor(page)
-    const record = (kind: 'console' | 'network', entry: DiagnosticsEntry) => {
-      this.diagSeq += 1
-      entry.n = this.diagSeq
-      entry.at = Date.now()
-      // Tag the owner: the rings are session-wide, the readers are per page.
-      entry.page = pageId
-      const ring = kind === 'console' ? this.consoleLog : this.networkLog
-      ring.push(entry)
-      while (ring.length > this.diagLimit) {
-        ring.shift()
-        this.diagDropped[kind] += 1
-      }
-    }
-    try {
-      page.on('console', (msg) => {
-        record('console', { level: msg.type(), text: msg.text(), source: (msg.location() ?? {}).url ?? '' })
-      })
-      page.on('pageerror', (err) => {
-        record('console', { level: 'pageerror', text: err?.message ?? String(err), source: page.url() })
-      })
-      page.on('request', (request) => {
-        const entry = {
-          method: request.method(),
-          url: request.url(),
-          status: null,
-          kind: request.resourceType(),
-          ms: null,
-          failure: null,
-        }
-        this.requestEntries.set(request, { entry, startedAt: Date.now() })
-        record('network', entry)
-      })
-      page.on('response', (response) => {
-        const slot = this.requestEntries.get(response.request())
-        if (slot === undefined) return
-        slot.entry.status = response.status()
-        slot.entry.ms = Date.now() - slot.startedAt
-        this.requestEntries.delete(response.request())
-      })
-      page.on('requestfailed', (request) => {
-        const slot = this.requestEntries.get(request)
-        if (slot === undefined) return
-        slot.entry.ms = Date.now() - slot.startedAt
-        slot.entry.failure = request.failure()?.errorText ?? 'request failed'
-        this.requestEntries.delete(request)
-      })
-    } catch {
-      // Diagnostics are optional: a page that refuses hooks still works.
-    }
+    return trackPage(this, page)
   }
   /** Stable id for one page of this session (used to scope diagnostics). */
   pageIdFor(page: Page) {
@@ -1431,78 +1362,11 @@ export class PlaywrightSession {
   }
   /** Recent console messages and uncaught page errors, newest last. */
   consoleMessages(args: { level?: string; limit?: number }) {
-    const wanted = typeof args.level === 'string' && args.level.length > 0 ? args.level : 'all'
-    const limit =
-      typeof args.limit === 'number' && Number.isFinite(args.limit)
-        ? Math.max(1, Math.min(this.diagLimit, args.limit))
-        : 50
-    const matches = (entry: DiagnosticsEntry) => {
-      if (wanted === 'all') return true
-      if (wanted === 'error') return entry.level === 'error' || entry.level === 'pageerror'
-      if (wanted === 'warning') return entry.level === 'warning' || entry.level === 'warn'
-      return entry.level === wanted
-    }
-    const { kept, otherPages } = this.scopeToCurrentPage(this.consoleLog.filter(matches))
-    return {
-      url: this.currentUrl(),
-      level: wanted,
-      total: kept.length,
-      returned: Math.min(limit, kept.length),
-      dropped: this.diagDropped.console,
-      otherPages,
-      note:
-        otherPages > 0
-          ? 'Only the tab this session is driving is reported; ' +
-            String(otherPages) +
-            ' matching entries from other tabs of the same window are not shown.'
-          : 'Capture starts when this session first drives a tab. In persistent mode every session shares one window; only the tab this session is driving is reported.',
-      entries: kept.slice(-limit).map((entry: DiagnosticsEntry) => ({
-        n: entry.n as number,
-        level: entry.level,
-        text: (entry.text ?? '').slice(0, 400),
-        source: String(entry.source).slice(0, 200),
-      })),
-    }
+    return consoleMessages(this, args)
   }
   /** Recent network requests, newest last, with status and duration where known. */
   networkRequests(args: { urlContains?: string; failedOnly?: boolean; limit?: number }) {
-    const limit =
-      typeof args.limit === 'number' && Number.isFinite(args.limit)
-        ? Math.max(1, Math.min(this.diagLimit, args.limit))
-        : 50
-    const needle = typeof args.urlContains === 'string' ? args.urlContains.toLowerCase() : ''
-    const failedOnly = args.failedOnly === true
-    let matching = this.networkLog
-    if (needle.length > 0)
-      matching = matching.filter((entry: DiagnosticsEntry) => (entry.url ?? '').toLowerCase().includes(needle))
-    if (failedOnly)
-      matching = matching.filter(
-        (entry: DiagnosticsEntry) =>
-          entry.failure !== null || ((entry.status ?? null) !== null && (entry.status ?? 0) >= 400),
-      )
-    const { kept, otherPages } = this.scopeToCurrentPage(matching)
-    return {
-      url: this.currentUrl(),
-      total: kept.length,
-      returned: Math.min(limit, kept.length),
-      dropped: this.diagDropped.network,
-      otherPages,
-      note:
-        otherPages > 0
-          ? 'Only the tab this session is driving is reported; ' +
-            String(otherPages) +
-            ' matching requests from other tabs of the same window are not shown. Response bodies are not captured.'
-          : 'Capture starts when this session first drives a tab. In persistent mode every session shares one window; only the tab this session is driving is reported. Response bodies are not captured.',
-      entries: kept.slice(-limit).map((entry: DiagnosticsEntry) => ({
-        n: entry.n as number,
-        method: entry.method,
-        url: (entry.url ?? '').slice(0, 300),
-        status: entry.status,
-        kind: entry.kind,
-        ms: entry.ms,
-        failure: entry.failure,
-      })),
-    }
+    return networkRequests(this, args)
   }
   /**
    * Refuse page access while a native dialog blocks the page: every call
