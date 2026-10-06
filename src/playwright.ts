@@ -3,6 +3,9 @@
  * one context per owner key, idle disposal, and the snapshot engine.
  * @module dsh-browser-playwright-codex/playwright
  */
+import { diffEntry, flagsDeltaOf, flagsOf, resolveSnapshotEngine, type RefSignature } from './page-snapshot.ts'
+import { hoverNote, withAbort } from './page-actions.ts'
+import { asTimeoutError, isAbortError, isContextDestroyed, isCrashError } from './page-diagnostics.ts'
 import { AUTO_CHANNELS, HUMANIZED_LAUNCH, REF_PATTERN, type PageData, type PlaywrightConfig } from './config.ts'
 import { assertAllowedUrl } from './url-policy.ts'
 import { createBackgroundPage, isWindowMinimized } from './browser-lifecycle.ts'
@@ -68,42 +71,6 @@ export function apply(ctx: Context, config: PlaywrightConfig) {
   })
 }
 
-/**
- * Which page-reading mode a capture uses. The user's choice on the settings page
- * (Settings → 浏览器 → 页面识别方式) wins over the deployment default, so flipping
- * that switch changes the very next operation — no restart, no config edit.
- * @param configured - the mode from this provider's config.
- * @returns the effective mode.
- */
-export function resolveSnapshotEngine(configured: 'legacy' | 'aria'): 'legacy' | 'aria' {
-  return getSnapshotEngine() ?? configured
-}
-/** Wrap a Playwright op so an aborted signal rejects while the op keeps draining in the background. */
-async function withAbort<T>(promise: Promise<T>, signal: AbortSignal | undefined): Promise<T> {
-  // Attach handlers FIRST: the caller's promise may still be draining (a
-  // dialog can keep it pending forever), and an abandoned rejection would
-  // become an unhandledRejection and can take the host down.
-  const guarded = Promise.resolve(promise)
-  guarded.catch(() => {})
-  // A malformed signal (not an AbortSignal) is treated as "no signal".
-  if (signal === undefined || typeof signal.addEventListener !== 'function' || typeof signal.aborted !== 'boolean')
-    return guarded
-  if (signal.aborted) throw new DOMException('The operation was aborted', 'AbortError')
-  return new Promise((resolve, reject) => {
-    const onAbort = () => reject(new DOMException('The operation was aborted', 'AbortError'))
-    signal.addEventListener('abort', onAbort, { once: true })
-    guarded.then(
-      (value) => {
-        signal.removeEventListener('abort', onAbort)
-        resolve(value)
-      },
-      (reason) => {
-        signal.removeEventListener('abort', onAbort)
-        reject(reason)
-      },
-    )
-  })
-}
 /**
  * Playwright-backed {@link BrowserProvider}: one shared browser, one context
  * per owner key, LRU eviction, idle disposal, ref-based snapshot interaction.
@@ -667,82 +634,6 @@ export class PlaywrightProvider {
     }
     throw launchFailed(this.launchError)
   }
-}
-/** Serialize a Playwright timeout into a stable browser error. Code is
- * prefixed on the message so the model sees a stable machine-readable label. */
-function asTimeoutError(kind: string, cause: unknown) {
-  const detail = cause instanceof Error ? cause.message : String(cause)
-  if (kind === 'navigation')
-    return new BrowserError('NAVIGATION_TIMEOUT', '[NAVIGATION_TIMEOUT] the browser operation timed out: ' + detail)
-  return new BrowserError('ACTION_TIMEOUT', '[ACTION_TIMEOUT] the browser action timed out: ' + detail)
-}
-/** Feature fingerprint of one ref-bearing node, for cross-snapshot diffing. */
-interface RefSignature {
-  role?: string
-  name?: string
-  level?: number
-  checked?: boolean
-  selected?: boolean
-  disabled?: boolean
-  href?: string
-  parentRef?: string
-}
-
-/** Feature flags carried by an added diff entry. */
-function flagsOf(sig: RefSignature): string[] {
-  const flags: string[] = []
-  if (sig.checked === true) flags.push('checked')
-  if (sig.selected === true) flags.push('selected')
-  if (sig.disabled === true) flags.push('disabled')
-  if (sig.level !== undefined) flags.push('level=' + String(sig.level))
-  if (sig.href !== undefined) flags.push('href=' + sig.href)
-  return flags
-}
-
-/** Flag keys whose value changed between two signatures. */
-function flagsDeltaOf(before: RefSignature, after: RefSignature): string[] {
-  const delta: string[] = []
-  const keys = ['checked', 'selected', 'disabled', 'level', 'href'] as const
-  for (const key of keys) {
-    const b = before[key]
-    const a = after[key]
-    if (String(b ?? '') === String(a ?? '')) continue
-    delta.push(
-      a !== undefined && a !== false
-        ? key === 'level'
-          ? 'level=' + String(a)
-          : key === 'href'
-            ? 'href=' + a
-            : key
-        : key,
-    )
-  }
-  return delta
-}
-
-/** Build a SnapshotDiffEntry, dropping undefined optionals (exactOptionalPropertyTypes). */
-function diffEntry(input: {
-  ref: string
-  role?: string | undefined
-  name?: string | undefined
-  flags?: string[] | undefined
-  flagsDelta?: string[] | undefined
-  parentRef?: string | undefined
-}): SnapshotDiffEntry {
-  const out: {
-    ref: string
-    role?: string | undefined
-    name?: string | undefined
-    flags?: string[] | undefined
-    flagsDelta?: string[] | undefined
-    parentRef?: string | undefined
-  } = { ref: input.ref }
-  if (input.role !== undefined) out.role = input.role
-  if (input.name !== undefined) out.name = input.name
-  if (input.flags !== undefined) out.flags = input.flags
-  if (input.flagsDelta !== undefined) out.flagsDelta = input.flagsDelta
-  if (input.parentRef !== undefined) out.parentRef = input.parentRef
-  return out as SnapshotDiffEntry
 }
 
 /** Live session over one browser context owned by one caller. */
@@ -2310,64 +2201,4 @@ class PlaywrightSession {
       )
     }
   }
-}
-/** Whether an error is a caller-initiated abort, which must propagate untouched. */
-function isAbortError(error: unknown) {
-  return error instanceof DOMException && error.name === 'AbortError'
-}
-/** Whether a Playwright failure is a mid-evaluate navigation race. */
-function isContextDestroyed(error: unknown) {
-  return error instanceof Error && /Execution context was destroyed/.test(error.message)
-}
-/** Whether a failure means the browser or its page died and must be relaunched. */
-function isCrashError(error: unknown) {
-  if (!(error instanceof Error)) return false
-  return /browser has disconnected|has been closed|Target closed|Target crashed|ProcessSingleton|Session closed|Cannot access object .* destroyed|The page .* was closed/i.test(
-    error.message,
-  )
-}
-/**
- * Post-hover note. A hover proves nothing by itself: the call returning only
- * means the pointer moved. The cheap evidence that content appeared is how the
- * actionable ref count changed, so the note reports it and tells the model
- * what to do when nothing appeared (retarget the owner of the menu, never
- * retry the same hover, never fall back to raw coordinates).
- * @param target - description of what was hovered (a ref, or a quoted label).
- * @param refsBefore - actionable refs before the hover.
- * @param refsAfter - actionable refs in the returned snapshot.
- * @param navigated - whether the hover changed the page URL.
- */
-function hoverNote(target: string, refsBefore: number, refsAfter: number, navigated: boolean) {
-  const grew = refsAfter - refsBefore
-  if (navigated) {
-    return (
-      'hover on ' +
-      target +
-      ' triggered a navigation (' +
-      refsBefore +
-      ' refs before, ' +
-      refsAfter +
-      ' after) — a hover should not navigate: verify the new page before continuing'
-    )
-  }
-  if (grew > 0) {
-    return (
-      'hover delivered to ' +
-      target +
-      ': ' +
-      refsBefore +
-      ' refs before, ' +
-      refsAfter +
-      ' after (+' +
-      grew +
-      ') — hover-revealed content is in this snapshot; act on it next, because any other pointer action may close it (pre-hover refs are stale)'
-    )
-  }
-  return (
-    'hover delivered to ' +
-    target +
-    ' but the page did not grow (' +
-    refsBefore +
-    ' refs before and after): if what you expected is still missing, THIS target does not reveal on hover — do NOT repeat this call and do NOT fall back to raw coordinates; hover the parent/container or the sibling that owns the menu instead, and if that reveals nothing either, hover is not implemented for this control'
-  )
 }

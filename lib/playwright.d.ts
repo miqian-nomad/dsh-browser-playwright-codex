@@ -3,6 +3,7 @@
  * one context per owner key, idle disposal, and the snapshot engine.
  * @module dsh-browser-playwright-codex/playwright
  */
+import { type RefSignature } from './page-snapshot.ts';
 import { type PlaywrightConfig } from './config.ts';
 import type { Context } from '@deepseek-ai/cordis';
 import { type Browser, type BrowserContext, type CDPSession, type Dialog, type Locator, type Page, type Request } from 'playwright-core';
@@ -17,14 +18,6 @@ export declare const inject: string[];
  * @param config - launch and fleet configuration.
  */
 export declare function apply(ctx: Context, config: PlaywrightConfig): void;
-/**
- * Which page-reading mode a capture uses. The user's choice on the settings page
- * (Settings → 浏览器 → 页面识别方式) wins over the deployment default, so flipping
- * that switch changes the very next operation — no restart, no config edit.
- * @param configured - the mode from this provider's config.
- * @returns the effective mode.
- */
-export declare function resolveSnapshotEngine(configured: 'legacy' | 'aria'): 'legacy' | 'aria';
 /**
  * Playwright-backed {@link BrowserProvider}: one shared browser, one context
  * per owner key, LRU eviction, idle disposal, ref-based snapshot interaction.
@@ -178,17 +171,6 @@ export declare class PlaywrightProvider {
     restoreState(context: BrowserContext): Promise<void>;
     /** Launch the browser once, probing the configured or auto-detected channel. */
     ensureBrowser(): Promise<Browser>;
-}
-/** Feature fingerprint of one ref-bearing node, for cross-snapshot diffing. */
-interface RefSignature {
-    role?: string;
-    name?: string;
-    level?: number;
-    checked?: boolean;
-    selected?: boolean;
-    disabled?: boolean;
-    href?: string;
-    parentRef?: string;
 }
 /** Live session over one browser context owned by one caller. */
 declare class PlaywrightSession {

@@ -4,7 +4,7 @@ import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { getEnabled, setEnabled, getSnapshotEngine, setSnapshotEngine } from '../src/runtime-state.ts'
-import { resolveSnapshotEngine } from '../src/playwright.ts'
+import { resolveSnapshotEngine } from '../src/page-snapshot.ts'
 
 /**
  * The settings file is the user's state, so these tests redirect it with
