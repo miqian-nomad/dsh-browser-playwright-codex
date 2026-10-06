@@ -3,6 +3,9 @@
  * one context per owner key, idle disposal, and the snapshot engine.
  * @module dsh-browser-playwright-codex/playwright
  */
+import { AUTO_CHANNELS, HUMANIZED_LAUNCH, REF_PATTERN, type PageData, type PlaywrightConfig } from './config.ts'
+import { assertAllowedUrl } from './url-policy.ts'
+import { createBackgroundPage, isWindowMinimized } from './browser-lifecycle.ts'
 import type { Context } from '@deepseek-ai/cordis'
 import {
   chromium,
@@ -47,116 +50,7 @@ import type {
 export const name = 'browser-playwright'
 /** The browser runtime this provider registers into. */
 export const inject = ['browser']
-/** Schemastery validation for {@link PlaywrightConfig}. */
-/** Launch configuration for the Playwright provider. */
-export interface PlaywrightConfig {
-  launch: {
-    /** Absolute path to a Chromium-family binary; takes precedence over channel. */
-    executablePath?: string
-    /** Browser channel: chromium, chrome, msedge. Omitted = auto-detect in that order. */
-    channel?: string
-    /** Run headful so the user can watch and rescue the browser by hand. */
-    headless: boolean
-    /** Persistent mode: one shared profile-backed window whose login survives. */
-    persistent: boolean
-    /** Profile directory for persistent mode; empty means ~/.dsh/browser-profiles/playwright. */
-    profileDir: string
-    viewport: { width: number; height: number }
-    /** Per-action navigation/click timeout in milliseconds. */
-    navigationTimeoutMs: number
-    /** Ignore HTTPS certificate errors. */
-    ignoreHTTPSErrors: boolean
-  }
-  /** Host suffixes the browser may visit. Empty = any http(s) host. */
-  allowedDomains?: string[]
-  /** Close an idle session's browser context after this many milliseconds. 0 disables. */
-  idleTimeoutMs: number
-  /** Maximum concurrent browser contexts; acquiring beyond it evicts the least recently used. */
-  maxSessions: number
-  snapshot: {
-    /** 'legacy' keeps the injected DOM walker; 'aria' uses the official ariaSnapshot(mode:'ai') engine. */
-    engine: 'legacy' | 'aria'
-    maxNodes: number
-    maxNameLength: number
-    maxTextLength: number
-    /** Incremental ref-diff mode; false = always full snapshots (zero behavioral change). */
-    diff: boolean
-  }
-}
 
-/** Bounded page data the extraction consumer feeds to a model. */
-export interface PageData {
-  readonly url: string
-  readonly title: string
-  readonly text: string
-  readonly truncated: boolean
-  readonly links: readonly { readonly text: string; readonly href: string }[]
-  readonly inputs: readonly {
-    readonly tag: string
-    readonly type: string
-    readonly name: string
-    readonly value: string
-    readonly label: string
-    readonly checked: boolean | null
-  }[]
-}
-
-/** Schemastery validation for {@link PlaywrightConfig}. */
-export const Config: z<PlaywrightConfig> = z.object({
-  launch: z.object({
-    executablePath: z.string(),
-    channel: z.string(),
-    // Visible window by default: the agent drives a browser the user can
-    // watch and rescue by hand (login, captcha, dialogs).
-    headless: z.boolean().default(false),
-    // Persistent context mode: one shared profile-backed window whose
-    // login state survives close/reopen. false = legacy launch() mode.
-    persistent: z.boolean().default(true),
-    // Profile directory for persistent mode. Empty = ~/.dsh/browser-profiles/playwright.
-    profileDir: z.string().default(''),
-    // Headless only: a headful window must behave like a normal Chrome the
-    // user opened by hand, so the fixed CSS viewport is ignored there (see
-    // ensureContext) and the page tracks the real window size instead.
-    viewport: z
-      .object({ width: z.number().default(1280), height: z.number().default(800) })
-      .default({ width: 1280, height: 800 }),
-    navigationTimeoutMs: z.number().default(30000),
-    ignoreHTTPSErrors: z.boolean().default(false),
-  }),
-  allowedDomains: z.array(z.string()),
-  idleTimeoutMs: z.number().default(600000),
-  maxSessions: z.number().default(8),
-  snapshot: z
-    .object({
-      // 'legacy' keeps the injected DOM walker as the default: existing
-      // tests, verify and every consumer see byte-identical snapshots until
-      // a caller opts into the aria engine.
-      engine: z.union([z.const('legacy'), z.const('aria')]).default('legacy'),
-      maxNodes: z.number().default(500),
-      maxNameLength: z.number().default(120),
-      maxTextLength: z.number().default(300),
-      // diff=false keeps every return path a full snapshot: zero behavioral
-      // change unless a caller explicitly turns the incremental mode on.
-      diff: z.boolean().default(false),
-    })
-    .default({ engine: 'legacy', maxNodes: 500, maxNameLength: 120, maxTextLength: 300, diff: false }),
-})
-/** Channels probed in order when none is configured. */
-const AUTO_CHANNELS = ['chromium', 'chrome', 'msedge', 'edge']
-/**
- * Launch flags that strip Playwright's obvious automation markers (anti-bot
- * detection layer L1). --enable-automation is what sets navigator.webdriver
- * and the "controlled by automated test software" infobar; dropping it plus
- * --disable-blink-features=AutomationControlled makes the browser present as
- * a plain real Chrome, which it is. No fingerprint spoofing is added: real
- * Chrome's own values are consistent by construction (spoofing would invent
- * a device that never existed and draw MORE suspicion).
- */
-const HUMANIZED_LAUNCH = {
-  ignoreDefaultArgs: ['--enable-automation'],
-  args: ['--disable-blink-features=AutomationControlled'],
-}
-const REF_PATTERN = /^e[0-9]+$/
 /**
  * Register this provider on the browser runtime for the plugin's lifetime.
  * @param ctx - plugin context carrying the browser runtime.
@@ -172,26 +66,6 @@ export function apply(ctx: Context, config: PlaywrightConfig) {
     if (enabled) return
     void provider.dispose()
   })
-}
-/** Validate one absolute URL against the navigation policy. */
-export function assertAllowedUrl(raw: string, allowedDomains: readonly string[]) {
-  let parsed
-  try {
-    parsed = new URL(raw)
-  } catch {
-    throw new BrowserError('URL_NOT_ALLOWED', 'invalid URL: ' + raw)
-  }
-  if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
-    throw new BrowserError('URL_NOT_ALLOWED', 'only http(s) URLs can be navigated, got: ' + parsed.protocol)
-  }
-  if (allowedDomains.length > 0) {
-    const host = parsed.hostname.toLowerCase()
-    const allowed = allowedDomains.some((suffix) => host === suffix || host.endsWith('.' + suffix))
-    if (!allowed) {
-      throw new BrowserError('URL_NOT_ALLOWED', 'host ' + parsed.hostname + ' is not in allowedDomains')
-    }
-  }
-  return parsed
 }
 
 /**
@@ -229,55 +103,6 @@ async function withAbort<T>(promise: Promise<T>, signal: AbortSignal | undefined
       },
     )
   })
-}
-/**
- * True when the OS window hosting this page is minimized. Tab selection lives
- * in the browser context, not in the OS window, so activation is a side effect
- * we are free to decline — and declining it is what keeps the agent from
- * yanking a minimized window into the user's face. If the window state cannot
- * be read we answer true (treat as minimized): the safe direction is to leave
- * the user's desktop alone, and a skipped bringToFront costs nothing functional.
- */
-async function isWindowMinimized(page: Page) {
-  let session
-  try {
-    session = await page.context().newCDPSession(page)
-    const { windowId } = await session.send('Browser.getWindowForTarget')
-    const { bounds } = await session.send('Browser.getWindowBounds', { windowId })
-    return bounds.windowState === 'minimized'
-  } catch {
-    return true
-  } finally {
-    await session?.detach().catch(() => {})
-  }
-}
-/**
- * Create a tab without raising the window. context.newPage() routes through CDP
- * Target.createTarget without `background`, and Chromium activates the window
- * on every tab creation -- plainly visible once the user has minimized it.
- * Sending the command ourselves with background:true creates the tab silently;
- * Playwright still auto-attaches and returns a fully driveable Page (verified
- * live: Playwright learns the page and evaluate() runs on it). The URL is left
- * at about:blank on purpose so the caller's own goto keeps owning navigation
- * policy, timeouts and abort handling. On any failure this falls back to
- * newPage(): a tab that pops the window beats no tab at all.
- */
-async function createBackgroundPage(context: BrowserContext) {
-  const anchor = context.pages()[0]
-  if (anchor === undefined) return await context.newPage()
-  let session
-  try {
-    session = await context.newCDPSession(anchor)
-    // Arm the listener before sending: Playwright attaches as soon as the
-    // target exists, which can happen before createTarget resolves.
-    const attached = context.waitForEvent('page', { timeout: 10000 })
-    await session.send('Target.createTarget', { url: 'about:blank', background: true })
-    return await attached
-  } catch {
-    return await context.newPage()
-  } finally {
-    await session?.detach().catch(() => {})
-  }
 }
 /**
  * Playwright-backed {@link BrowserProvider}: one shared browser, one context

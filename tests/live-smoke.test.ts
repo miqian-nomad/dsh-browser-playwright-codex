@@ -15,7 +15,7 @@ import assert from 'node:assert/strict'
 import os from 'node:os'
 import path from 'node:path'
 import { PlaywrightProvider } from '../src/playwright.ts'
-import type { PlaywrightConfig } from '../src/playwright.ts'
+import type { PlaywrightConfig } from '../src/config.ts'
 
 // 隔离设置页的真实用户状态：这些用例的期望值按 legacy（兼容模式）的树写。
 process.env.DSH_BROWSER_STATE_FILE = path.join(os.tmpdir(), 'dsh-browser-tests-state-isolated.json')

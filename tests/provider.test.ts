@@ -5,7 +5,7 @@ import { readFile } from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
 import { PlaywrightProvider } from '../src/playwright.ts'
-import type { PlaywrightConfig } from '../src/playwright.ts'
+import type { PlaywrightConfig } from '../src/config.ts'
 import { BrowserError } from '../src/errors.ts'
 import type { BrowserNode } from '../src/types.ts'
 

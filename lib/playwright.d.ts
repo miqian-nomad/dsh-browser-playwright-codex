@@ -3,82 +3,20 @@
  * one context per owner key, idle disposal, and the snapshot engine.
  * @module dsh-browser-playwright-codex/playwright
  */
+import { type PlaywrightConfig } from './config.ts';
 import type { Context } from '@deepseek-ai/cordis';
 import { type Browser, type BrowserContext, type CDPSession, type Dialog, type Locator, type Page, type Request } from 'playwright-core';
-import z from '@deepseek-ai/schemastery';
 import type { BrowserNode, BrowserSnapshot, DiagnosticsEntry, LoadState } from './types.ts';
 /** Cordis plugin name used by loader diagnostics. */
 export declare const name = "browser-playwright";
 /** The browser runtime this provider registers into. */
 export declare const inject: string[];
-/** Schemastery validation for {@link PlaywrightConfig}. */
-/** Launch configuration for the Playwright provider. */
-export interface PlaywrightConfig {
-    launch: {
-        /** Absolute path to a Chromium-family binary; takes precedence over channel. */
-        executablePath?: string;
-        /** Browser channel: chromium, chrome, msedge. Omitted = auto-detect in that order. */
-        channel?: string;
-        /** Run headful so the user can watch and rescue the browser by hand. */
-        headless: boolean;
-        /** Persistent mode: one shared profile-backed window whose login survives. */
-        persistent: boolean;
-        /** Profile directory for persistent mode; empty means ~/.dsh/browser-profiles/playwright. */
-        profileDir: string;
-        viewport: {
-            width: number;
-            height: number;
-        };
-        /** Per-action navigation/click timeout in milliseconds. */
-        navigationTimeoutMs: number;
-        /** Ignore HTTPS certificate errors. */
-        ignoreHTTPSErrors: boolean;
-    };
-    /** Host suffixes the browser may visit. Empty = any http(s) host. */
-    allowedDomains?: string[];
-    /** Close an idle session's browser context after this many milliseconds. 0 disables. */
-    idleTimeoutMs: number;
-    /** Maximum concurrent browser contexts; acquiring beyond it evicts the least recently used. */
-    maxSessions: number;
-    snapshot: {
-        /** 'legacy' keeps the injected DOM walker; 'aria' uses the official ariaSnapshot(mode:'ai') engine. */
-        engine: 'legacy' | 'aria';
-        maxNodes: number;
-        maxNameLength: number;
-        maxTextLength: number;
-        /** Incremental ref-diff mode; false = always full snapshots (zero behavioral change). */
-        diff: boolean;
-    };
-}
-/** Bounded page data the extraction consumer feeds to a model. */
-export interface PageData {
-    readonly url: string;
-    readonly title: string;
-    readonly text: string;
-    readonly truncated: boolean;
-    readonly links: readonly {
-        readonly text: string;
-        readonly href: string;
-    }[];
-    readonly inputs: readonly {
-        readonly tag: string;
-        readonly type: string;
-        readonly name: string;
-        readonly value: string;
-        readonly label: string;
-        readonly checked: boolean | null;
-    }[];
-}
-/** Schemastery validation for {@link PlaywrightConfig}. */
-export declare const Config: z<PlaywrightConfig>;
 /**
  * Register this provider on the browser runtime for the plugin's lifetime.
  * @param ctx - plugin context carrying the browser runtime.
  * @param config - launch and fleet configuration.
  */
 export declare function apply(ctx: Context, config: PlaywrightConfig): void;
-/** Validate one absolute URL against the navigation policy. */
-export declare function assertAllowedUrl(raw: string, allowedDomains: readonly string[]): URL;
 /**
  * Which page-reading mode a capture uses. The user's choice on the settings page
  * (Settings → 浏览器 → 页面识别方式) wins over the deployment default, so flipping

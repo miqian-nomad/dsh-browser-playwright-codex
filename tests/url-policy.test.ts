@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { assertAllowedUrl } from '../src/playwright.ts'
+import { assertAllowedUrl } from '../src/url-policy.ts'
 import { BrowserError } from '../src/errors.ts'
 
 test('http and https pass', () => {

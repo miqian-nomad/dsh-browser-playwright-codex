@@ -5,7 +5,7 @@ import ToolRuntime from '@deepseek-ai/dsh-tools'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import BrowserRuntime from '../src/service.ts'
 import { PlaywrightProvider } from '../src/playwright.ts'
-import type { PlaywrightConfig } from '../src/playwright.ts'
+import type { PlaywrightConfig } from '../src/config.ts'
 import * as browserTool from '../src/tool.ts'
 import type { ToolConfig } from '../src/tool.ts'
 
