@@ -34,7 +34,20 @@ import {
   verifyFill,
   withAbort,
 } from './page-actions.ts'
-import { diffEntry, flagsDeltaOf, flagsOf, resolveSnapshotEngine } from './page-snapshot.ts'
+import {
+  assertLive,
+  attachDiff,
+  buildRefSignatures,
+  captureAria,
+  captureLegacy,
+  diffEntry,
+  flagsDeltaOf,
+  flagsOf,
+  refLocator,
+  resolveSnapshotEngine,
+  settleAndSnapshot,
+  snapshot,
+} from './page-snapshot.ts'
 import { captureAriaSnapshot } from './snapshot-aria.ts'
 import type { SnapshotOptions } from './injected.ts'
 import { assertAllowedUrl } from './url-policy.ts'
@@ -124,18 +137,7 @@ export class PlaywrightSession {
   }
   /** Post-action settle: wait out a real navigation, then render-stabilize before snapshotting. */
   async settleAndSnapshot(page: Page, navChanged: boolean): Promise<BrowserSnapshot> {
-    // Race the settle+capture against a fresh dialog: a chained dialog
-    // (one raised the moment the previous was answered) would block
-    // page.evaluate forever and hang this call.
-    const raced = await this.runAction(page, async () => {
-      if (navChanged) {
-        await page.waitForLoadState('load', { timeout: this.timeoutMs() }).catch(() => {})
-      }
-      await this.waitForPageStable(page, navChanged ? 1500 : 800)
-      return await this.capture(page, undefined)
-    })
-    if (raced.blocked) return this.blockedSnapshot(page, raced.pending)
-    return raced.value as BrowserSnapshot
+    return settleAndSnapshot(this, page, navChanged)
   }
   /**
    * Snapshot substitute while a native dialog blocks the page: only locally
@@ -221,73 +223,11 @@ export class PlaywrightSession {
    * receive "the page has no elements" because the engine failed to parse.
    */
   async captureAria(page: Page, opts: { interactiveOnly?: boolean } | undefined) {
-    const o = {
-      interactiveOnly: opts?.interactiveOnly === true,
-      maxNodes: this.provider.config.snapshot.maxNodes,
-      maxNameLength: this.provider.config.snapshot.maxNameLength,
-      maxTextLength: this.provider.config.snapshot.maxTextLength,
-    }
-    let raw: { nodes: BrowserNode[]; truncated: boolean; totalRefs: number; missing?: boolean }
-    try {
-      raw = await captureAriaSnapshot(page, o)
-    } catch (error) {
-      // Same mid-evaluate navigation race as the legacy path: settle once and retry.
-      if (!isContextDestroyed(error)) throw error
-      await this.settleNavigation(page)
-      raw = await captureAriaSnapshot(page, o)
-    }
-    if (raw.missing === true) {
-      // Degrade honestly: the tree below is the compatible engine's, and the
-      // snapshot says so. Silence here is how a user who explicitly picked smart
-      // mode keeps believing smart mode is what they are reading.
-      const legacy = await this.captureLegacy(page, opts)
-      return {
-        ...legacy,
-        engineNote:
-          'smart mode could not read this page, so it was rendered with the compatible engine. ' +
-          'The refs below belong to the compatible engine. Nothing is wrong with the page; ' +
-          'switch the page-reading mode in Settings if you want to stop seeing this.',
-      }
-    }
-    return {
-      url: page.url(),
-      title: await page.title(),
-      nodes: raw.nodes ?? [],
-      totalRefs: raw.totalRefs ?? 0,
-      truncated: raw.truncated ?? false,
-    }
+    return captureAria(this, page, opts)
   }
   /** Legacy capture: injected DOM walker (default engine, byte-identical output). */
   async captureLegacy(page: Page, opts: { interactiveOnly?: boolean } | undefined) {
-    const o = {
-      ...(opts?.interactiveOnly !== undefined ? { interactiveOnly: opts.interactiveOnly } : {}),
-      maxNodes: this.provider.config.snapshot.maxNodes,
-      maxNameLength: this.provider.config.snapshot.maxNameLength,
-      maxTextLength: this.provider.config.snapshot.maxTextLength,
-    }
-    type RawSnapshot = { nodes: BrowserNode[]; truncated: boolean; totalRefs: number; missing?: boolean }
-    const read = (options: SnapshotOptions): RawSnapshot => {
-      const fn = (window as unknown as { __dshSnapshot?: (o: SnapshotOptions) => RawSnapshot }).__dshSnapshot
-      if (typeof fn !== 'function') return { nodes: [], truncated: false, totalRefs: 0, missing: true }
-      return fn(options)
-    }
-    let raw: RawSnapshot
-    try {
-      raw = await page.evaluate(read, o)
-    } catch (error) {
-      // A click can start a JS navigation that destroys the execution
-      // context mid-evaluate; wait for the new document and retry once.
-      if (!isContextDestroyed(error)) throw error
-      await this.settleNavigation(page)
-      raw = await page.evaluate(read, o)
-    }
-    return {
-      url: page.url(),
-      title: await page.title(),
-      nodes: raw.nodes ?? [],
-      totalRefs: raw.totalRefs ?? 0,
-      truncated: raw.truncated ?? false,
-    }
+    return captureLegacy(this, page, opts)
   }
   /**
    * Attach an incremental diff when snapshot.diff is enabled. Absence of the
@@ -296,67 +236,11 @@ export class PlaywrightSession {
    * data-dsh-ref, so legacy and aria engines share the same contract.
    */
   attachDiff(snap: BrowserSnapshot): BrowserSnapshot {
-    if (this.provider.config.snapshot.diff !== true) {
-      this.lastRefSignatures = undefined
-      this.lastRefNonce = undefined
-      return snap
-    }
-    const sigs = this.buildRefSignatures(snap.nodes)
-    const nonce = this.refNonce(snap.nodes)
-    const base = this.lastRefSignatures
-    const baseNonce = this.lastRefNonce
-    this.lastRefSignatures = sigs
-    this.lastRefNonce = nonce
-    // No baseline yet (first capture) — the full snapshot is the baseline.
-    if (base === undefined || baseNonce === undefined) return snap
-    // Navigation reset (ref nonce changed) or truncation: the delta is void.
-    if (nonce !== baseNonce || snap.truncated === true) {
-      return { ...snap, diff: { added: [], removed: [], changed: [], same: 0, navigationReset: true } }
-    }
-    const added: SnapshotDiffEntry[] = []
-    const removed: string[] = []
-    const changed: SnapshotDiffEntry[] = []
-    let same = 0
-    for (const [ref, sig] of sigs) {
-      const oldSig = base.get(ref)
-      if (oldSig === undefined) {
-        added.push(diffEntry({ ref, role: sig.role, name: sig.name, flags: flagsOf(sig), parentRef: sig.parentRef }))
-      } else {
-        const delta = flagsDeltaOf(oldSig, sig)
-        if (sig.role !== oldSig.role || sig.name !== oldSig.name || delta.length > 0) {
-          changed.push(diffEntry({ ref, role: sig.role, name: sig.name, flagsDelta: delta, parentRef: sig.parentRef }))
-        } else {
-          same += 1
-        }
-      }
-    }
-    for (const ref of base.keys()) {
-      if (!sigs.has(ref)) removed.push(ref)
-    }
-    return { ...snap, diff: { added, removed, changed, same, navigationReset: false } }
+    return attachDiff(this, snap)
   }
   /** Build ref -> feature signature map from a captured tree, with parent refs. */
   buildRefSignatures(nodes: readonly BrowserNode[]): Map<string, RefSignature> {
-    const out = new Map<string, RefSignature>()
-    const walk = (list: readonly BrowserNode[], parentRef?: string) => {
-      for (const node of list) {
-        if (node.ref !== undefined) {
-          out.set(node.ref, {
-            role: node.role,
-            name: node.name,
-            ...(node.level !== undefined ? { level: node.level } : {}),
-            checked: node.checked === true,
-            selected: node.selected === true,
-            disabled: node.disabled === true,
-            ...(node.href !== undefined ? { href: node.href } : {}),
-            ...(parentRef !== undefined ? { parentRef } : {}),
-          })
-        }
-        walk(node.children ?? [], node.ref ?? parentRef)
-      }
-    }
-    walk(nodes)
-    return out
+    return buildRefSignatures(this, nodes)
   }
   /** The document nonce shared by this snapshot's refs, or undefined. */
   refNonce(nodes: readonly BrowserNode[]): string | undefined {
@@ -371,20 +255,7 @@ export class PlaywrightSession {
     return navigate(this, url, waitUntil, signal)
   }
   async snapshot(opts?: { interactiveOnly?: boolean }) {
-    return this.run(async () => {
-      this.assertLive()
-      const page = await this.withDialogGuardLifted(() => this.ensurePage())
-      this.provider.touch(this.owner)
-      // A parked dialog blocks the page: never round-trip into it.
-      const pending = this.provider.pendingDialogFor(page)
-      if (pending !== undefined) return this.blockedSnapshot(page, pending)
-      const racedSnap = await this.runAction(page, async () => {
-        await this.waitForPageStable(page, 400)
-        return await this.capture(page, opts)
-      })
-      if (racedSnap.blocked) return this.blockedSnapshot(page, racedSnap.pending)
-      return racedSnap.value as BrowserSnapshot
-    })
+    return snapshot(this, opts)
   }
   /**
    * Codex-style click-point resolution. Tries a scroll-alignment ladder
@@ -789,27 +660,7 @@ export class PlaywrightSession {
     return this.context.pages()[index]
   }
   async refLocator(ref: string) {
-    this.assertLive()
-    if (!REF_PATTERN.test(ref)) {
-      throw new BrowserError(
-        'REF_NOT_FOUND',
-        'invalid ref ' + JSON.stringify(ref) + ': use a ref from the latest browser_snapshot',
-      )
-    }
-    const locator = this.currentPageSync()
-      .locator('[data-dsh-ref="' + ref + '"]')
-      .first()
-    // Fast-fail on stale refs (per-snapshot nonces make a reused number
-    // impossible) instead of burning the full action timeout.
-    if ((await locator.count()) === 0) {
-      throw new BrowserError(
-        'REF_NOT_FOUND',
-        'ref ' +
-          JSON.stringify(ref) +
-          ' no longer matches an element; take a fresh browser_snapshot and use a ref from its result',
-      )
-    }
-    return locator
+    return refLocator(this, ref)
   }
   currentPageSync() {
     const pages = this.context.pages()
@@ -819,22 +670,6 @@ export class PlaywrightSession {
     return page
   }
   assertLive() {
-    if (this.closed) {
-      throw new BrowserError(
-        'SESSION_CLOSED',
-        'the browser session was closed via browser_close; the next browser call opens a fresh one',
-      )
-    }
-    if (!this.provider.isLive(this.owner)) {
-      // The window went away without this session asking for it: idle
-      // disposal, an external manual close, or a crash. Surface it as a
-      // crash so the model retries — the next call relaunches with the
-      // saved login state instead of reporting a misleading close.
-      this.closed = true
-      throw new BrowserError(
-        'BROWSER_CRASHED',
-        'the browser window is no longer available (idle timeout, manual close, or a crash); the next browser call reopens it with the saved login state',
-      )
-    }
+    return assertLive(this)
   }
 }
