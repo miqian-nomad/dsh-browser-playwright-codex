@@ -11,7 +11,7 @@ import type { LoadState } from './types.ts'
 import { assertAllowedUrl } from './url-policy.ts'
 import { asTimeoutError, isAbortError } from './page-diagnostics.ts'
 import { clearLabelTargets, labelTargetProbe } from './page-probes.ts'
-import { createBackgroundPage, isWindowMinimized } from './browser-lifecycle.ts'
+import { createBackgroundPage, isWindowMinimized } from './window-focus.ts'
 
 /** Wrap a Playwright op so an aborted signal rejects while the op keeps draining in the background. */
 export async function withAbort<T>(promise: Promise<T>, signal: AbortSignal | undefined): Promise<T> {

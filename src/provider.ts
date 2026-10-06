@@ -12,7 +12,7 @@ import type { PlaywrightConfig } from './config.ts'
 import { getEnabled, publishConfiguredEngine } from './runtime-state.ts'
 import { BrowserError } from './errors.ts'
 import { SNAPSHOT_SCRIPT } from './injected.ts'
-import { isWindowMinimized } from './browser-lifecycle.ts'
+import { isWindowMinimized } from './window-focus.ts'
 
 /**
  * Playwright-backed {@link BrowserProvider}: one shared browser, one context
