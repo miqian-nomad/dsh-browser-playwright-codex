@@ -1,7 +1,3 @@
-/**
- * 浏览器提供方：profile/context 生命周期、会话注册、空闲回收、弹窗登记、标签记账。
- * @module dsh-browser-playwright-codex/provider
- */
 import { type Browser, type BrowserContext, type Dialog, type Page } from 'playwright-core';
 import { PlaywrightSession } from './session.ts';
 import type { PlaywrightConfig } from './config.ts';

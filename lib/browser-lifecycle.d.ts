@@ -1,7 +1,4 @@
-/**
- * 浏览器窗口生命周期：窗口最小化判定、后台页创建。
- * @module dsh-browser-playwright-codex/browser-lifecycle
- */
+import type { PlaywrightProvider } from './provider.ts';
 import type { BrowserContext, Page } from 'playwright-core';
 /**
  * True when the OS window hosting this page is minimized. Tab selection lives
@@ -24,3 +21,14 @@ export declare function isWindowMinimized(page: Page): Promise<boolean>;
  * newPage(): a tab that pops the window beats no tab at all.
  */
 export declare function createBackgroundPage(context: BrowserContext): Promise<Page>;
+/**
+ * Ensure the shared persistent context is alive (persistent mode). A
+ * profile-backed window is launched once and reused until closed by the
+ * last owner, idle disposal, or an external close; login state lives in
+ * the profile plus the exported state file, so reopening is seamless.
+ */
+export declare function ensureContext(provider: PlaywrightProvider): Promise<BrowserContext>;
+/** Remove stale Chrome singleton lock files inside the profile directory. */
+export declare function clearChromeLocks(provider: PlaywrightProvider): Promise<void>;
+/** Launch the browser once, probing the configured or auto-detected channel. */
+export declare function ensureBrowser(provider: PlaywrightProvider): Promise<import("playwright-core").Browser>;
