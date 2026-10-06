@@ -1,5 +1,5 @@
 /**
- * tool-types：从 tool.ts 拆出的一部分（纯搬运，行为不变）。
+ * 工具面类型：各工具的返回值形状（快照/标签/截图/诊断）与辅助服务接口。
  * @module dsh-browser-playwright-codex/tool-types
  */
 import type { StreamChunk } from '@deepseek-ai/dsh-llm';

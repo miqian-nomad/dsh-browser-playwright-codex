@@ -15,7 +15,7 @@
  */
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { readFileSync } from 'node:fs'
+import { readFileSync, readdirSync } from 'node:fs'
 import { bundleConfig } from '../scripts/shipped-gates.mjs'
 import {
   CONFIG_DEFAULTS,
@@ -440,4 +440,21 @@ test('the README update log opens with the newest minor release', () => {
     .sort((a, b) => a.localeCompare(b, undefined, { numeric: true }))
     .at(-1)
   assert.equal(listed[0], newest, `the README update log must open with ${newest}, not ${listed[0]}`)
+})
+
+test('no module header is left at the splitter placeholder', () => {
+  // 拆分脚本（_deps/scripts/split-ts-file.cjs）会给新文件写一句占位说明：
+  //   "<name>：从 <file> 拆出的一部分（纯搬运，行为不变）。"
+  // 那是搬运当天的临时文案，对一个月后的读者毫无信息量 —— 2026-10-06 的评审就是被这类
+  // "说明与内容不符" 抓到的（browser-lifecycle.ts 说自己负责窗口最小化，而那两个函数已经搬走）。
+  // 说明与内容是否一致，机器判不了，只能靠人；但这条占位文案是机械可判的，就让它别再回来。
+  const offenders: string[] = []
+  for (const file of readdirSync(new URL('../src', import.meta.url))) {
+    if (!file.endsWith('.ts')) continue
+    // readFileSync accepts a URL; the local read() helper above resolves *document* names and
+    // would happily hand back the wrong file for every iteration (it did, first try).
+    const header = readFileSync(new URL('../src/' + file, import.meta.url), 'utf8').slice(0, 400)
+    if (/拆出的一部分（纯搬运/.test(header)) offenders.push(file)
+  }
+  assert.deepEqual(offenders, [], 'these modules still carry the splitter placeholder header: ' + offenders.join(', '))
 })

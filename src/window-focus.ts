@@ -1,5 +1,6 @@
 /**
- * 窗口与焦点行为：判断承载页面的系统窗口是否最小化、以及在后台创建标签页。两项都是为了让窗口/标签不打扰用户（背景与实测见 FOCUS-STEALING.md）。
+ * 窗口与焦点行为：判断承载页面的系统窗口是否最小化，以及在后台创建标签页 —— 两项都是为了让
+ * 窗口/标签不打扰用户。背景与实测见 FOCUS-STEALING.md。
  * @module dsh-browser-playwright-codex/window-focus
  */
 import type { BrowserContext, Page } from 'playwright-core'

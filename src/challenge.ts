@@ -1,5 +1,5 @@
 /**
- * challenge：从 tool.ts 拆出的一部分（纯搬运，行为不变）。
+ * 人机验证页识别：从快照里判断是否撞上 Cloudflare 之类的挑战页，并给出对应的提示文案。
  * @module dsh-browser-playwright-codex/challenge
  */
 import type { ChallengeMatch, ChallengeNode, ChallengeSnapshot } from './tool-types.ts'

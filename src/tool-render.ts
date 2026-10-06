@@ -1,5 +1,5 @@
 /**
- * tool-render：从 tool.ts 拆出的一部分（纯搬运，行为不变）。
+ * 把工具的返回值渲染成模型可见的内容：快照树、标签列表、截图（含附件）、诊断摘要。
  * @module dsh-browser-playwright-codex/tool-render
  */
 import type { ContentBlock } from '@deepseek-ai/dsh-llm'

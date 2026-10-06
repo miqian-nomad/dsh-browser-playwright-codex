@@ -1,5 +1,6 @@
 /**
- * 一次浏览器会话的全部交互：快照、点击、填充、按键、滚动、标签、截图、诊断、CDP。
+ * 一次浏览器会话：持有 page/context、处理弹窗、截图、页面数据、evaluate/CDP 等交互，并把
+ * 动作、快照、诊断三块转发给对应模块（page-actions / page-snapshot / page-diagnostics）。
  * @module dsh-browser-playwright-codex/session
  */
 import type { BrowserContext, CDPSession, Locator, Page, Request } from 'playwright-core'

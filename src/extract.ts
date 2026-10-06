@@ -1,5 +1,5 @@
 /**
- * extract：从 tool.ts 拆出的一部分（纯搬运，行为不变）。
+ * 提取工具的辅助：容错地解析模型返回的 JSON，以及为提取请求拼装提示词。
  * @module dsh-browser-playwright-codex/extract
  */
 import type { JsonValue } from './tool-types.ts'

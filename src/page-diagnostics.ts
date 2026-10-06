@@ -1,5 +1,6 @@
 /**
- * 失败诊断：把 Playwright 抛出的错误归类成可读的原因。
+ * 页面诊断：把控制台消息、页面错误与网络请求按页收进有界记录，并把 Playwright 抛出的错误
+ * 归类成可读的原因（超时/中断/上下文销毁/浏览器崩溃）。
  * @module dsh-browser-playwright-codex/page-diagnostics
  */
 import type { Page } from 'playwright-core'

@@ -1,5 +1,6 @@
 /**
- * 页面快照：识别模式选择、ref 签名与快照差异计算。
+ * 读取网页并生成快照：等页面稳定、兼容（注入脚本）与智能（aria）两种采集、ref 签名与快照差异、
+ * 以及 ref 到定位器的解析与存活校验。
  * @module dsh-browser-playwright-codex/page-snapshot
  */
 import type { Page } from 'playwright-core'
