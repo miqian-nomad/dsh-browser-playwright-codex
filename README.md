@@ -31,16 +31,23 @@ dsh plugin --profile <name> add github:miqian-nomad/dsh-browser-playwright-codex
 - **强力工具默认关闭** — `browser_evaluate` / `browser_cdp` are **not registered at all** unless your
   deployment opts in; this package ships both off.
 
-**安全一览 / Security at a glance** — dsh.so's scanner reports *2 Critical* on this repository, and
-both findings **are** the implementation of `browser_evaluate`, which this package ships switched off.
+**安全一览 / Security at a glance** — dsh.so's scanner flags this repository's **one Critical finding**, and that finding **is** the
+implementation of `browser_evaluate` (its dynamic evaluation), which this package ships switched off.
+The counts move as the scanner and the code change — [SECURITY.md](SECURITY.md) maps every finding to the
+gate that contains it.
 Every finding is explained gate by gate in [SECURITY.md](SECURITY.md), together with what the plugin
 can and cannot do with your logins (URL policy, CDP allow-list, dialog policy, no telemetry, and it
 never types passwords or 2FA codes).
 
 ## Install
 
-This package is **not on npm** — the repository is the distribution channel, so install it from GitHub
-(or link a checkout):
+From npm (published since v0.5.1 — [npmjs.com/package/dsh-browser-playwright-codex](https://www.npmjs.com/package/dsh-browser-playwright-codex)):
+
+```sh
+dsh plugin --profile <name> add dsh-browser-playwright-codex
+```
+
+Or straight from the repository / a checkout:
 
 ```sh
 dsh plugin --profile <name> add github:miqian-nomad/dsh-browser-playwright-codex
@@ -48,6 +55,10 @@ dsh plugin --profile <name> add github:miqian-nomad/dsh-browser-playwright-codex
 # local development: clone, then link the checkout
 dsh plugin --profile <name> add link:<absolute path to this directory>
 ```
+
+**Compatibility.** Built and tested against DSH `0.2.0-rc.1` (`@deepseek-ai/*` peer ranges are deliberately
+`*` so a newer harness still installs). After a harness upgrade, `npm run doctor` re-checks that every named
+export this plugin imports still exists — that is the fast way to tell "the harness moved" from "the plugin broke".
 
 `lib/` ships in the repository (and there is deliberately no `prepare` hook), so a fresh clone loads
 without a build step — `npm run build` is only needed after editing `src/`.

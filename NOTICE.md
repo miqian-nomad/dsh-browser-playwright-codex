@@ -6,7 +6,7 @@ This repository mixes work from three different origins. They are **not** under 
 
 ## 1. The plugin — MIT (`./LICENSE`)
 
-Covers everything that is part of the plugin: `src/`, `tests/`, `scripts/`, `cordis.patch.yml`, `tsconfig.json`, `package.json`, `CHANGELOG.md`, and the plugin's own documentation (`docs/PLUGIN-README.md`, `docs/DIALOG-POLICY.md`, `docs/SAFETY-RULES.md`, `docs/SNAPSHOT-RULES.md`, `docs/codex-rules.md`).
+Covers everything that is part of the plugin: `src/`, `tests/`, `scripts/`, `cordis.patch.yml`, `tsconfig.json`, `package.json`, `CHANGELOG.md`, and the plugin's own documentation (`PLUGIN-README.md`, `DIALOG-POLICY.md`, `SAFETY-RULES.md`, `SNAPSHOT-RULES.md`, `codex-rules.md`).
 
 | Origin | What | Licence |
 |---|---|---|
@@ -20,8 +20,8 @@ Covers everything that is part of the plugin: `src/`, `tests/`, `scripts/`, `cor
 Covers only the writing produced *for this repository*:
 
 - `README.md` (this repository's landing page)
-- `docs/FOCUS-STEALING.md`
-- `docs/MODE-TRADE-OFFS.md`
+- `FOCUS-STEALING.md`
+- `MODE-TRADE-OFFS.md`
 
 Share and adapt for **non-commercial** purposes with attribution and share-alike; commercial use is not permitted. Legal code: [`LICENSE-DOCS`](LICENSE-DOCS).
 
@@ -30,7 +30,7 @@ Note the deliberate boundary: the plugin's *own* documentation is not in this se
 ## 3. Third-party content that is **not** redistributed here
 
 - **No OpenAI code is included in this repository.** Nothing from the bundled Codex browser plugin (`extension-host.exe`, the Chrome extension, `browser-client.mjs`, its `node_modules`) is copied, linked, decompiled or redistributed here.
-- `docs/codex-rules.md` is an **independently written Chinese summary of browser-automation behaviour**, produced by studying publicly observable behaviour and a locally installed copy of that plugin's documentation. It contains no verbatim reproduction of that documentation; what it does contain is a *source map* (file names such as `docs/browser-safety.md`) so readers can consult the originals themselves. Facts and ideas are not copyrightable; the expression here is this project's own.
+- `codex-rules.md` is an **independently written Chinese summary of browser-automation behaviour**, produced by studying publicly observable behaviour and a locally installed copy of that plugin's documentation. It contains no verbatim reproduction of that documentation; what it does contain is a *source map* (file names such as `docs/browser-safety.md`) so readers can consult the originals themselves. Facts and ideas are not copyrightable; the expression here is this project's own.
 - **Rights in the original Codex documentation and browser plugin remain with their owner (OpenAI).** If you are that owner and you object to the source map or to any phrasing here, open an issue and it will be removed.
 - `openai/codex` (the CLI) is Apache-2.0. It is mentioned for context only; no code from it is included.
 

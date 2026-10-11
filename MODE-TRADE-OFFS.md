@@ -40,7 +40,7 @@ Two consequences worth stating plainly:
 | Login | **Usually once per site** | after a browser restart both a durable cookie *and* localStorage survived (see §4) |
 | Captcha / anti-bot challenge | **Yes** — no automation substitute | the human needs to see it *and* interact with it |
 
-**Correction to this repository's own earlier text.** `docs/FOCUS-STEALING.md` and `patches/README.md` listed "native dialogs" among the reasons a window must exist. That was wrong, and it is now fixed in both files: this plugin answers dialogs through Playwright's `dialog` event plus CDP, which works with no window at all. The corrected short list of "why headful exists" is: **captcha/challenge hand-off, and letting the user watch.**
+**Correction to this repository's own earlier text.** `FOCUS-STEALING.md` and `patches/README.md` listed "native dialogs" among the reasons a window must exist. That was wrong, and it is now fixed in both files: this plugin answers dialogs through Playwright's `dialog` event plus CDP, which works with no window at all. The corrected short list of "why headful exists" is: **captcha/challenge hand-off, and letting the user watch.**
 
 **中文小结**：**原生对话框不需要窗口**（实测 headless 下 prompt 被挂起、被回答、页面继续），文件选择器也不需要（`setInputFiles`）。登录多数只在首次需要人。**真正必须人眼可见窗口的只有验证码/风控挑战这一类。** 我此前在本仓库里把"原生对话框"也算进必须 headful 的理由，是错的，已在原文更正。
 
