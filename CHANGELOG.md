@@ -10,10 +10,10 @@ languages, the individual entries follow the language the surrounding code and d
 ### Fixed
 
 - **README 声称"这个包不在 npm 上"**（与同一文件里的 `# from npm` 自相矛盾）：包从 v0.5.1 起已在 npm 上。改为「From npm (published since v0.5.1)」并给出 npm 安装命令，仓库与本地 link 两种方式保留。
-- **NOTICE.md 的 7 个路径全部失效**（写成 `docs/PLUGIN-README.md`、`docs/DIALOG-POLICY.md` …，实际都在仓库根目录）：已按根相对路径改正。同一段里指向**上游文档**的 `docs/browser-safety.md` 保持原样 —— 那是给读者的来源索引，不是我们的文件。顺带修掉 `MODE-TRADE-OFFS.md` 里同类一处。
+- **NOTICE.md 的 7 个路径全部失效**（这 7 份文档都写成 `docs/` 前缀，实际都在仓库根目录）：已按根相对路径改正。同一段里指向**上游文档**的 `docs/browser-safety.md` 保持原样 —— 那是给读者的来源索引，不是我们的文件。顺带修掉 `MODE-TRADE-OFFS.md` 里同类一处。
 - **README"安全一览"写死"2 Critical"**，而 dsh.so 当前扫描是 **1 Critical / 3 Warning / 22 Info**（v0.5.3、75 文件）：改为不含数字的说法。
 - **SECURITY.md §2 与表格按当前扫描重写**：Critical 就是 `browser_evaluate` 的动态求值（`src/session.ts` → `lib/session.js`，出厂关闭）、3 条 Warning、22 条 Info；v0.4.9 的 2/5/26 作为历史留在引用块里，并写明"以他们的报告为准"。
-- **SECURITY.md 里 `src/playwright.ts (~:2041)` 这类"文件名 + 行号"引用在 0.5.x 拆分后失效**（该文件现在 55 行）：改为模块名 —— 行号会漂，模块名不会。
+- **SECURITY.md 里"某个文件 + 行号"式的引用在 0.5.x 拆分后失效**（该文件现在 55 行）：改为模块名 —— 行号会漂，模块名不会。
 - **三份发帖草稿里的"2 个 Critical"**：去掉数字，改为"那个 Critical"。
 - **几处把上游文件写得像我们自己的**：`docs/articles/focus-stealing.md`、`patches/README.md`、`codex-rules.md` 里标明那是**上游仓库**的文件。
 - **README 增加 "Compatibility" 段**：写明构建与测试用的 DSH 版本是 `0.2.0-rc.1`、peer 范围故意留 `*`（换新版 harness 仍可安装）、升级后跑 `npm run doctor` 复核本插件导入的具名导出是否还在。

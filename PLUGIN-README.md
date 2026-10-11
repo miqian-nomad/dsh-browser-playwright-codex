@@ -1,3 +1,7 @@
+> **说明**：本文件是**上游那个插件**（[ChenyuHeee/dsh-browser-playwright](https://github.com/ChenyuHeee/dsh-browser-playwright)）的 README，
+> 保留在这里作为来源索引与行为对照；它说的 `dsh-browser-playwright`、`0.4.7` 等都是上游的，不是本包的。
+> 本包的文档见 [README.md](README.md) / [中文说明.md](中文说明.md)。
+
 # dsh-browser-playwright
 
 Playwright-powered browser capability for [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness): the agent drives a **visible, profile-backed browser window** through accessibility snapshots with stable element refs — no CSS-selector guessing, no full-DOM dumps. Login state survives window close and harness restarts (Codex-style personal browser), tabs, screenshots as durable image attachments, structured extraction, gated JavaScript evaluation, and Codex-inspired reliability guards (bounded render-stability waits, post-action verification, fast-fail actionability checks, crash auto-recovery) and native-dialog handling (alert/confirm/prompt/beforeunload are parked as a pending state, reported to the model, and answered only by an explicit `browser_dialog` call — never auto-accepted; see [DIALOG-POLICY.md](DIALOG-POLICY.md)).

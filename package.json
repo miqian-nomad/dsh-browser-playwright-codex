@@ -37,6 +37,7 @@
     "README.md",
     "CHANGELOG.md",
     "SECURITY.md",
+    "NOTICE.md",
     "locale"
   ],
   "scripts": {
@@ -50,7 +51,8 @@
     "cost": "node node_modules/tsx/dist/cli.mjs scripts/measure-prompt-cost.mjs",
     "format": "node node_modules/prettier/bin/prettier.cjs --write \"src/**/*.ts\" \"tests/**/*.ts\" \"scripts/**/*.mjs\"",
     "format:check": "node node_modules/prettier/bin/prettier.cjs --check \"src/**/*.ts\" \"tests/**/*.ts\" \"scripts/**/*.mjs\"",
-    "prepublishOnly": "npm run build && npm test"
+    "prepublishOnly": "npm run build && npm test && npm run verify && npm run preflight",
+    "preflight": "node scripts/preflight.mjs ."
   },
   "dependencies": {
     "@deepseek-ai/schemastery": "*",
