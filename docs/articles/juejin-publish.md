@@ -61,7 +61,7 @@ npm run doctor  # 宿主编译接口是否还对得上
 
 细节都在仓库里，这三份最值得先看：
 
-- `SECURITY.md`：安全边界，以及第三方扫描报的 2 个 Critical 分别是什么、在什么条件下才可达
+- `SECURITY.md`：安全边界，以及第三方扫描报的那个 Critical 是什么、在什么条件下才可达
 - `FOCUS-STEALING.md`：抢焦点三个根因的复现，含一个 60 行、不依赖插件的脚本
 - `DIALOG-POLICY.md`：弹窗与验证码策略
 

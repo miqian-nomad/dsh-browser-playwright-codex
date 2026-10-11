@@ -71,6 +71,8 @@
 ---
 
 ## 规则来源对照（想追原文时用）
+> 下面这些 `docs/*.md`、`skills/*` 文件名属于**上游仓库**（OpenAI 那个浏览器插件），不是本仓库的文件；列在这里是给读者一份来源索引。
+
 
 - 状态检查 / 权威信号 / 无效不盲重试 / 同 URL 不重导 / 查找一次聚焦：`docs/api-use-behavior.md`
 - 页面内容不可信 / 传输即外泄 / action-time 确认：`docs/browser-safety.md` + `docs/confirmations.md`

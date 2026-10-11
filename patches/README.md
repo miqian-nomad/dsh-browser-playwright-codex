@@ -11,7 +11,7 @@ git apply /path/to/upstream-window-activation.patch
 pnpm install && pnpm test
 ```
 
-What it changes (`src/playwright.ts`, 61 insertions / 5 deletions):
+What it changes in the upstream repository (`src/playwright.ts` there, 61 insertions / 5 deletions):
 
 | Change | Why |
 |---|---|

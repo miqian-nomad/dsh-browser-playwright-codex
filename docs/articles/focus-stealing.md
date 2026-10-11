@@ -13,7 +13,7 @@
 
 | # | 触发 | 代码层原因 | 处理 |
 |---|---|---|---|
-| 1 | **切标签** | `switchTab` 无条件调用 `page.bringToFront()`（上游 `src/playwright.ts` 里就有这行） | 最小化时**跳过**激活，只切内部索引 |
+| 1 | **切标签** | `switchTab` 无条件调用 `page.bringToFront()`（这个问题在上游仓库的 `src/playwright.ts` 里就有） | 最小化时**跳过**激活，只切内部索引 |
 | 2 | **开新标签** | `context.newPage()` —— Chromium 建标签**必然激活窗口** | 改走 `Target.createTarget({ background: true })`（CDP 后台建页） |
 | 3 | **什么都不做** | 持久化方案「每次操作后导出登录态」→ Playwright 的 `storageState()` 会**开一个临时页面**导航到未覆盖的 origin | 最小化时**跳过完整导出**，只取 cookies |
 

@@ -33,11 +33,10 @@ dsh plugin --profile <name> add github:miqian-nomad/dsh-browser-playwright-codex
 
 **安全一览 / Security at a glance** — dsh.so's scanner flags this repository's **one Critical finding**, and that finding **is** the
 implementation of `browser_evaluate` (its dynamic evaluation), which this package ships switched off.
-The counts move as the scanner and the code change — [SECURITY.md](SECURITY.md) maps every finding to the
-gate that contains it.
-Every finding is explained gate by gate in [SECURITY.md](SECURITY.md), together with what the plugin
-can and cannot do with your logins (URL policy, CDP allow-list, dialog policy, no telemetry, and it
-never types passwords or 2FA codes).
+[SECURITY.md](SECURITY.md) maps every finding to the gate that contains it, and explains what the plugin
+can and cannot do with your logins (URL policy, CDP allow-list, dialog policy, no telemetry, and it never
+types passwords or 2FA codes). Counts move as the scanner and the code change — their own report is the
+live number.
 
 ## Install
 

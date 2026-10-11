@@ -4,7 +4,7 @@ This plugin drives a **real browser with your login state**. That is the point o
 the thing worth being careful about. This file answers the two questions a reader actually has:
 
 1. **What can it do to me?**
-2. **Why does dsh.so's scanner report "2 Critical"?**
+2. **Why does dsh.so's scanner report a Critical finding?**
 
 If you only read one line: **the two findings are the implementation of `browser_evaluate`, a tool
 this package ships switched off** — it is not registered at all until a deployment turns it on.
@@ -68,18 +68,22 @@ Nothing else.
 
 ---
 
-## 2. Why the scanner reports "2 Critical"
+## 2. What the scanner reports, and which gate contains it
 
-dsh.so runs `dsh-plugin-vet` over the whole repository. On v0.4.9 it reports **2 Critical, 5 Warning,
-26 Info** across 57 files — and it is **right about the capability**. Here is each one, with the gate
-that decides whether it is reachable at all.
+dsh.so runs `dsh-plugin-vet` over the whole repository. Their scan of **v0.5.3 (2026-10-11)** reports
+**1 Critical, 3 Warning, 22 Info** across 75 files — and it is **right about the capability**. Here is
+each one, with the gate that decides whether it is reachable at all.
+
+> For the record: their v0.4.9 scan — before this plugin was split into responsibility-scoped modules —
+> reported 2 Critical, 5 Warning, 26 Info across 57 files. Counts move as the scanner and the code
+> change; **their report is the live number**, and this table is a map, not a snapshot.
 
 | Level | Finding (as reported) | What it actually is | Reachable when |
 |---|---|---|---|
-| Critical | `new Function('return (' + expression + ')')` — `src/playwright.ts` (~:2041) and its `lib/` mirror | The body of **`browser_evaluate`**: it wraps your expression and runs it in the page. This is what "run JavaScript in the page" means; there is no way to implement it without dynamic evaluation. | Only when `allowEvaluate: true`. **The package ships `false`, so the tool is not registered.** |
-| Warning | `fs.writeFileSync` of a JSON blob (3 sites: `playwright.ts` ×2, `runtime-state.ts`) | Exporting the login state (`cookies` + `localStorage`) so a closed window can be reopened still logged in, and the small runtime state file behind the Settings switches. | Always — it is how login persistence works. The files live under your DSH home. |
+| Critical | `new Function('return (' + expression + ')')` — reported in `lib/session.js` (source: `src/session.ts`) | The body of **`browser_evaluate`**: it wraps your expression and runs it in the page. This is what "run JavaScript in the page" means; there is no way to implement it without dynamic evaluation. | Only when `allowEvaluate: true`. **The package ships `false`, so the tool is not registered.** |
+| Warning | `fs.writeFileSync` of a JSON blob (`lib/login-state.js`, `lib/runtime-state.js`) | Exporting the login state (`cookies` + `localStorage`) so a closed window can be reopened still logged in, and the small runtime state file behind the Settings switches. | Always — it is how login persistence works. The files live under your DSH home. |
 | Warning | HTTP request to a bare IP (`scripts/dsh-browser-verify.mjs`) | The acceptance suite starts a **local** `http.server` on `127.0.0.1` with a fixture page, so `npm run verify` needs no DSH and no internet. | Only when you run that script. |
-| Info ×26 | `localStorage` reads, `process.env` reads, dev-only probe scripts | Restoring login state; test hooks (`DSH_BROWSER_STATE_FILE`, `PLAYWRIGHT_DOWNLOAD_HOST`); and scripts under `scripts/analysis/` that the scanner itself marks *"Dev-only file — not executed at install/runtime"*. | — |
+| Info ×22 | `localStorage` reads, `process.env` reads, hardcoded `127.0.0.1`, dev-only probe scripts | Restoring login state; test hooks (`DSH_BROWSER_STATE_FILE`, `PLAYWRIGHT_DOWNLOAD_HOST`); and scripts under `scripts/analysis/` that the scanner itself marks *"Dev-only file — not executed at install/runtime"*. | — |
 
 Two honest notes:
 
@@ -87,8 +91,9 @@ Two honest notes:
   your deployment turns it on. A scanner that reads code cannot see a runtime gate.
 - We did **not** try to hide the finding (moving the call, obfuscating it, or suppressing the rule).
   That would be deceiving the tool that is trying to protect users, and it would make this file a lie.
-
----
+- Module names, not line numbers: this file used to cite a line number in `src/playwright.ts`, which the
+  0.5.x split made meaningless (the code lives in `src/session.ts` now, and that file is a 55-line
+  entry point). File names survive refactors; line numbers do not.
 
 ## 3. How to check all of this yourself
 

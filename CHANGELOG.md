@@ -3,6 +3,31 @@
 Bilingual by intent: the version headings and the summary of each release are given in both
 languages, the individual entries follow the language the surrounding code and docs use.
 
+## 0.5.4
+
+一句话摘要：**把第三方评审（2026-10-11，8.6/10）指出的"对外表述与现实脱节"修干净，并把这些说法变成守卫** —— 运行时行为零变化。但 README / SECURITY / NOTICE 是**随包发布**的，所以必须发一版：不发版，从 npm 装的用户看到的仍是那句"不在 npm 上"。
+
+### Fixed
+
+- **README 声称"这个包不在 npm 上"**（与同一文件里的 `# from npm` 自相矛盾）：包从 v0.5.1 起已在 npm 上。改为「From npm (published since v0.5.1)」并给出 npm 安装命令，仓库与本地 link 两种方式保留。
+- **NOTICE.md 的 7 个路径全部失效**（写成 `docs/PLUGIN-README.md`、`docs/DIALOG-POLICY.md` …，实际都在仓库根目录）：已按根相对路径改正。同一段里指向**上游文档**的 `docs/browser-safety.md` 保持原样 —— 那是给读者的来源索引，不是我们的文件。顺带修掉 `MODE-TRADE-OFFS.md` 里同类一处。
+- **README"安全一览"写死"2 Critical"**，而 dsh.so 当前扫描是 **1 Critical / 3 Warning / 22 Info**（v0.5.3、75 文件）：改为不含数字的说法。
+- **SECURITY.md §2 与表格按当前扫描重写**：Critical 就是 `browser_evaluate` 的动态求值（`src/session.ts` → `lib/session.js`，出厂关闭）、3 条 Warning、22 条 Info；v0.4.9 的 2/5/26 作为历史留在引用块里，并写明"以他们的报告为准"。
+- **SECURITY.md 里 `src/playwright.ts (~:2041)` 这类"文件名 + 行号"引用在 0.5.x 拆分后失效**（该文件现在 55 行）：改为模块名 —— 行号会漂，模块名不会。
+- **三份发帖草稿里的"2 个 Critical"**：去掉数字，改为"那个 Critical"。
+- **几处把上游文件写得像我们自己的**：`docs/articles/focus-stealing.md`、`patches/README.md`、`codex-rules.md` 里标明那是**上游仓库**的文件。
+- **README 增加 "Compatibility" 段**：写明构建与测试用的 DSH 版本是 `0.2.0-rc.1`、peer 范围故意留 `*`（换新版 harness 仍可安装）、升级后跑 `npm run doctor` 复核本插件导入的具名导出是否还在。
+
+### Added
+
+- **`tests/doc-reality.test.ts`（5 条守卫）**，把"文档对世界说的话"变成 CI 会拦的事实：
+  1. 现行文档不得声称"不在 npm 上"（CHANGELOG 是历史，跳过）；
+  2. README 必须给出 npm 安装路径（与第 1 条互为孪生）；
+  3. 反引号包着的仓库路径必须真的在那个位置（规则：该路径不存在、但同名文件在本仓库里存在才报 —— 不误伤上游引用；`./`、`../` 相对所在文档解析，其余相对仓库根）；
+  4. 文档里的「文件:行号」引用不得越界（行号 > 该文件现在的行数即报错 —— 正是 0.5.x 重构制造的那类腐烂）；
+  5. 带数字的 `N Critical` 只允许出现在 SECURITY.md（计数会变，其它文档一律用文字指过去）。
+  每条都做了"有牙复检"：把对应的旧文案塞回去，守卫立刻报红。
+
 ## 0.5.3
 
 一句话摘要：**源码按职责拆开、可维护性大幅提升，并修掉拆分过程中暴露的三处隐患** —— 对用户可见的行为零变化：工具面、配置接口、出厂默认值全部不动。本版同时修掉中文说明里一处会让人误判权限状态的过期说法。

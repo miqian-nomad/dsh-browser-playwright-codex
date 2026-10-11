@@ -101,3 +101,39 @@ test('every backticked repository path in the docs exists', () => {
     'these documents point at a path where the file does not live:\n  ' + offenders.join('\n  '),
   )
 })
+
+test('line-number references in the docs still point inside the file', () => {
+  // 0.5.x 的重构把代码搬了家：SECURITY.md 里 "src/playwright.ts (~:2041)" 这种"文件名 + 行号"
+  // 的引用在这之后就是错的（那个文件现在只有 55 行）。上一版守卫只查"路径存不存在"，覆盖不到
+  // 这个形态 —— 于是加这一条：行号必须落在该文件当前的行数之内，否则报错。
+  // 只有**同时**写了文件名与行号、且文件名真在仓库里时才判（纯数字在散文里太常见，不能乱抓）。
+  const reference = /([A-Za-z0-9_./-]+\.(?:ts|js|mjs|cjs|json|yml))[^\n]{0,12}?[:(]\s*~?:?(\d{3,5})/g
+  const offenders: string[] = []
+  for (const file of docFiles()) {
+    for (const match of read(file).matchAll(reference)) {
+      const path = match[1].replace(/^\.\//, '')
+      if (!existsSync(new URL(path, ROOT))) continue
+      const lines = readFileSync(new URL(path, ROOT), 'utf8').split('\n').length
+      if (Number(match[2]) > lines)
+        offenders.push(file + ' → ' + match[1] + ':' + match[2] + '（该文件现在只有 ' + lines + ' 行）')
+    }
+  }
+  assert.deepEqual(
+    offenders,
+    [],
+    'these documents cite a line number past the end of the file: \n  ' + offenders.join('\n  '),
+  )
+})
+
+test('a numeric Critical count lives only in SECURITY.md', () => {
+  // 计数会随扫描器与代码变（v0.4.9 时代是 2，0.5.3 是 1）。所以规定：**只有 SECURITY.md 写数字**，
+  // 其它文档一律用文字指过去（"那个 Critical"）。否则任何一次扫描变化都会重新种出"两份文档对不上"。
+  // CHANGELOG 是历史记录，跳过。
+  const numeric = /\b[0-9]+\s*(?:个\s*)?Critical\b/i
+  const offenders = docFiles().filter((file) => file !== 'SECURITY.md' && numeric.test(read(file)))
+  assert.deepEqual(
+    offenders,
+    [],
+    'only SECURITY.md may state a numeric Critical count (others: refer to it): ' + offenders.join(', '),
+  )
+})
