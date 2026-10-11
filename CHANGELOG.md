@@ -3,6 +3,24 @@
 Bilingual by intent: the version headings and the summary of each release are given in both
 languages, the individual entries follow the language the surrounding code and docs use.
 
+## 0.5.5
+
+一句话摘要：**把 `NOTICE.md` 补进 npm 包**（此前从未随包发布过），并把发版审计固化成 `npm run preflight` —— 挂在 `prepublishOnly` 上，不通过就发不出去。
+
+### Fixed
+
+- **`NOTICE.md` 从未随包发布**：`package.json#files` 里没有它，而 npm 只会自动带上 `LICENSE`、不会带 `NOTICE`。那份文件说明的是"MIT 衍生部分保持 MIT、只有本项目的分析性散文才是 CC BY-NC-SA"，属于归属声明，必须送到用户手里。已加入 `files`：现在包内 79 个文件，含 NOTICE.md。
+- 上游那个插件的 README 放在仓库根目录，容易与本包混淆（它写着旧包名与旧版本号）—— 顶部加了一行说明。
+- 0.5.4 的 CHANGELOG 条目描述"哪里写错了"时，把失效路径与失效行号照抄进了正文，于是审计（正确地）把它们当成真引用。改为描述而不照抄。
+
+### Added
+
+- **`scripts/preflight.mjs`（`npm run preflight`）**：发版前审计，并挂到 `prepublishOnly`（`build && test && verify && preflight`）。检查项：
+  - 包里装了什么 —— 必备文件清单（NOTICE / LICENSE / SECURITY / CHANGELOG / locale / cordis.patch.yml）、`lib/` 必须在、`src/` 与 `tests/` 与 `.bak` 必须不在；
+  - 文档"关于世界的断言" —— 本包版本号、写死的工具数、写死的总 token 数、旧包名、反引号路径、「文件:行号」是否越界、markdown 相对链接是否失效；
+  - 基线取自**命令本身**（`npm run cost`、`node --test`），不是文档自述；
+  - 输出分 **✗ 必须修 / ？ 待确认 / ✓ 已核对** 三类，规则刻意收窄避免噪声。
+
 ## 0.5.4
 
 一句话摘要：**把第三方评审（2026-10-11，8.6/10）指出的"对外表述与现实脱节"修干净，并把这些说法变成守卫** —— 运行时行为零变化。但 README / SECURITY / NOTICE 是**随包发布**的，所以必须发一版：不发版，从 npm 装的用户看到的仍是那句"不在 npm 上"。
