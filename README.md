@@ -234,9 +234,9 @@ Measured with ``npm run cost`` (per-turn, resident in the system prompt):
 
 | Surface | Tools | Schema characters | ≈ tokens/turn |
 |---|---|---|---|
-| Schema defaults (`Config({})`, no patch layer) | 20 | 15,033 | ≈ 4,176 |
-| Shipped bundle layer (this package's `cordis.patch.yml`: both power gates off) | 20 | 15,033 | ≈ 4,176 |
-| Everything registered (`registerDisabledTools: true`, plus `extract`) | 23 | 17,886 | ≈ 4,968 |
+| Schema defaults (`Config({})`, no patch layer) | 20 | 15,269 | ≈ 4,241 |
+| Shipped bundle layer (this package's `cordis.patch.yml`: both power gates off) | 20 | 15,269 | ≈ 4,241 |
+| Everything registered (`registerDisabledTools: true`, plus `extract`) | 23 | 18,122 | ≈ 5,034 |
 
 Three things changed here, and only one of them was about size. (1) The click family was rewritten so each rule is stated once instead of three times: -390 characters, with every rule, example and rationale pinned by `tests/tool-descriptions.test.ts`, so a trim that eats one fails the build. (2) A gated tool is registered only while its capability is live — `browser_extract` on this deployment: -456 characters ≈ 127 tokens/turn. (3) Four descriptions were corrected to match the code they describe (dialog blocking, the gated diagnostics `browser_fill` points at, persistent-mode `browser_close`, and `browser_click_at`'s landing note), which added 211 characters back because the old wording promised behaviour the implementation did not have. Net: 18,065 → 17,886 characters with everything registered; the shipped layer's total is identical to the schema-defaults row above, because it keeps both power gates off — those schemas are not registered at all and cost nothing. What is left is per-tool prose rather than repetition, so a further cut trades away real guidance.
 

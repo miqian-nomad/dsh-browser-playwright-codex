@@ -163,6 +163,44 @@ function refInTree(tree: string, role: string, name: string): string | null {
 
 // ---------------------------------------------------------------------------
 // Scenario: a scripted agent completes a search → product journey by tool
+test('browser_fill accepts the value as `value` too, and it really reaches the page', async () => {
+  const ctx = await assemble()
+  const nav = await call(ctx, 'browser_navigate', { url: store.base + '/?nopromo=1', waitFor: 'load' })
+  assert.equal(nav.isError, false, textBlock(nav))
+  const ref = refInTree(treeOf(nav), 'searchbox', 'Search products')
+  assert.ok(ref !== null, 'search box ref must be visible in the tree')
+
+  // A reviewing model passed `value` first and got only `missing required property "text"`.
+  // The alias must now work end to end — proven by the search it produces, not by a flag.
+  // (`coffee` matches the fixture catalog; a non-matching term renders a different page, so the
+  // assertion below is what distinguishes "the value really arrived" from "nothing typed".)
+  const byAlias = await call(ctx, 'browser_fill', { ref, value: 'coffee' })
+  assert.equal(byAlias.isError, false, textBlock(byAlias))
+  const pressed = await call(ctx, 'browser_press', { ref, key: 'Enter' })
+  assert.equal(pressed.isError, false, textBlock(pressed))
+  const searched = await callUntil(
+    ctx,
+    'browser_snapshot',
+    {},
+    (value) => (value as { url: string }).url.includes('/search?q=coffee'),
+    'search results from the aliased value',
+  )
+  assert.match(treeOf(searched), /Found products for/)
+})
+
+test('browser_fill without a value names both spellings and points at browser_click', async () => {
+  const ctx = await assemble()
+  const refused = await call(ctx, 'browser_fill', { ref: 'e999' })
+  assert.equal(refused.isError, true, 'a fill with no value must fail fast')
+  const message = textBlock(refused)
+  assert.ok(
+    message.includes('PARAM_MISSING') || message.includes('needs the value to type'),
+    'the failure must name the missing parameter: ' + message,
+  )
+  assert.ok(message.includes('alias `value`'), 'the failure must name the alias: ' + message)
+  assert.ok(message.includes('browser_click'), 'the failure must disambiguate from browser_click: ' + message)
+})
+
 // ---------------------------------------------------------------------------
 
 test('tool journey: the model drives search and cart by tree refs', async () => {

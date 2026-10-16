@@ -3,6 +3,24 @@
 Bilingual by intent: the version headings and the summary of each release are given in both
 languages, the individual entries follow the language the surrounding code and docs use.
 
+## Unreleased
+
+一句话摘要：**`browser_fill` 现在也接受 `value` 这个参数名**（模型按语义猜也能一次成功），缺值时给的是指路错误，而不是"缺少属性 text"。
+
+### Fixed
+
+- **`browser_fill` 参数名歧义（评审 A1）**：`value` 作为 `text` 的别名被接受，两者都给时 `text` 优先。缺值时抛 `PARAM_MISSING`，消息同时点出两种写法，并说明"`text` 是要填入的值（要点可见标签请用 `browser_click`）"；这条检查在**获取会话之前**，所以参数传错不会白开一个浏览器。schema 里 `text` 不再是 required —— 参数 DSL 是扁平属性表、required 只能逐属性标，表达不了"text 与 value 二选一"，只能在处理函数里兜，代码注释写明了原因。
+- **`PLUGIN-README.md` 的安装命令指向不存在的包**：它写着 `add dsh-browser-playwright`（0.4.0 改名前的旧包名，npm 上没有这个包）。已改为当前包名、标题同步；并修掉上一批我加错的说明 —— `git log --follow` 显示这份文件在初始提交里就叫 `README.md`，是本插件自己的英文自述，**不是**上游插件的文档。
+
+### Changed
+
+- 文档的常驻成本数字同步为实测值：20 工具 **15,269** 字符 ≈ **4,241** token/轮（全量注册 23 工具 18,122 ≈ 5,034），README / PLUGIN-README / 中文说明三处一致。本次改动净增约 236 字符（≈ +65 token/轮），是别名说明的代价。
+
+### Added
+
+- **`tests/doc-reality.test.ts` 第 6 条守卫**：文档里的 `dsh plugin … add <spec>` 必须指向真实来源（本包名、本仓库 `github:` 或 URL、`link:`），引用上游命令的行除外。
+- 测试：schema 层断言别名在 schema 中可见、`ref` 是唯一必填；行为层断言用 `value` 填的值**真的进了页面**（以它触发的搜索结果为证），以及缺值时错误同时点出两种写法与 `browser_click`。
+
 ## 0.5.5
 
 一句话摘要：**把 `NOTICE.md` 补进 npm 包**（此前从未随包发布过），并把发版审计固化成 `npm run preflight` —— 挂在 `prepublishOnly` 上，不通过就发不出去。

@@ -137,3 +137,29 @@ test('a numeric Critical count lives only in SECURITY.md', () => {
     'only SECURITY.md may state a numeric Critical count (others: refer to it): ' + offenders.join(', '),
   )
 })
+
+test('every documented install command names a source that exists', () => {
+  // A line like `dsh plugin --profile <name> add <spec>` is an instruction a reader will paste.
+  // It must name this package, this repository, or a link: path — never the pre-rename name
+  // (`dsh-browser-playwright`, which npm does not have) and never a typo. 2026-10-16: PLUGIN-README.md
+  // still told readers to install the old name, because it is a copy of the README from before the
+  // 0.4.0 rename; nothing was checking install commands at all.
+  const pkgName = (JSON.parse(read('package.json')) as { name: string }).name
+  const allowed = (spec: string): boolean =>
+    spec === pkgName ||
+    spec.startsWith('github:miqian-nomad/') ||
+    spec.startsWith('link:') ||
+    spec.startsWith('https://github.com/miqian-nomad/')
+  const offenders: string[] = []
+  for (const file of docFiles()) {
+    read(file)
+      .split('\n')
+      .forEach((line, i) => {
+        if (/上游|upstream/i.test(line)) return // quoting someone else's install command is fine
+        for (const match of line.matchAll(/dsh plugin\s+--profile\s+\S+\s+add\s+(\S+)/g)) {
+          if (!allowed(match[1])) offenders.push(file + ':' + (i + 1) + ' → ' + match[1])
+        }
+      })
+  }
+  assert.deepEqual(offenders, [], 'these install commands do not name a real source: ' + offenders.join(', '))
+})

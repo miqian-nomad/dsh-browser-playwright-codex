@@ -223,7 +223,7 @@ export function apply(ctx: Context, config: ToolConfig): void {
         text: {
           type: 'string',
           description:
-            'Visible label of a target shown WITHOUT a ref (plain text, e.g. generic "搜索设置"). Copied exactly as the snapshot renders it; the first visible element whose own text matches is clicked and the landing note names it.',
+            'Visible label of a target shown WITHOUT a ref (plain text, e.g. generic "搜索设置"). Copied exactly as the snapshot renders it; the first visible element whose own text matches is clicked and the landing note names it. Not a value to type — that is browser_fill\'s `text`.',
         },
       },
       output: { schema: SNAPSHOT_SCHEMA, render: renderSnapshotValue },
@@ -352,6 +352,7 @@ export function apply(ctx: Context, config: ToolConfig): void {
       name: p('fill'),
       description:
         'Replace the value of the input or select referenced by the latest snapshot. ' +
+        '`value` is accepted as an alias of `text`. ' +
         'For <select> elements the text selects the matching option label. ' +
         'IRON RULE: after filling, verify in the returned snapshot that the field actually holds the value. ' +
         'Frameworks can silently reject or transform input (controlled components, contenteditable editors, ' +
@@ -364,12 +365,31 @@ export function apply(ctx: Context, config: ToolConfig): void {
         'say so) — understand why it was ignored, then act.',
       parameters: {
         ref: { type: 'string', required: true, description: 'Input or select ref (e.g. e7) from the latest snapshot.' },
-        text: { type: 'string', required: true, description: 'Exact value to fill, or option label for selects.' },
+        text: {
+          type: 'string',
+          description:
+            'Exact value to fill, or option label for selects. (In browser_click, `text` is a label to click instead.)',
+        },
+        value: { type: 'string', description: 'Alias of `text`; if both are given, `text` wins.' },
       },
       output: { schema: SNAPSHOT_SCHEMA, render: renderSnapshotValue },
       async execute(args, exec) {
+        // `text` deliberately is NOT `required: true` here, even though in practice you must give it
+        // (or `value`). The parameter DSL is a flat property map whose only requiredness is
+        // per-property, so it cannot express "exactly one of text/value" — the `oneOf` the compiled
+        // JSON Schema supports is value-level, not object-level. The requirement is therefore
+        // enforced below, before a session is acquired (a malformed call must not launch a browser),
+        // and the message names both spellings. 2026-10-16: a reviewing model passed `value` first
+        // and only got `invalid arguments: missing required property "text"` — no way forward.
+        const value = args.text ?? args.value
+        if (value === undefined) {
+          throw new BrowserError(
+            'PARAM_MISSING',
+            'browser_fill needs the value to type: pass `text` (alias `value`). The `text` here is the value you type — for a visible label to click, use browser_click instead.',
+          )
+        }
         const session = await acquire(exec)
-        return snapshotValue(await session.fill(args.ref, args.text, exec.signal))
+        return snapshotValue(await session.fill(args.ref, value, exec.signal))
       },
     }),
   )

@@ -105,6 +105,25 @@ test('spot-check the wire projection of one schema', async () => {
   assert.ok('waitFor' in params.properties)
 })
 
+test('browser_fill takes its value under either spelling, and says so in the schema', async () => {
+  const { root } = await assemble(toolConfig)
+  const fill = root.tools.schemas().find((schema) => schema.name === 'browser_fill')
+  assert.ok(fill !== undefined)
+  const params = fill.parameters as {
+    properties: Record<string, { description?: string }>
+    required: string[]
+  }
+  // `ref` is the only hard requirement: the value may arrive as `text` or as its alias `value`.
+  assert.deepEqual(params.required, ['ref'])
+  assert.ok('text' in params.properties, 'text must stay in the schema')
+  assert.ok('value' in params.properties, 'the alias must be declared, not just tolerated')
+  // The parameter DSL is a flat property map with per-property requiredness only, so "exactly one of
+  // text/value" cannot be expressed — which makes these two descriptions the only place a model can
+  // learn the rule. Pin them, or the alias silently becomes undiscoverable again.
+  assert.match(params.properties.value.description ?? '', /alias of `text`/i)
+  assert.match(params.properties.text.description ?? '', /browser_click/i)
+})
+
 test('tool names respect the configured prefix', async () => {
   const { root } = await assemble({ ...toolConfig, toolPrefix: 'web_' })
   assert.ok(root.tools.schemas().some((schema) => schema.name === 'web_click'))

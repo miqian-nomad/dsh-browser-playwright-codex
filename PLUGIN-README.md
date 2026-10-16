@@ -1,15 +1,14 @@
-> **说明**：本文件是**上游那个插件**（[ChenyuHeee/dsh-browser-playwright](https://github.com/ChenyuHeee/dsh-browser-playwright)）的 README，
-> 保留在这里作为来源索引与行为对照；它说的 `dsh-browser-playwright`、`0.4.7` 等都是上游的，不是本包的。
-> 本包的文档见 [README.md](README.md) / [中文说明.md](中文说明.md)。
+> **说明**：本文件是本插件的**英文自述**（中文对应版是 [中文说明.md](中文说明.md)），仓库首页那份是 [README.md](README.md)。
+> （它在仓库早期曾叫 `README.md`，改名后留作插件市场的英文条目来源；包名自 0.4.0 起是 `dsh-browser-playwright-codex`。）
 
-# dsh-browser-playwright
+# dsh-browser-playwright-codex
 
 Playwright-powered browser capability for [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness): the agent drives a **visible, profile-backed browser window** through accessibility snapshots with stable element refs — no CSS-selector guessing, no full-DOM dumps. Login state survives window close and harness restarts (Codex-style personal browser), tabs, screenshots as durable image attachments, structured extraction, gated JavaScript evaluation, and Codex-inspired reliability guards (bounded render-stability waits, post-action verification, fast-fail actionability checks, crash auto-recovery) and native-dialog handling (alert/confirm/prompt/beforeunload are parked as a pending state, reported to the model, and answered only by an explicit `browser_dialog` call — never auto-accepted; see [DIALOG-POLICY.md](DIALOG-POLICY.md)).
 
 ## Install
 
 ```sh
-dsh plugin --profile <name> add dsh-browser-playwright
+dsh plugin --profile <name> add dsh-browser-playwright-codex
 ```
 
 The bundle mounts three rows: the `ctx.browser` seam (`service`), the Playwright provider (`playwright`), and the model-facing tool family (`tool`).
@@ -174,9 +173,9 @@ Measured with ``npm run cost`` (per-turn, resident in the system prompt):
 
 | Surface | Tools | Schema characters | ≈ tokens/turn |
 |---|---|---|---|
-| Schema defaults (`Config({})`, no patch layer) | 20 | 15,033 | ≈ 4,176 |
-| Shipped bundle layer (this package's `cordis.patch.yml`: both power gates off) | 20 | 15,033 | ≈ 4,176 |
-| Everything registered (`registerDisabledTools: true`, plus `extract`) | 23 | 17,886 | ≈ 4,968 |
+| Schema defaults (`Config({})`, no patch layer) | 20 | 15,269 | ≈ 4,241 |
+| Shipped bundle layer (this package's `cordis.patch.yml`: both power gates off) | 20 | 15,269 | ≈ 4,241 |
+| Everything registered (`registerDisabledTools: true`, plus `extract`) | 23 | 18,122 | ≈ 5,034 |
 
 Three things changed here, and only one of them was about size. (1) The click family was rewritten so each rule is stated once instead of three times: -390 characters, with every rule, example and rationale pinned by `tests/tool-descriptions.test.ts`, so a trim that eats one fails the build. (2) A gated tool is registered only while its capability is live — `browser_extract` on this deployment: -456 characters ≈ 127 tokens/turn. (3) Four descriptions were corrected to match the code they describe (dialog blocking, the gated diagnostics `browser_fill` points at, persistent-mode `browser_close`, and `browser_click_at`'s landing note), which added 211 characters back because the old wording promised behaviour the implementation did not have. Net: 18,065 → 17,886 characters with everything registered; the shipped layer's total is identical to the schema-defaults row above, because it keeps both power gates off — those schemas are not registered at all and cost nothing. What is left is per-tool prose rather than repetition, so a further cut trades away real guidance.
 
