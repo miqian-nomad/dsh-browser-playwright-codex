@@ -217,7 +217,9 @@ power tools on or off — no restart, no YAML. The card also lists **which sites
 signed in to**. Two things make that list trustworthy: cookies are attributed **first-party** — only
 domains this browser actually visited are candidates, because a tracker's cookie belongs to the site
 you were browsing, not to the tracker — and "looks signed in" follows OWASP's session-ID criteria
-(an `HttpOnly` cookie *and* a session-scoped or token-shaped one), not cookie names or counts. It is
+(an `HttpOnly` cookie *and* a session-scoped or token-shaped one), not cookie names or counts. Each row also says **what the site is** (`jinritemai.com` → 巨量千川（抖音电商广告后台）): the page's
+own title when the browser has that domain open, otherwise a curated offline table, otherwise just the
+domain — never a guess. It is
 labelled as an inference rather than a fact. It shows domain names,
 counts and signal labels — never cookie names and never values; nothing is written to disk; and no
 tool exposes it to the model, so an agent cannot read this list. It is a separate package because

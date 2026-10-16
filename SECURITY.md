@@ -137,3 +137,5 @@ exact finding — the point of this file is that the answer does not have to be 
   `GET /api/browser-playwright/logins`，而该路由**强制要求 `x-dsh-plugin: browser-toggle` 自定义头**
   （自定义头会触发 CORS 预检，浏览器里的其它页面因此读不到它）。这条路由有测试盯着：不带头的请求必须 403。
 - **它只是推断。** "有 cookie"不等于"登录着"，所以界面写的是"推测登录"；需要更确定时请自己打开窗口看。
+- **域名说明也不出网。** "这个域名是什么"来自两处：当前打开页面的标题，以及包内一份离线对照表
+  （`src/site-aliases.ts`）。不查在线接口、不下载图标、不发送域名给任何第三方。

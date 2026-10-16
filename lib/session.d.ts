@@ -61,6 +61,12 @@ export declare class PlaywrightSession {
      * login inference attributes cookies to. Taken from the live pages rather than the browser's
      * history database: the plugin only claims what it can see, and never reads a new data source.
      */
+    /**
+     * Page titles by registrable domain for the pages currently open — the site's own name for
+     * itself, which is what browsers and password managers show instead of a bare hostname. Titles
+     * are display-only and trimmed; a domain with no open page simply has no title.
+     */
+    siteTitles(): Promise<Map<string, string>>;
     visitedHosts(): string[];
     /** Run one operation under busy tracking: idle disposal defers until it settles. */
     run<T>(operation: () => Promise<T>): Promise<T>;

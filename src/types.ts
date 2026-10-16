@@ -216,6 +216,8 @@ export interface BrowserSession {
    * that was visited rather than to whoever set them.
    */
   visitedHosts(): string[]
+  /** Page titles by registrable domain, for display only; empty when nothing is open. */
+  siteTitles(): Promise<Map<string, string>>
   /** Evaluate one JavaScript expression and return its JSON result. */
   evaluate(expression: string, signal?: AbortSignal): Promise<unknown>
   /** Click the element whose visible text matches, by semantic locator. */

@@ -7,6 +7,7 @@
  */
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
+import { siteAlias } from '../src/site-aliases.ts'
 import {
   registrableDomain,
   isTracker,
@@ -239,4 +240,45 @@ test('载荷的统计要诚实：likelyTotal / total / thirdPartyTotal 都在', 
   assert.equal(payload.total, 3)
   assert.equal(payload.likelyTotal, 2, 'one 与 three 像登录态，two 只有 httpOnly')
   assert.equal(payload.thirdPartyTotal, 1)
+})
+
+test('网页自己的标题会随行带出，且只在知道时才有', () => {
+  // 认不出域名是这个功能真实的痛点（用户原话："我都不知道我登的这些是什么"）。浏览器与密码管理器
+  // 的做法是显示网页自己的标题 —— 那是网站自己报的名字，不会过期。导出文件里没有标题，所以快照路径
+  // 天然为空，卡片就只显示域名。
+  const rows = [cookie('sid', 'example.com', { httpOnly: true }), cookie('sid', 'notitle.example', { httpOnly: true })]
+  const withTitles = summarizeLoginSites(rows, 'live', NOW, {
+    titles: new Map([['example.com', '  示例站点   首页  ']]),
+  })
+  const byDomain = new Map(withTitles.sites.map((s) => [s.domain, s]))
+  assert.equal(byDomain.get('example.com')?.title, '示例站点 首页', '标题应被规整（去多余空白）')
+  assert.equal(byDomain.get('notitle.example')?.title, undefined, '没有标题时不该编一个')
+  const withoutTitles = summarizeLoginSites(rows, 'snapshot', NOW)
+  assert.equal(withoutTitles.sites[0]?.title, undefined, '快照路径没有标题')
+  // 标题只用于展示：不得因此把 cookie 名或值带出去
+  const serialized = JSON.stringify(withTitles)
+  for (const forbidden of ['"value"', '"name"', 'sid']) {
+    assert.ok(!serialized.includes(forbidden), '产出里不该出现 ' + forbidden)
+  }
+})
+
+test('域名说明：认识的说清楚、不认识的不瞎猜', () => {
+  // 用户原话："我都不知道我登的这些是什么"。对照表只解释确实认识的；认不出就返回 undefined，
+  // 界面退回显示域名本身，绝不给一个编出来的名字。
+  assert.equal(siteAlias('jinritemai.com'), '巨量千川（抖音电商广告后台）')
+  assert.equal(siteAlias('.JD.COM'), '京东', '大小写与前导点都要能对上')
+  assert.ok(siteAlias('a-mo.net')?.includes('广告'), '广告域要标出来')
+  assert.equal(siteAlias('some-unknown-host.example'), undefined, '不认识就留空')
+  assert.equal(siteAlias(''), undefined)
+})
+
+test('载荷里的每行都带上说明（有就带，没有就不带）', () => {
+  const payload = summarizeLoginSites(
+    [cookie('sid', 'jinritemai.com', { httpOnly: true }), cookie('sid', 'unknown-xyz.example', { httpOnly: true })],
+    'live',
+    NOW,
+  )
+  const byDomain = new Map(payload.sites.map((s) => [s.domain, s]))
+  assert.equal(byDomain.get('jinritemai.com')?.alias, '巨量千川（抖音电商广告后台）')
+  assert.equal(byDomain.get('unknown-xyz.example')?.alias, undefined)
 })

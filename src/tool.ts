@@ -129,8 +129,13 @@ export function apply(ctx: Context, config: ToolConfig): void {
     lastLoginPublish = now
     void session
       .cookieJar()
-      .then((rows) => {
-        publishLoginSites(summarizeLoginSites(rows, 'live', now, { visited: session.visitedHosts() }))
+      .then(async (rows) => {
+        publishLoginSites(
+          summarizeLoginSites(rows, 'live', now, {
+            visited: session.visitedHosts(),
+            titles: await session.siteTitles(),
+          }),
+        )
       })
       .catch(() => {
         /* display-only: a failed cookie read must not surface as a tool failure */

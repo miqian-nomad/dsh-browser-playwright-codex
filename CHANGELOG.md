@@ -7,6 +7,15 @@ languages, the individual entries follow the language the surrounding code and d
 
 一句话摘要：**`browser_fill` 现在也接受 `value` 这个参数名**（模型按语义猜也能一次成功），缺值时给的是指路错误，而不是"缺少属性 text"。
 
+### Added
+
+- **每一行写明"这个域名是什么"**（用户："我都不知道我登的这些是什么"）：优先用**网页自己的标题**
+  （浏览器与密码管理器的做法，网站自己报的名字，不出网），其次包内一份**离线对照表**
+  （`src/site-aliases.ts`，60 多条：国内平台、京东系一大家子、国外服务，以及被明确标注的广告/统计域），
+  认不出的只显示域名、不编。广告/统计域被标出来本身就是提示 —— 它出现在"像登录态"里通常说明判据被
+  数据相似性骗了。`LoginSite` 新增 `alias?` 与 `title?`（标题由 `session.siteTitles()` 提供，
+  `page.title()` 是异步的，所以该方法是 async）。
+
 ### Fixed
 
 - **`browser_fill` 参数名歧义（评审 A1）**：`value` 作为 `text` 的别名被接受，两者都给时 `text` 优先。缺值时抛 `PARAM_MISSING`，消息同时点出两种写法，并说明"`text` 是要填入的值（要点可见标签请用 `browser_click`）"；这条检查在**获取会话之前**，所以参数传错不会白开一个浏览器。schema 里 `text` 不再是 required —— 参数 DSL 是扁平属性表、required 只能逐属性标，表达不了"text 与 value 二选一"，只能在处理函数里兜，代码注释写明了原因。

@@ -49,6 +49,18 @@ export interface LoginSite {
     tokenLike: number;
     /** Inference, not a fact: see the module header. */
     likely: boolean;
+    /**
+     * The page's own title, when the browser has that domain open. This is how browsers and password
+     * managers make a hostname recognizable: the site names itself, and nothing goes stale. Absent for
+     * domains read from an exported state file (titles are not part of a cookie export).
+     */
+    title?: string;
+    /**
+     * A short Chinese explanation of what this domain is ("巨量千川（抖音电商广告后台）"), from the
+     * curated table in site-aliases.ts. Absent when we do not actually know — the card then falls back
+     * to the page title, and finally to the bare domain. Never a guess.
+     */
+    alias?: string;
     /** Short labels explaining the score — never cookie names. */
     signals: string[];
 }
@@ -105,10 +117,12 @@ export declare function looksLikeToken(value: string): boolean;
  * @param source - where those cookies came from, for the card's label.
  * @param now - epoch ms, injectable so tests are not time-dependent.
  * @param options.visited - registrable domains the browser actually visited; the rest is third-party.
+ * @param options.titles - page titles by registrable domain, for display only.
  * @param options.maxSites - display cap; defaults to {@link MAX_SITES}.
  * @returns the display payload.
  */
 export declare function summarizeLoginSites(rows: readonly CookieRow[], source: 'live' | 'snapshot', now: number, options?: {
     visited?: readonly string[] | ReadonlySet<string>;
+    titles?: ReadonlyMap<string, string>;
     maxSites?: number;
 }): LoginSites;
