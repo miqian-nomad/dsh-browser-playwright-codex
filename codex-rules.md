@@ -56,17 +56,17 @@
 |---|---|---|
 | 同 URL 不重复导航 | `browser_navigate` | 重导同 URL 会丢用户输入 |
 | 快照=最便宜状态检查；快照/截图二选一 | `browser_snapshot` | 动作后先确认生效再走下一步 |
-| 点击后校验生效；无效不盲试、不降坐标 | `browser_click` / `browser_click_at` | 先查拦截者再重试语义动作 |
-| 读 landing note：被截获=失败 | `browser_click` / `browser_click_at` | 落点不是目标即重瞄 |
+| 点击后校验生效；无效不盲试、不降坐标 | `browser_click`（含 `precise: true`）| 先查拦截者再重试语义动作 |
+| 读 landing note：被截获=失败 | `browser_click` | 落点不是目标即重瞄 |
 | 当前页没变化≠点击失败；先列页签 | `browser_click` | `target="_blank"` 会开新标签页 |
-| 悬停只揭示内容；看 ref 数变化 | `browser_hover` | 没 ref 的触发器可用 `text` 按可见文字悬停；没新 ref 就换父级/容器，别原样重试、别降坐标 |
+| 悬停只揭示内容；看 ref 数变化 | `browser_click`（`mode: "hover"`）| 没 ref 的触发器可用 `text` 按可见文字悬停；没新 ref 就换父级/容器，别原样重试、别降坐标 |
 | 没 ref 的标签也能点 | `browser_click` | 用 `text` 原样抄可见文字；有 ref 时优先 ref；点浮现菜单项前先 `hover` 让它留在屏幕上 |
 | 填充后校验 value 真写入 | `browser_fill` | 框架会静默拒绝/改写输入 |
 | 按键后校验真生效 | `browser_press` | 别假设 Enter 提交成功了 |
 | evaluate 只读优先；裸 DOM 赋值不更新框架态 | `browser_evaluate` | contenteditable 重复输入根因提示 |
 | CDP 是逃生舱不是后门；改了状态要告知 | `browser_cdp` | 直接改动页面必须在最终回复说明 |
 
-改动文件：`lib/tool.js`（description 文案）、`lib/playwright.js`（`browser_hover` / `browser_click` 均支持 ref 与 text 两种定位；共用页内标签解析 `labelTargetProbe`；悬停前后 ref 数对比 + 落地提示）、`lib/types.d.ts`。生效需重启 DSH。
+改动文件：`lib/tool.js`（description 文案）、`lib/playwright.js`（`browser_click` 的 click 与 hover 两种模式均支持 ref 与 text 定位；共用页内标签解析 `labelTargetProbe`；悬停前后 ref 数对比 + 落地提示）、`lib/types.d.ts`。生效需重启 DSH。
 
 ---
 

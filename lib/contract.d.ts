@@ -9,14 +9,14 @@
  * Tool name suffixes in registration order; a wire name is `prefix + suffix`.
  * Gated suffixes are kept in the same list so the full surface stays visible.
  */
-export declare const TOOL_SUFFIXES: readonly ["navigate", "snapshot", "click", "dialog", "click_at", "hover", "fill", "press", "scroll", "back", "forward", "wait", "tabs", "switch_tab", "open_tab", "close_tab", "screenshot", "extract", "evaluate", "cdp", "console_messages", "network_requests", "close"];
+export declare const TOOL_SUFFIXES: readonly ["navigate", "snapshot", "click", "dialog", "fill", "press", "scroll", "back", "forward", "wait", "tabs", "switch_tab", "open_tab", "close_tab", "screenshot", "extract", "evaluate", "cdp", "console_messages", "network_requests", "close"];
 /** One tool name suffix. */
 export type ToolSuffix = (typeof TOOL_SUFFIXES)[number];
 /**
  * Suffixes registered unconditionally. They are always in the system prompt,
  * so this list is also the resident schema cost of the plugin.
  */
-export declare const ALWAYS_ON_SUFFIXES: readonly ["navigate", "snapshot", "click", "dialog", "click_at", "hover", "fill", "press", "scroll", "back", "forward", "wait", "tabs", "switch_tab", "open_tab", "close_tab", "screenshot", "console_messages", "network_requests", "close"];
+export declare const ALWAYS_ON_SUFFIXES: readonly ["navigate", "snapshot", "click", "dialog", "fill", "press", "scroll", "back", "forward", "wait", "tabs", "switch_tab", "open_tab", "close_tab", "screenshot", "console_messages", "network_requests", "close"];
 /**
  * Suffixes registered only when their capability is enabled (or configured):
  * a tool the deployment disabled can only error, so shipping its schema would

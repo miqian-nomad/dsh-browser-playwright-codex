@@ -18,69 +18,24 @@ import type { ToolConfig } from '../src/tool.ts'
  * This table is the real budget: the character cap below only catches prose that
  * grows back, while every entry here is a fact a previous trim could have eaten.
  */
+/**
+ * 2026-10-16：click / hover / click_at 合并成一个 browser_click，所以这张表从三个键并成一个键。
+ * 下面每条都对应一次真实踩坑，合并时逐条确认过"这句话还在描述里"；被删掉的是枚举性文字和
+ * 低风险风格建议（例如"别悬停你本来就要点的链接"），不是失败教训。
+ */
 const RULES: Record<string, { id: string; pattern: RegExp }[]> = {
   browser_click: [
-    { id: 'what it does', pattern: /Click the element with the given ref[\s\S]*return the new snapshot/i },
-    { id: 'stale refs → fresh snapshot', pattern: /Refs go stale[\s\S]*snapshot[\s\S]*if a ref fails/i },
-    { id: 'ref preferred; text for no-ref targets', pattern: /Prefer ref[\s\S]*WITHOUT a ref[\s\S]*pass text/i },
+    {
+      id: 'what it does (click, or reveal with mode hover)',
+      pattern: /Click the target from the latest snapshot[\s\S]*mode:"hover"[\s\S]*new snapshot/i,
+    },
+    {
+      id: 'ref preferred, text for no-ref targets, copied exactly',
+      pattern: /Best target first[\s\S]*shown WITHOUT a ref/i,
+    },
     { id: 'label copied exactly as rendered', pattern: /copied exactly as rendered/i },
-    { id: 'a revealed item may need hover first', pattern: /revealed[\s\S]*hover[\s\S]*first/i },
-    { id: 'verify the effect after clicking', pattern: /IRON RULE: after the click, verify[\s\S]*actually happened/i },
-    { id: 'no blind repeat', pattern: /do NOT blindly repeat/i },
-    { id: 'no raw-coordinate fallback', pattern: /do NOT fall back to[\s\S]*raw coordinates/i },
-    { id: 'find the blocker or interception first', pattern: /blocker or interception/i },
-    { id: 'retry the most direct semantic action', pattern: /most direct semantic action/i },
-    { id: 'landing note → treat as failed and retarget', pattern: /landing note[\s\S]*retarget/i },
-    { id: 'no change may still be success: check tabs', pattern: /tabs[\s\S]*new tab[\s\S]*before concluding/i },
-    { id: 'same-page overlay counts as success', pattern: /overlay[\s\S]*success/i },
-    { id: 'a dialog stays PENDING', pattern: /PENDING[\s\S]*dialog text/i },
-    { id: 'answer the dialog with the dialog tool', pattern: /answer it with[\s\S]*dialog/i },
-    {
-      id: 'no way to accept a dialog from this tool',
-      pattern: /no way to accept a dialog[\s\S]*separate, deliberate call/i,
-    },
-    { id: 'the effect may be a dialog', pattern: /selection, toast, dialog, new content/i },
-    { id: 'a new tab comes from a target="_blank" link', pattern: /a target="_blank" link/i },
-    {
-      id: 'compare refs and content with the pre-click snapshot',
-      pattern: /compare its refs and content with the pre-click snapshot/i,
-    },
-    {
-      id: 'inspect the visible state for the blocker',
-      pattern: /inspect the visible state for the blocker or interception/i,
-    },
-  ],
-  browser_click_at: [
-    { id: 'two modes', pattern: /two modes/i },
-    { id: 'ref mode clicks the geometric centre', pattern: /geometric centre/i },
-    { id: 'raw mode is viewport CSS pixels', pattern: /x\/y viewport CSS pixels/i },
-    { id: 'it is the fallback, not routine', pattern: /FALLBACK, not a routine alternative/i },
-    { id: 'try click (incl. text mode) first', pattern: /click[\s\S]*including its text mode[\s\S]*first/i },
-    { id: 'ref mode only after click reports a failure', pattern: /not actionable|could not be delivered/i },
-    { id: 'raw x/y is a last resort (canvas hit areas)', pattern: /last resort[\s\S]*canvas/i },
-    {
-      id: 'a raw click still reports what it hit',
-      pattern: /raw clicks still return a landing note/i,
-    },
-    { id: 'verify the effect', pattern: /verify the effect in the returned snapshot/i },
-    { id: 'no blind repeat, no more raw coordinates', pattern: /do NOT repeat blindly[\s\S]*raw coordinates/i },
-    { id: 'find the blocker or interception first', pattern: /blocker or interception/i },
-    {
-      id: 'CAUTION note when ref mode fell back to coordinates',
-      pattern: /fall back to a bare click[\s\S]*CAUTION note/i,
-    },
-    { id: 'intercepted → failed and retarget', pattern: /treat it as failed and retarget/i },
-    { id: 'ref mode scrolls the element into view', pattern: /the element is scrolled into view/i },
-    {
-      id: 'ref mode needs no measuring or dpr guesswork',
-      pattern: /no screenshot measuring, no devicePixelRatio guesswork/i,
-    },
-  ],
-  browser_hover: [
-    {
-      id: 'what it does (ref or visible text)',
-      pattern: /Hover the element with the given ref[\s\S]*label equals text/i,
-    },
+    { id: 'raw x/y is a last resort (canvas hit areas)', pattern: /last resort[\s\S]*canvas-drawn hit areas/i },
+    { id: 'stale refs → fresh snapshot', pattern: /Refs go stale[\s\S]*if a ref fails/i },
     { id: 'hover only reveals, never activates', pattern: /only REVEALS content and never activates/i },
     {
       id: 'use it when content hides until the pointer rests',
@@ -90,30 +45,42 @@ const RULES: Record<string, { id: string; pattern: RegExp }[]> = {
       id: 'especially when the snapshot lacks an expected element',
       pattern: /lacks an element the page obviously should have/i,
     },
-    {
-      id: 'text mode only for a no-ref label, exactly as rendered',
-      pattern: /text only for a label shown WITHOUT a ref[\s\S]*copied exactly as rendered/i,
-    },
-    {
-      id: 'do not hover links/buttons you mean to activate',
-      pattern: /Do not hover plain links\/buttons you mean to activate/i,
-    },
-    { id: 'never hover "just in case"', pattern: /never hover "just in case"/i },
     { id: 'a hover returning is not proof', pattern: /only means the pointer moved/i },
     { id: 'read the ref-count comparison note', pattern: /comparing the actionable ref count before and after/i },
     {
       id: 'new refs: pre-hover refs are stale, act before the menu closes',
       pattern: /pre-hover refs are stale[\s\S]*closes the menu/i,
     },
-    { id: 'IRON RULE when no new refs appear', pattern: /IRON RULE: if the note reports no new refs/i },
-    { id: 'do not repeat the hover', pattern: /do NOT repeat the hover/i },
+    { id: 'no new refs: do not repeat the hover', pattern: /do NOT repeat the hover/i },
     { id: 'no fallback to raw coordinates', pattern: /do NOT fall back to[\s\S]*raw coordinates/i },
     { id: 'try the parent/container or owning sibling', pattern: /parent\/container or the sibling/i },
     { id: 'otherwise: visible alternative or tell the user', pattern: /visible alternative or tell the user/i },
     {
-      id: 'hover-only controls, named',
-      pattern: /account menus, tooltips, previews, chart values, player controls/i,
+      id: 'precise: geometric centre through native input',
+      pattern: /scrolled into view[\s\S]*exact centre through native input/i,
     },
+    {
+      id: 'precise needs no measuring or dpr guesswork',
+      pattern: /no screenshot measuring, no devicePixelRatio guesswork/i,
+    },
+    {
+      id: 'precise is the fallback, only after a failed ref click',
+      pattern: /FALLBACK, not a routine alternative[\s\S]*not actionable/i,
+    },
+    { id: 'verify the effect after clicking', pattern: /IRON RULE: verify the effect in the returned snapshot/i },
+    { id: 'the effect may be a dialog or new content', pattern: /URL, selection, toast, dialog, new content/i },
+    { id: 'no change may still be success: check tabs', pattern: /tabs[\s\S]*new tab[\s\S]*before concluding/i },
+    { id: 'a new tab comes from a target="_blank" link', pattern: /a target="_blank" link/i },
+    { id: 'same-page overlay counts as success', pattern: /same-page overlay as success/i },
+    {
+      id: 'landing note → treat as failed and retarget',
+      pattern: /landing note[\s\S]*treat it as failed and retarget/i,
+    },
+    { id: 'no blind repeat', pattern: /do NOT blindly repeat/i },
+    { id: 'find the blocker or interception first', pattern: /blocker or interception first/i },
+    { id: 'retry the most direct semantic action', pattern: /most direct semantic action/i },
+    { id: 'a dialog stays PENDING', pattern: /stays PENDING[\s\S]*dialog text/i },
+    { id: 'answer the dialog with the dialog tool', pattern: /cannot accept it[\s\S]*separate, deliberate call/i },
   ],
 }
 
@@ -153,10 +120,15 @@ test('assemble the full tool surface once', async () => {
 })
 
 test('every description stays within the SNAPSHOT-RULES budget', async () => {
+  // 默认每条 ≤1650。承接过多个同类工具的合并工具额度更高：browser_click 吸收了 click_at 与 hover，
+  // 去重后仍要 ~2165 字符才能把原来 46 条规则里的核心（含"精确点击兜底""悬停揭示失败怎么办"这两段
+  // 失败路径，规范里的五要素之一）一条不丢地说完。整个描述面的总量上限另有断言，这里只是单品额度。
+  const CONSOLIDATED: Record<string, number> = { browser_click: 2400 }
   for (const [name, description] of descriptions) {
+    const cap = CONSOLIDATED[name] ?? 1650
     assert.ok(
-      description.length <= 1650,
-      `${name} description is ${description.length} characters; SNAPSHOT-RULES §5 caps it at 1650`,
+      description.length <= cap,
+      `${name} description is ${description.length} characters; SNAPSHOT-RULES §5 caps it at ${cap}`,
     )
   }
 })

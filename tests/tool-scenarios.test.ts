@@ -604,7 +604,7 @@ test('native dialog: parked on the page, blocking other tools, answered only exp
 // ---------------------------------------------------------------------------
 // Link and tab policy: EVERY path that could reach another host enforces
 // allowedDomains. Two regressions this pins:
-//   * browser_click_at resolved an element (or a point) and clicked it without
+//   * browser_click with precise:true (or raw x/y) resolved an element and clicked it without
 //     ever asking the policy, so a disallowed host was one click_at away while
 //     browser_click refused it;
 //   * a tab a page opened itself (window.open / target="_blank") bypassed the
@@ -664,12 +664,12 @@ test('click policy: ref, geometric-ref and raw clicks all refuse a disallowed ho
     const viaClick = await call(ctx, 'browser_click', { ref: externalRef }, agentId)
     await assertRefused(viaClick, 'browser_click')
 
-    const viaGeometricRef = await call(ctx, 'browser_click_at', { ref: externalRef }, agentId)
-    await assertRefused(viaGeometricRef, 'browser_click_at (ref mode)')
+    const viaGeometricRef = await call(ctx, 'browser_click', { ref: externalRef, precise: true }, agentId)
+    await assertRefused(viaGeometricRef, 'browser_click precise ref mode')
 
     // #external occupies y=0..40 of the viewport, above everything else.
-    const viaRaw = await call(ctx, 'browser_click_at', { x: 10, y: 20 }, agentId)
-    await assertRefused(viaRaw, 'browser_click_at (raw mode)')
+    const viaRaw = await call(ctx, 'browser_click', { x: 10, y: 20 }, agentId)
+    await assertRefused(viaRaw, 'browser_click raw mode')
 
     // The page never left the allowed host.
     const after = await call(ctx, 'browser_snapshot', {}, agentId)
@@ -695,7 +695,7 @@ test('click policy: an in-page javascript: link is clickable and stays on the pa
     assert.equal(clicked.isError, false, textBlock(clicked))
 
     // The same link by raw coordinates (y=40..80).
-    const rawClicked = await call(ctx, 'browser_click_at', { x: 10, y: 60 }, agentId)
+    const rawClicked = await call(ctx, 'browser_click', { x: 10, y: 60 }, agentId)
     assert.equal(rawClicked.isError, false, textBlock(rawClicked))
   } finally {
     await provider.dispose()

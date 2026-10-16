@@ -78,14 +78,13 @@ Or pin a binary: `launch.executablePath` / `launch.channel` in the plugin config
 
 ## Tools
 
-The default `toolPrefix` is `browser_`. Every action returns a fresh snapshot, so refs always come from the latest result. The registered set is capability-gated: `browser_evaluate`, `browser_cdp` and `browser_extract` appear only when their capability is switched on (their schemas are resident in the system prompt on every turn, so a tool that could only answer "disabled" would be pure prompt cost). Count the live surface with `npm run cost` — the shipped `cordis.patch.yml` keeps **both power gates off** (since 0.4.7), so a profile mounting this bundle sees **20 tools**; 21 or 22 once your deployment opts into `evaluate` / `cdp`, 23 once `extract` is configured. How to opt in: [SECURITY.md](SECURITY.md) §1.
+The default `toolPrefix` is `browser_`. Every action returns a fresh snapshot, so refs always come from the latest result. The registered set is capability-gated: `browser_evaluate`, `browser_cdp` and `browser_extract` appear only when their capability is switched on (their schemas are resident in the system prompt on every turn, so a tool that could only answer "disabled" would be pure prompt cost). Count the live surface with `npm run cost` — the shipped `cordis.patch.yml` keeps **both power gates off** (since 0.4.7), so a profile mounting this bundle sees **18 tools**; 19 or 20 once your deployment opts into `evaluate` / `cdp`, 21 once `extract` is configured. How to opt in: [SECURITY.md](SECURITY.md) §1.
 
 | Tool | Purpose |
 |---|---|
 | `browser_navigate` | Open a URL (http/https only) and return the snapshot |
 | `browser_snapshot` | Snapshot the current page: URL, title, visible elements with `ref=` ids |
-| `browser_click` | Click the element with a `ref` — or a visible label the snapshot gave no ref, e.g. `{ text: "搜索设置" }` — from the latest snapshot; a dialog raised by a click stays pending — answer it with `browser_dialog` |
-| `browser_hover` | Rest the pointer on a `ref` — or on a visible label the snapshot gave no ref, e.g. `{ text: "设置" }` — so hover-revealed content appears (submenus, tooltips, previews, player controls); the returned snapshot names the target and notes whether the actionable ref count grew |
+| `browser_click` | Click the target from the latest snapshot — a `ref`, a visible label the snapshot gave no ref (e.g. `{ text: "搜索设置" }`), or raw `x`/`y` viewport pixels as a last resort — or rest the pointer on it without activating anything with `mode: "hover"` (submenus, tooltips, previews, player controls); `precise: true` takes a ref click down the geometric-centre path. The returned snapshot opens with a landing note naming what received the click, and a dialog raised by a click stays pending — answer it with `browser_dialog` |
 | `browser_fill` | Replace an input's value; selects match by option label |
 | `browser_press` | Press a key (Enter, Tab, Escape, ArrowDown, …) on an element |
 | `browser_scroll` | Scroll the page or bring a ref into view |
@@ -96,7 +95,6 @@ The default `toolPrefix` is `browser_`. Every action returns a fresh snapshot, s
 | `browser_extract` | Structured extraction: natural-language instruction → one parsed JSON value | **Only registered when enabled.**
 | `browser_evaluate` | Run one JavaScript expression in the page (disabled by default) | **Only registered when enabled.**
 | `browser_dialog` | Answer the native dialog blocking the page: `{ accept: true }` confirms, `false` cancels; errors with `NO_DIALOG` when nothing is pending |
-| `browser_click_at` | Precise native click: ref mode (geometric centre, Codex-style) or raw x/y mode; reports the actual landing element |
 | `browser_cdp` | Send one raw CDP command (DOM inspection / Input simulation allow-list only; disabled by default) | **Only registered when enabled.**
 | `browser_close` | Close the session's browser window; the profile keeps login state, so the next call reopens signed in |
 | `browser_console_messages` | Read the page console messages captured for the current page (levels, text, source) |
@@ -234,11 +232,11 @@ Measured with ``npm run cost`` (per-turn, resident in the system prompt):
 
 | Surface | Tools | Schema characters | ≈ tokens/turn |
 |---|---|---|---|
-| Schema defaults (`Config({})`, no patch layer) | 20 | 15,269 | ≈ 4,241 |
-| Shipped bundle layer (this package's `cordis.patch.yml`: both power gates off) | 20 | 15,269 | ≈ 4,241 |
-| Everything registered (`registerDisabledTools: true`, plus `extract`) | 23 | 18,122 | ≈ 5,034 |
+| Schema defaults (`Config({})`, no patch layer) | 18 | 12,755 | ≈ 3,543 |
+| Shipped bundle layer (this package's `cordis.patch.yml`: both power gates off) | 18 | 12,755 | ≈ 3,543 |
+| Everything registered (`registerDisabledTools: true`, plus `extract`) | 21 | 15,608 | ≈ 4,336 |
 
-Three things changed here, and only one of them was about size. (1) The click family was rewritten so each rule is stated once instead of three times: -390 characters, with every rule, example and rationale pinned by `tests/tool-descriptions.test.ts`, so a trim that eats one fails the build. (2) A gated tool is registered only while its capability is live — `browser_extract` on this deployment: -456 characters ≈ 127 tokens/turn. (3) Four descriptions were corrected to match the code they describe (dialog blocking, the gated diagnostics `browser_fill` points at, persistent-mode `browser_close`, and `browser_click_at`'s landing note), which added 211 characters back because the old wording promised behaviour the implementation did not have. Net: 18,065 → 17,886 characters with everything registered; the shipped layer's total is identical to the schema-defaults row above, because it keeps both power gates off — those schemas are not registered at all and cost nothing. What is left is per-tool prose rather than repetition, so a further cut trades away real guidance.
+Three things changed here, and only one of them was about size. (1) The click family was rewritten so each rule is stated once instead of three times: -390 characters, with every rule, example and rationale pinned by `tests/tool-descriptions.test.ts`, so a trim that eats one fails the build. (2) A gated tool is registered only while its capability is live — `browser_extract` on this deployment: -456 characters ≈ 127 tokens/turn. (3) Four descriptions were corrected to match the code they describe (dialog blocking, the gated diagnostics `browser_fill` points at, persistent-mode `browser_close`, and the click family’s landing note), which added 211 characters back because the old wording promised behaviour the implementation did not have. Net: 18,065 → 17,886 characters with everything registered; the shipped layer's total is identical to the schema-defaults row above, because it keeps both power gates off — those schemas are not registered at all and cost nothing. What is left is per-tool prose rather than repetition, so a further cut trades away real guidance.
 
 #### KV Cache effect
 
@@ -281,7 +279,7 @@ Written for people deciding whether to hand an agent their browser:
   ```
 - **Chromium family only** — Firefox/WebKit channels are not probed; providers are swappable if another engine is needed.
 - **Extract needs a dedicated model route** — it does not reuse the main request's route; misconfiguration fails loudly at call time.
-- **JS-driven navigations are not statically checkable** — `allowedDomains` covers `browser_navigate`, `browser_open_tab`, every click path (`browser_click`, `browser_click_at` in both ref and raw-coordinate mode) and `browser_switch_tab`, but a button whose handler runs `location.href = …` can still leave the allowed hosts, and a tab that is already sitting on a disallowed host stays open (the agent simply refuses to drive it); deploy an external network guard for hard isolation.
+- **JS-driven navigations are not statically checkable** — `allowedDomains` covers `browser_navigate`, `browser_open_tab`, every click path (`browser_click`: ref, `precise`, raw-coordinate and `mode:"hover"` modes) and `browser_switch_tab`, but a button whose handler runs `location.href = …` can still leave the allowed hosts, and a tab that is already sitting on a disallowed host stays open (the agent simply refuses to drive it); deploy an external network guard for hard isolation.
 - **Stability waits are bounded by design** — a perpetually animating element falls back to a forced click on its current rect rather than stalling; a page that never settles is snapshotted after the cap. This is intentional: the agent must never hang.
 
 ### Ref and lifecycle safety (fixed)
@@ -289,7 +287,7 @@ Written for people deciding whether to hand an agent their browser:
 The scenario suites originally surfaced four hazards, now fixed and regression-tested:
 
 - **Stale refs fail fast** — refs carry a per-snapshot nonce, so after a client-side re-render a stale ref matches nothing and `browser_click` fails with `REF_NOT_FOUND` instead of silently acting on a different element.
-- **Link clicks respect `allowedDomains`** — every click path is checked before any input is delivered: `browser_click`, and `browser_click_at` in ref mode (the element's `href`) and raw-coordinate mode (the enclosing link found at the point). A disallowed host is rejected with `URL_NOT_ALLOWED`. `javascript:` links are exempt because they run in-page and navigate nowhere; other non-http(s) schemes stay refused.
+- **Link clicks respect `allowedDomains`** — every click path is checked before any input is delivered: `browser_click` — ref mode (the element's `href`), `precise` ref mode, and raw-coordinate mode (the enclosing link found at the point). A disallowed host is rejected with `URL_NOT_ALLOWED`. `javascript:` links are exempt because they run in-page and navigate nowhere; other non-http(s) schemes stay refused.
 - **A page-opened tab outside `allowedDomains` cannot be driven** — a page can open a tab itself (`target="_blank"`, `window.open`) and the plugin never sees that navigation, so the policy is applied where it can be: `browser_switch_tab` refuses to enter such a tab (the current tab is kept, the tab itself stays open for the user).
 - **Idle disposal defers during operations** — a navigation slower than `idleTimeoutMs` completes normally; disposal only fires when the session is truly idle.
 - **Mid-navigation snapshots settle** — a `browser_snapshot` racing a JS navigation waits for the new document and retries instead of surfacing a raw "Execution context was destroyed" error.

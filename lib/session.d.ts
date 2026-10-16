@@ -178,7 +178,7 @@ export declare class PlaywrightSession {
     }>;
     /**
      * Click an element the snapshot gave no ref, addressed by its visible label
-     * (e.g. a menu item revealed by browser_hover that is plain text). The
+     * (e.g. a menu item revealed by browser_click with mode "hover" that is plain text). The
      * label must equal an element's own direct text; the deepest match wins,
      * and the landing note names what was actually clicked plus how many
      * elements shared the label.

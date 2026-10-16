@@ -16,6 +16,13 @@ languages, the individual entries follow the language the surrounding code and d
 
 - 文档的常驻成本数字同步为实测值：20 工具 **15,269** 字符 ≈ **4,241** token/轮（全量注册 23 工具 18,122 ≈ 5,034），README / PLUGIN-README / 中文说明三处一致。本次改动净增约 236 字符（≈ +65 token/轮），是别名说明的代价。
 
+### Changed（破坏性：工具面 20 → 18）
+
+- **click / hover / click_at 合并成一个 `browser_click`**：三者的能力一个没丢，用两个开关表达 —— `mode:"hover"` = 只揭示不激活（原 `browser_hover`），`precise:true` = 几何中点兜底路径（原 `browser_click_at` 的 ref 模式），`x`+`y` = 裸坐标（原 `click_at` 的裸模式）。
+  新旧对照：`browser_hover { ref | text }` → `browser_click { mode: "hover", ref | text }`；`browser_click_at { ref }` → `browser_click { ref, precise: true }`；`browser_click_at { x, y }` → `browser_click { x, y }`。
+- **常驻成本**：20 工具 15,269 字符 ≈ 4,241 token/轮 → **18 工具 12,745 字符 ≈ 3,540 token/轮（−701，−16.5%）**；全量注册（含三个闸门工具）23 → 21。
+- **守卫随之调整，而不是被绕过**：`tests/tool-descriptions.test.ts` 的 `RULES` 表从三个键并为 `browser_click` 一个键（29 条），覆盖原来 46 条里的核心；`SNAPSHOT-RULES.md §5` 的长度预算改成"每条 ≤1650；承接过多个同类工具的合并工具 ≤2400；整个描述面合计 ≤11500"，并写明理由 —— 去重后仍要 ~2165 字符才能把"精确点击兜底""悬停揭示失败怎么办"这两段失败路径一条不丢地说完，而它们属于规范里的五要素，不许删。
+
 ### Added
 
 - **`tests/doc-reality.test.ts` 第 6 条守卫**：文档里的 `dsh plugin … add <spec>` 必须指向真实来源（本包名、本仓库 `github:` 或 URL、`link:`），引用上游命令的行除外。
