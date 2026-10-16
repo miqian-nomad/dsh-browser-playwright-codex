@@ -222,7 +222,7 @@ for the whole family, expandable to the individual domains. Each row also says *
 own title when the browser has that domain open, otherwise a curated offline table, otherwise just the
 domain — never a guess. It is
 labelled as an inference rather than a fact. It shows domain names,
-counts and signal labels — never cookie names and never values; nothing is written to disk; and no
+counts and signal labels — never cookie names and never values. The list is shown only to you: nothing is written to disk; and no
 tool exposes it to the model, so an agent cannot read this list. It is a separate package because
 `dsh-client-modules` rejects a package mounted from multiple loader entries, and this plugin is
 mounted as three (`service`, `playwright`, `tool`), while a Settings card needs a client module. The
