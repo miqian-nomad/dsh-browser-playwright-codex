@@ -163,3 +163,21 @@ test('every documented install command names a source that exists', () => {
   }
   assert.deepEqual(offenders, [], 'these install commands do not name a real source: ' + offenders.join(', '))
 })
+
+test('the two response-size levers stay documented', () => {
+  // interactiveOnlyDefault and snapshot.diff are the only knobs that shrink what a tool RETURNS
+  // (the resident schema cost is fixed by the tool surface). Both default to false, both are pure
+  // wins on noisy pages — and until 2026-10-16 both were absent from 中文说明.md and from the
+  // shipped cordis.patch.yml, i.e. a lever most users could not find. Presence is the assertion:
+  // their exact wording may change, but they may not silently disappear from the user-facing docs.
+  for (const doc of ['README.md', '中文说明.md']) {
+    const text = read(doc)
+    for (const key of ['interactiveOnlyDefault', 'snapshot.diff']) {
+      assert.ok(text.includes(key), doc + ' no longer documents ' + key)
+    }
+  }
+  const patch = read('cordis.patch.yml')
+  for (const leaf of ['interactiveOnlyDefault', 'diff:']) {
+    assert.ok(patch.includes(leaf), 'cordis.patch.yml no longer shows ' + leaf + ' as a configurable knob')
+  }
+})

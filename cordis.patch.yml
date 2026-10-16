@@ -32,6 +32,11 @@
         # exits. User choice: never auto-close (2026-09-04).
         idleTimeoutMs: 0
         maxSessions: 8
+        # Response-size lever (off by default): return "+/-/~" ref diffs between
+        # snapshots instead of the whole tree. Smaller returns on pages that
+        # re-render often; the model then has to hold the previous tree itself.
+        snapshot:
+          diff: false
     - id: browser-tool
       name: 'dsh-browser-playwright-codex/tool'
       config:
@@ -55,6 +60,7 @@
         #       allowEvaluate: true    # registers browser_evaluate
         #       allowCdp: true         # registers browser_cdp (needs a DSH restart)
         #       registerDisabledTools: false
+        #       interactiveOnlyDefault: false   # true = snapshot returns actionable elements only
         #       maxWaitMs: 60000
         #
         # browser_evaluate runs arbitrary page JavaScript: it can read anything in

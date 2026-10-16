@@ -174,6 +174,7 @@ All tunables are patchable through the profile's `cordis.patch.yml` (later layer
       maxNodes: 500                     # token budget per snapshot tree
       maxNameLength: 120
       maxTextLength: 300
+      diff: false                       # true = return "+/-/~" ref diffs instead of the full tree
 
 - id: browser-tool
   config:
@@ -181,6 +182,7 @@ All tunables are patchable through the profile's `cordis.patch.yml` (later layer
     allowEvaluate: false                # browser_evaluate gate
     allowCdp: false                     # browser_cdp gate (DOM inspection / Input simulation allow-list)
     registerDisabledTools: false        # register evaluate/cdp/extract even while off (discoverability vs resident prompt cost)
+    interactiveOnlyDefault: false       # true = browser_snapshot returns actionable elements only
     maxWaitMs: 60000                    # browser_wait bound
     extract:
       provider: deepseek-official       # optional: enables browser_extract
@@ -190,6 +192,22 @@ All tunables are patchable through the profile's `cordis.patch.yml` (later layer
 ```
 
 `browser_extract` needs an auxiliary LLM route (`extract.provider` + `extract.model`); without one it fails with an actionable error. With a route configured, `extract.maxInputChars` bounds the page text in that prompt, and the prompt names the cap when it truncates. A gated tool is **not registered at all** while its capability is off, so its schema never reaches the system prompt; set `registerDisabledTools: true` to keep the whole surface discoverable (the tool then answers with the error naming the switch). The shipped layer in [`cordis.patch.yml`](cordis.patch.yml) keeps `allowEvaluate` and `allowCdp` **off**, matching the schema defaults and this sample: that file travels inside the package, so anything it enabled would be enabled for everyone who installs it. Opt in per deployment, in that deployment's own patch layer. `browser_evaluate` executes arbitrary page JavaScript; `browser_cdp` stays off until `allowCdp: true`, and even then only the allow-list in `lib/cdp-policy.js` passes — network, storage, cookie, security and arbitrary-JS (`Runtime.evaluate`) commands are rejected with `CDP_DENIED`.
+
+### Two levers that shrink what tools *return*
+
+The resident schema cost is fixed, but two switches cut what each call sends back — useful on pages
+whose snapshots are long, and both are off by default because both change what the model sees:
+
+- **`snapshot.diff`** (playwright row) — returns `+` / `-` / `~` diffs against the previous snapshot,
+  keyed by stable refs, instead of the whole tree. A ref-nonce change is reported as a navigation reset,
+  and a truncated tree falls back to the full snapshot, so the model is never handed a diff it cannot
+  anchor. Turn it on when a page re-renders often and you resent paying for the same tree twice.
+- **`interactiveOnlyDefault`** (tool row) — makes `browser_snapshot` default to actionable elements
+  only; the model can still pass `interactiveOnly: false` per call when it needs the text around them.
+
+Both are honest trades, not free wins: a diff is smaller but requires the model to hold the previous
+tree, and an interactive-only snapshot hides the prose the model may want to read. Measure before
+turning them on in a deployment that shares prompts across many users.
 
 ### Prefer a switch to editing config?
 

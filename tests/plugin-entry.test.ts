@@ -73,6 +73,30 @@ test('P1 的原始故障场景：不含 snapshot 的 profile 配置也必须能�
   assert.doesNotThrow(() => void config.snapshot.engine, 'provider 在构造期就会读它')
 })
 
+test('出厂 patch 给的是"部分 snapshot"，不得重置其它默认值', () => {
+  // cordis.patch.yml 随包发给每一个安装者，它现在带 `snapshot: { diff: false }`（2026-10-16 加，
+  // 用来文档化降噪开关）。内层每个键都有自己的 default，所以"给一部分"必须与"完全不给"解析出
+  // 同一个对象 —— 否则这一行会在没人察觉的情况下把 engine / maxNodes / maxNameLength /
+  // maxTextLength 一起重置，而现有测试全都直接 new PlaywrightProvider(完整配置)，谁也发现不了。
+  const parse = schemaOf(entrySource, 'src/playwright.ts')
+  const partial = { ...PROFILE_CONFIG, snapshot: { diff: false } }
+  const withoutIt = parse(PROFILE_CONFIG) as unknown as { snapshot: Record<string, unknown> }
+  const withIt = parse(partial) as unknown as { snapshot: Record<string, unknown> }
+  assert.deepEqual(withIt.snapshot, withoutIt.snapshot, '给部分 snapshot 改变了生效值')
+  assert.deepEqual(withIt.snapshot, {
+    engine: 'legacy',
+    maxNodes: 500,
+    maxNameLength: 120,
+    maxTextLength: 300,
+    diff: false,
+  })
+  assert.deepEqual(
+    schemaOf(entryBuilt, 'lib/playwright.js')(partial),
+    withIt,
+    'lib/ 与 src/ 对"部分 snapshot"的处理不一致 —— 记得 npm run build',
+  )
+})
+
 test('产物与源码的 schema 行为一致（loader 加载的是产物）', () => {
   const fromSource = schemaOf(entrySource, 'src/playwright.ts')(PROFILE_CONFIG)
   const fromBuilt = schemaOf(entryBuilt, 'lib/playwright.js')(PROFILE_CONFIG)
