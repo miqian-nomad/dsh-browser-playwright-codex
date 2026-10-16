@@ -1,16 +1,22 @@
 /**
  * 「已登录站点」的只读推断：把 cookie 按可注册域聚合、打分，供设置页展示。
  *
- * 红线（写给下一个改这个文件的人）：
- *   1. **永不输出 cookie 的值，也不输出 cookie 的名字。** 出去的东西只有域名、条数和几个
- *      布尔信号；名字只在本模块内部用于打分。设备里存着的东西不因为它被"看一眼"就安全，
- *      所以这份数据一旦离开进程就不该再含有可冒用的内容。
- *   2. **不读 Chrome 的密码库**（Login Data）。这里只碰 cookie，且只碰浏览器自己给的那份。
- *   3. **这份数据不给模型看。** 它只经由设置页的路由出去；不注册工具、不写进 diagnostics。
+ * 两条设计来自成熟产品的做法，2026-10-16 重写时按它们改的（第一版按"谁设的域"聚合、用"名字像会话 +
+ * cookie 多"打分，结果真实名单里 `pubmatic.com`（广告交易所）和 `mmstat.com`（统计）都排在前面）：
  *
- * 另一个诚实的说明：**cookie 存在 ≠ 登录着**。任何网站都会塞分析/风控 cookie，所以先按
- * 名字剔除tracker（否则每个访问过的站看起来都像"已登录"），再按 httpOnly / 有效期 /
- * 名字特征打分，最后只给"推测"结论（`likely`），不打包票。
+ *   1. **归属看"你在哪个站"，不看"谁设的"** —— Firefox 的 Total Cookie Protection 给每个访问过的
+ *      网站一个独立 cookie jar，第三方（统计/广告）的 cookie 属于**当时浏览的那个站**，不代表你登录了它。
+ *      所以这里只把「浏览器实际访问过的域」当候选第一方，其余只报个数、不进列表。
+ *   2. **判据用 OWASP 的会话 ID 特征** —— HttpOnly + Secure + 长且高熵 + 会话级；**名字是最不可靠的
+ *      信号**（框架名可被指纹、也可被改成任意名字），所以名字与"cookie 条数"都不再能单独把一条推成
+ *      "推测登录"。
+ *
+ * 红线（写给下一个改这个文件的人）：
+ *   1. **永不输出 cookie 的值，也不输出 cookie 的名字。** 出去的东西只有域名、条数和布尔信号；
+ *      名字只在本模块内部用于统计，值只被 `session.cookieJar()` 折算成一个布尔（像不像令牌）。
+ *   2. **不读 Chrome 的密码库**（Login Data）。这里只碰 cookie。
+ *   3. **这份数据不给模型看。** 它只经由设置页的路由出去；不注册工具、不写进 diagnostics。
+ *   4. 结论写"推测"：cookie 存在 ≠ 登录着。
  * @module dsh-browser-playwright-codex/login-sites
  */
 
@@ -22,11 +28,17 @@ export interface CookieRow {
   expires?: number
   httpOnly?: boolean
   secure?: boolean
+  /**
+   * Whether the value looked like a session token (long, opaque, mixed alphabet). Computed by
+   * `session.cookieJar()` from the value and reduced to a boolean there — the value itself never
+   * leaves that function.
+   */
+  tokenLike?: boolean
 }
 
 /** One aggregated site. Contains no cookie names and no values. */
 export interface LoginSite {
-  /** Registrable domain, e.g. `github.com` or `x.co.uk`. */
+  /** Registrable domain the browser actually visited. */
   domain: string
   /** Non-tracker cookies seen for this domain. */
   cookies: number
@@ -35,6 +47,8 @@ export interface LoginSite {
   longLived: number
   /** Session cookies (dropped when the browser closes). */
   sessionLike: number
+  /** Cookies whose value looked like a token. */
+  tokenLike: number
   /** Inference, not a fact: see the module header. */
   likely: boolean
   /** Short labels explaining the score — never cookie names. */
@@ -47,10 +61,14 @@ export interface LoginSites {
   source: 'live' | 'snapshot'
   /** Epoch ms when this summary was computed. */
   capturedAt: number
-  /** Non-tracker cookies counted across all sites. */
+  /** Non-tracker cookies counted across first-party domains. */
   cookies: number
-  /** Total sites seen (before the display cap). */
+  /** First-party domains seen (before the display cap). */
   total: number
+  /** How many of those look signed in. */
+  likelyTotal: number
+  /** Domains excluded because the browser never visited them (analytics/ad endpoints). */
+  thirdPartyTotal: number
   /** The capped, sorted list actually shown. */
   sites: LoginSite[]
 }
@@ -139,10 +157,10 @@ const TRACKER_PATTERNS: readonly RegExp[] = [
 ]
 
 /**
- * Whole hosts that are analytics/CDN endpoints rather than sites you log into. The name list above
+ * Whole hosts that are analytics/ad endpoints rather than sites you log into. The name list above
  * cannot catch these: `mmstat.com` (Alibaba's stats host) sets cookies with innocent names, and a
  * user who merely browsed Taobao would see it listed as a login. Found by looking at the first real
- * payload this feature ever produced (231 domains; `mmstat.com` with 30 cookies, no httpOnly).
+ * payload this feature ever produced (231 domains; `mmstat.com` 30 cookies, `pubmatic.com` 27).
  */
 const TRACKER_HOSTS: readonly RegExp[] = [
   /(^|\.)mmstat\.com$/i,
@@ -158,17 +176,16 @@ const TRACKER_HOSTS: readonly RegExp[] = [
   /(^|\.)clarity\.ms$/i,
   /(^|\.)hotjar\.com$/i,
   /(^|\.)sentry\.io$/i,
+  /(^|\.)pubmatic\.com$/i,
+  /(^|\.)criteo\.com$/i,
+  /(^|\.)adnxs\.com$/i,
+  /(^|\.)rubiconproject\.com$/i,
+  /(^|\.)casalemedia\.com$/i,
+  /(^|\.)scorecardresearch\.com$/i,
+  /(^|\.)adsrvr\.org$/i,
+  /(^|\.)taboola\.com$/i,
+  /(^|\.)outbrain\.com$/i,
 ]
-
-/** Whether a whole host is an analytics/CDN endpoint rather than a site you log into. */
-export function isTrackerHost(host: string): boolean {
-  const clean = host.trim().replace(/^\./, '').toLowerCase()
-  return TRACKER_HOSTS.some((pattern) => pattern.test(clean))
-}
-
-/** Names that look like a server-side session / auth token. */
-const SESSION_NAME =
-  /(^|[._-])(sid|sess|session|sessionid|jsessionid|phpsessid|auth|token|jwt|ticket|login|remember|account|uid|user)([._-]|$)/i
 
 const WEEK_SECONDS = 7 * 24 * 60 * 60
 
@@ -193,94 +210,133 @@ export function isTracker(name: string): boolean {
   return TRACKER_PATTERNS.some((pattern) => pattern.test(name))
 }
 
+/** Whether a whole host is an analytics/ad endpoint rather than a site you log into. */
+export function isTrackerHost(host: string): boolean {
+  const clean = host.trim().replace(/^\./, '').toLowerCase()
+  return TRACKER_HOSTS.some((pattern) => pattern.test(clean))
+}
+
 /**
- * Aggregate cookies into per-domain login inferences. Trackers are dropped, never counted,
- * and never surfaced; only counts and boolean signals leave this function.
+ * Whether a cookie *value* looks like a session token rather than an analytics blob. OWASP's
+ * session-ID guidance is the basis: at least 64 bits of entropy, hex ids ≥16 chars, base64 ids
+ * longer still, opaque content. Analytics values are short, structured or JSON, so they fail here.
+ *
+ * The value is passed in and never returned: callers turn this into the `tokenLike` boolean.
+ * @param value - the raw cookie value.
+ * @returns whether it plausibly is a token.
+ */
+export function looksLikeToken(value: string): boolean {
+  if (typeof value !== 'string') return false
+  const v = value.trim()
+  if (v.length < 20 || v.length > 4096) return false
+  if (/\s/.test(v)) return false
+  if (v.startsWith('{') || v.startsWith('[') || v.startsWith('"')) return false
+  if (!/^[A-Za-z0-9._~+/=-]+$/.test(v)) return false
+  if (new Set(v).size < 8) return false
+  const hasDigit = /[0-9]/.test(v)
+  const hasLetter = /[A-Za-z]/.test(v)
+  // Pure hex of session-id length, or a base64-ish mix, or simply long and varied.
+  if (/^[0-9a-f]{16,}$/i.test(v)) return true
+  if (hasDigit && hasLetter) return true
+  return v.length >= 40
+}
+
+/**
+ * Aggregate cookies into per-domain login inferences. Trackers are dropped, third-party domains
+ * (ones the browser never visited) are counted but not listed, and only counts and boolean signals
+ * leave this function.
  * @param rows - cookies as read from the browser (or the last exported state file).
  * @param source - where those cookies came from, for the card's label.
  * @param now - epoch ms, injectable so tests are not time-dependent.
- * @param maxSites - display cap; defaults to {@link MAX_SITES}.
+ * @param options.visited - registrable domains the browser actually visited; the rest is third-party.
+ * @param options.maxSites - display cap; defaults to {@link MAX_SITES}.
  * @returns the display payload.
  */
 export function summarizeLoginSites(
   rows: readonly CookieRow[],
   source: 'live' | 'snapshot',
   now: number,
-  maxSites: number = MAX_SITES,
+  options: { visited?: readonly string[] | ReadonlySet<string>; maxSites?: number } = {},
 ): LoginSites {
+  const { visited = [], maxSites = MAX_SITES } = options
+  const visitedSet: ReadonlySet<string> = visited instanceof Set ? visited : new Set(visited)
   const perDomain = new Map<
     string,
-    { cookies: number; httpOnly: number; longLived: number; sessionLike: number; names: number; secure: number }
+    { cookies: number; httpOnly: number; longLived: number; sessionLike: number; tokenLike: number }
   >()
   let counted = 0
+  let thirdParty = 0
+  const seenThirdParty = new Set<string>()
   for (const row of rows) {
     if (typeof row?.name !== 'string' || typeof row?.domain !== 'string') continue
     if (isTracker(row.name)) continue
+    if (isTrackerHost(row.domain)) continue
     const domain = registrableDomain(row.domain)
-    if (domain === '' || isTrackerHost(row.domain)) continue
+    if (domain === '') continue
+    // First-party attribution: a cookie on a domain this browser never visited belongs to the site
+    // that was being browsed, not to that domain (Firefox calls this the per-site cookie jar).
+    if (visitedSet.size > 0 && !visitedSet.has(domain)) {
+      if (!seenThirdParty.has(domain)) {
+        seenThirdParty.add(domain)
+        thirdParty += 1
+      }
+      continue
+    }
     counted += 1
     const entry = perDomain.get(domain) ?? {
       cookies: 0,
       httpOnly: 0,
       longLived: 0,
       sessionLike: 0,
-      names: 0,
-      secure: 0,
+      tokenLike: 0,
     }
     entry.cookies += 1
     if (row.httpOnly === true) entry.httpOnly += 1
-    if (row.secure === true) entry.secure += 1
+    if (row.tokenLike === true) entry.tokenLike += 1
     const expires = typeof row.expires === 'number' ? row.expires : -1
     if (expires === -1 || expires === 0) entry.sessionLike += 1
     else if (expires - now / 1000 > WEEK_SECONDS) entry.longLived += 1
-    if (SESSION_NAME.test(row.name)) entry.names += 1
     perDomain.set(domain, entry)
   }
 
   const sites: LoginSite[] = []
   for (const [domain, entry] of perDomain) {
-    // Score, then threshold. httpOnly is the strongest single hint: analytics cookies are
-    // almost never httpOnly, while a server-side session cookie usually is. A session-like
-    // *name* alone is weak (plenty of anonymous visitors get `uid`), so it needs a partner.
+    // OWASP's criteria, not name-guessing: an httpOnly cookie AND a session-scoped or token-shaped
+    // one. Cookie count and session-like *names* deliberately do not contribute — the first version
+    // of this scored them and put an ad exchange at the top of a real list.
+    const likely = entry.httpOnly >= 1 && (entry.sessionLike >= 1 || entry.tokenLike >= 1)
     const signals: string[] = []
-    let score = 0
-    if (entry.httpOnly >= 1) {
-      score += 2
-      signals.push('httpOnly')
-    }
-    if (entry.names >= 1) {
-      score += 1
-      signals.push('session-like name')
-    }
-    if (entry.sessionLike >= 1) {
-      score += 1
-      signals.push('session cookie')
-    }
-    if (entry.longLived >= 1) {
-      score += 1
-      signals.push('long-lived')
-    }
-    if (entry.cookies >= 3) {
-      score += 1
-      signals.push('several cookies')
-    }
-    if (entry.secure >= 1) signals.push('secure')
+    if (entry.httpOnly >= 1) signals.push('httpOnly')
+    if (entry.sessionLike >= 1) signals.push('会话 cookie')
+    if (entry.tokenLike >= 1) signals.push('值像令牌')
+    if (entry.longLived >= 1) signals.push('长效')
     sites.push({
       domain,
       cookies: entry.cookies,
       httpOnly: entry.httpOnly,
       longLived: entry.longLived,
       sessionLike: entry.sessionLike,
-      likely: score >= 3,
+      tokenLike: entry.tokenLike,
+      likely,
       signals,
     })
   }
 
+  const likelyTotal = sites.filter((site) => site.likely).length
   sites.sort((a, b) => {
     if (a.likely !== b.likely) return a.likely ? -1 : 1
+    if (a.httpOnly !== b.httpOnly) return b.httpOnly - a.httpOnly
     if (a.cookies !== b.cookies) return b.cookies - a.cookies
     return a.domain.localeCompare(b.domain)
   })
 
-  return { source, capturedAt: now, cookies: counted, total: sites.length, sites: sites.slice(0, maxSites) }
+  return {
+    source,
+    capturedAt: now,
+    cookies: counted,
+    total: sites.length,
+    likelyTotal,
+    thirdPartyTotal: thirdParty,
+    sites: sites.slice(0, maxSites),
+  }
 }

@@ -197,6 +197,11 @@ export interface BrowserSession {
      * `value` before returning: the inference only needs names, domains and lifetime.
      */
     cookieJar(): Promise<readonly CookieRow[]>;
+    /**
+     * Registrable domains of the pages this browser has open, used to attribute cookies to the site
+     * that was visited rather than to whoever set them.
+     */
+    visitedHosts(): string[];
     /** Evaluate one JavaScript expression and return its JSON result. */
     evaluate(expression: string, signal?: AbortSignal): Promise<unknown>;
     /** Click the element whose visible text matches, by semantic locator. */

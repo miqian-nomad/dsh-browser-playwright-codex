@@ -214,8 +214,11 @@ turning them on in a deployment that shares prompts across many users.
 The companion package [`dsh-browser-toggle`](https://github.com/miqian-nomad/dsh-browser-toggle) puts
 this on a Settings card: enable/disable the browser, pick the page-reading mode, and turn the two
 power tools on or off — no restart, no YAML. The card also lists **which sites this browser looks
-signed in to**: an inference from its own cookies (analytics cookies excluded, so a site you merely
-visited does not appear), labelled as an inference rather than a fact. It shows domain names,
+signed in to**. Two things make that list trustworthy: cookies are attributed **first-party** — only
+domains this browser actually visited are candidates, because a tracker's cookie belongs to the site
+you were browsing, not to the tracker — and "looks signed in" follows OWASP's session-ID criteria
+(an `HttpOnly` cookie *and* a session-scoped or token-shaped one), not cookie names or counts. It is
+labelled as an inference rather than a fact. It shows domain names,
 counts and signal labels — never cookie names and never values; nothing is written to disk; and no
 tool exposes it to the model, so an agent cannot read this list. It is a separate package because
 `dsh-client-modules` rejects a package mounted from multiple loader entries, and this plugin is

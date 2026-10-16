@@ -3,7 +3,7 @@
  * @module dsh-browser-playwright-codex/provider
  */
 import { persistState, restoreState } from './login-state.ts'
-import { summarizeLoginSites, type CookieRow } from './login-sites.ts'
+import { registrableDomain, summarizeLoginSites, type CookieRow } from './login-sites.ts'
 import fs from 'node:fs'
 import { clearChromeLocks, ensureBrowser, ensureContext } from './browser-lifecycle.ts'
 import { type Browser, type BrowserContext, type Dialog, type Page } from 'playwright-core'
@@ -83,9 +83,29 @@ export class PlaywrightProvider {
       // file is the browser's own cookie export; unreadable/unparsable simply means "nothing to
       // show yet". Values are dropped by summarizeLoginSites — only counts and signals survive.
       try {
-        const exported = JSON.parse(fs.readFileSync(this.stateFile, 'utf8')) as { cookies?: unknown }
+        const exported = JSON.parse(fs.readFileSync(this.stateFile, 'utf8')) as {
+          cookies?: unknown
+          origins?: unknown
+        }
+        // With no live session, the exported localStorage origins are the honest stand-in for
+        // "sites this browser visited": a site can only have storage there if it was loaded.
+        const hosts = new Set<string>()
+        if (Array.isArray(exported.origins)) {
+          for (const entry of exported.origins as Array<{ origin?: unknown }>) {
+            const origin = entry?.origin
+            if (typeof origin !== 'string') continue
+            if (!origin.startsWith('http://') && !origin.startsWith('https://')) continue
+            try {
+              hosts.add(registrableDomain(new URL(origin).host))
+            } catch {
+              /* unparsable origin: skip it */
+            }
+          }
+        }
         if (Array.isArray(exported.cookies)) {
-          publishLoginSites(summarizeLoginSites(exported.cookies as CookieRow[], 'snapshot', Date.now()))
+          publishLoginSites(
+            summarizeLoginSites(exported.cookies as CookieRow[], 'snapshot', Date.now(), { visited: hosts }),
+          )
         }
       } catch {
         /* no state file yet, or it is not valid JSON: nothing to publish */

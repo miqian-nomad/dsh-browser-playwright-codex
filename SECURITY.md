@@ -121,13 +121,16 @@ exact finding — the point of this file is that the answer does not have to be 
 ## 5. 隐私：设置页的「已登录的站点」名单
 
 设置页多了一节只读展示：这台浏览器**像登录着**的站点。它由 provider 从浏览器自己给的 cookie 里推断，
-出去的内容只有域名、cookie 条数和几个布尔信号（httpOnly / 长有效期 / 名字像会话）——**没有 cookie 的名字，
+出去的内容只有域名、cookie 条数和几个布尔信号（httpOnly / 会话级 / 值像令牌）——**没有 cookie 的名字，
 也没有值**；`src/login-sites.ts` 在唯一入口处就把 `value` 丢掉了，测试里有一条断言把整份产出
 序列化后搜不到任何名字或值。
 
 几条边界，写清楚是为了以后不被误改：
 
 - **不读 Chrome 的密码库**（`Login Data`）。只碰 cookie，且只碰浏览器交出来的那份。
+- **也不读浏览历史。** 判断"这个域你访问过"用的是**当前打开着的页面 URL**（provider 自己看得到的那些），
+  不是 History 数据库 —— 插件只声明它看得见的东西。浏览器没开时退回到导出文件里的 localStorage origins
+  （一个域只有在被真正加载过时才可能有存储）。
 - **不落盘。** 这份摘要是内存态（`runtime-state` 的 `publishLoginSites`），DSH 重启即消失。
   卡片上"隐藏某一行"是**浏览器 localStorage 里的显示偏好**，不是服务端记录。
 - **模型看不到。** 它不注册任何工具、不写进 diagnostics、也不出现在工具返回值里；唯一出口是

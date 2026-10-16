@@ -7,7 +7,14 @@
  */
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { registrableDomain, isTracker, isTrackerHost, summarizeLoginSites, type CookieRow } from '../src/login-sites.ts'
+import {
+  registrableDomain,
+  isTracker,
+  isTrackerHost,
+  looksLikeToken,
+  summarizeLoginSites,
+  type CookieRow,
+} from '../src/login-sites.ts'
 import { getLoginSites, publishLoginSites } from '../src/runtime-state.ts'
 
 const NOW = 1_700_000_000_000
@@ -94,7 +101,7 @@ test('排序：推测登录的在前，其次按 cookie 数', () => {
 test('展示上限：超出只截断列表，总数仍然诚实', () => {
   const rows: CookieRow[] = []
   for (let i = 0; i < 12; i += 1) rows.push(cookie('sid', 'site' + String(i) + '.example', { httpOnly: true }))
-  const payload = summarizeLoginSites(rows, 'live', NOW, 5)
+  const payload = summarizeLoginSites(rows, 'live', NOW, { maxSites: 5 })
   assert.equal(payload.sites.length, 5, '列表被截断到 5')
   assert.equal(payload.total, 12, 'total 必须报告真实数量')
 })
@@ -150,4 +157,80 @@ test('整个域就是统计服务时不出现（真实 payload 抓到的误报�
     ['github.com'],
   )
   assert.equal(payload.cookies, 1)
+})
+
+// ── 2026-10-16 重写后新增：成熟产品的两条做法 ──────────────────────────────────
+
+const TOKEN = 'eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.dBjftJeZ4CVPmB92K27uhbUJU1p1r_wW1gFWFOEjXk'
+
+test('令牌判据：像会话 ID 的值通过，分析用的结构化值不通过', () => {
+  assert.equal(looksLikeToken(TOKEN), true, 'JWT 形状')
+  assert.equal(looksLikeToken('a1b2c3d4e5f60718293a4b5c6d7e8f90'), true, '32 位十六进制')
+  assert.equal(looksLikeToken('9f8e7d6c5b4a39281706f5e4d3c2b1a0'), true, '32 位十六进制（数字开头）')
+  assert.equal(looksLikeToken('short'), false, '太短')
+  assert.equal(looksLikeToken('1'), false)
+  assert.equal(looksLikeToken('2026-10-16T12:00:00Z'), false, '时间戳这类结构化值')
+  assert.equal(looksLikeToken('{%22a%22:1,%22b%22:2}'), false, 'JSON 形状')
+  assert.equal(looksLikeToken('aaaaaaaaaaaaaaaaaaaaaaaaaaaa'), false, '字符种类太少')
+})
+
+test('第一方归属：浏览器没访问过的域只计数、不进列表（Firefox 的 cookie jar 模型）', () => {
+  const payload = summarizeLoginSites(
+    [
+      cookie('sid', 'github.com', { httpOnly: true }),
+      cookie('cna', 'pubmatic.com'),
+      cookie('t', 'mmstat.com'),
+      cookie('x', 'some-ad-exchange.example'),
+    ],
+    'live',
+    NOW,
+    { visited: ['github.com'] },
+  )
+  assert.deepEqual(
+    payload.sites.map((s) => s.domain),
+    ['github.com'],
+    '只列访问过的域',
+  )
+  assert.equal(payload.thirdPartyTotal, 1, '没访问过、也不在域级名单里的域只报个数')
+  assert.equal(payload.total, 1)
+})
+
+test('OWASP 判据：httpOnly + 会话级/令牌才算"推测登录"，名字与条数不再能凑分', () => {
+  const rows = [
+    // 真会话：httpOnly + 无过期
+    cookie('whatever', 'a.example', { httpOnly: true }),
+    // httpOnly + 值是令牌形状
+    cookie('x', 'b.example', { httpOnly: true, tokenLike: true }),
+    // 只有 httpOnly，既非会话级也不像令牌 → 不算
+    cookie('y', 'c.example', { httpOnly: true, expires: Math.floor(NOW / 1000) + 86400 }),
+    // 名字像会话 + cookie 很多，但没有 httpOnly → 不算（这正是上一版把广告域排到前面的原因）
+    cookie('sid', 'd.example', { expires: Math.floor(NOW / 1000) + WEEK }),
+    cookie('sessionid', 'd.example', { expires: Math.floor(NOW / 1000) + WEEK }),
+    cookie('auth', 'd.example'),
+    cookie('login', 'd.example'),
+    cookie('ticket', 'd.example'),
+  ]
+  const byDomain = new Map(summarizeLoginSites(rows, 'live', NOW).sites.map((s) => [s.domain, s]))
+  assert.equal(byDomain.get('a.example')?.likely, true, 'httpOnly + 会话级')
+  assert.equal(byDomain.get('b.example')?.likely, true, 'httpOnly + 值像令牌')
+  assert.equal(byDomain.get('c.example')?.likely, false, '只有 httpOnly 不算')
+  assert.equal(byDomain.get('d.example')?.likely, false, '名字像会话 + 条数多，但没有 httpOnly → 不算')
+  assert.equal(byDomain.get('d.example')?.cookies, 5, '但条数照实统计')
+})
+
+test('载荷的统计要诚实：likelyTotal / total / thirdPartyTotal 都在', () => {
+  const payload = summarizeLoginSites(
+    [
+      cookie('a', 'one.example', { httpOnly: true }),
+      cookie('b', 'two.example', { httpOnly: true, expires: Math.floor(NOW / 1000) + 86400 }),
+      cookie('c', 'three.example', { httpOnly: true, tokenLike: true }),
+      cookie('d', 'never-visited.example'),
+    ],
+    'live',
+    NOW,
+    { visited: ['one.example', 'two.example', 'three.example'] },
+  )
+  assert.equal(payload.total, 3)
+  assert.equal(payload.likelyTotal, 2, 'one 与 three 像登录态，two 只有 httpOnly')
+  assert.equal(payload.thirdPartyTotal, 1)
 })

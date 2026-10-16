@@ -23,7 +23,25 @@ languages, the individual entries follow the language the surrounding code and d
 - **常驻成本**：20 工具 15,269 字符 ≈ 4,241 token/轮 → **18 工具 12,745 字符 ≈ 3,540 token/轮（−701，−16.5%）**；全量注册（含三个闸门工具）23 → 21。
 - **守卫随之调整，而不是被绕过**：`tests/tool-descriptions.test.ts` 的 `RULES` 表从三个键并为 `browser_click` 一个键（29 条），覆盖原来 46 条里的核心；`SNAPSHOT-RULES.md §5` 的长度预算改成"每条 ≤1650；承接过多个同类工具的合并工具 ≤2400；整个描述面合计 ≤11500"，并写明理由 —— 去重后仍要 ~2165 字符才能把"精确点击兜底""悬停揭示失败怎么办"这两段失败路径一条不丢地说完，而它们属于规范里的五要素，不许删。
 
+### Fixed
+
+- **「已登录的站点」的归属模型与判据都错了**（这份功能第一次吐出真实名单时暴露的：231 个域、1177 个 cookie，
+  `pubmatic.com`（广告交易所）27 个、`mmstat.com`（统计）30 个都排在前面，展示的 60 个**全被标"推测"**）。
+  按两个成熟做法重写：
+  1. **第一方归属**（Firefox Total Cookie Protection 的模型）：cookie 属于"你当时浏览的那个站"，
+     不是"设它的那个域"。现在只把**浏览器真的访问过**的域当候选（用当前打开页面的 URL，**不读浏览历史**；
+     浏览器没开时用导出文件里的 localStorage origins 顶上），其余只报个数（`thirdPartyTotal`）、不进列表。
+  2. **OWASP 的会话特征**：`httpOnly` 且（会话级 或 值像令牌）才算"推测登录"；**名字与 cookie 条数不再作为依据**
+     （上一版正是靠它们把广告域排到了前面）。值只在 `session.cookieJar()` 里被折算成一个布尔（`tokenLike`），
+     值本身不出那个函数 —— 红线不变。
+  另外：载荷补上诚实的统计（`likelyTotal` / `total` / `thirdPartyTotal`），卡片默认**只显示像登录态的**、
+  可展开其余，每行给出可核对的证据（cookie 数 / httpOnly / 会话 / 值像令牌）；域级名单补上广告交易所
+  （pubmatic / criteo / adnxs / rubiconproject / scorecardresearch / adsrvr / taboola / outbrain 等）。
+  接口 `summarizeLoginSites` 的第 4 个参数改为**具名选项**（`{ visited, maxSites }`）—— 位置参数在这个位置
+  太容易传错，改的时候就踩了一次。
+
 ### Added
+
 
 - **设置页新增只读的「已登录的站点」名单**（配套件 `dsh-browser-toggle` 的卡片里）：provider 从浏览器自己的
   cookie 推断哪些站点像登录着，按可注册域聚合（含 `com.cn` / `co.uk` 这类多段后缀），剔除分析/风控 cookie

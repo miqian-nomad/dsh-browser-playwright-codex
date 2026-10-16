@@ -7,7 +7,7 @@ import type { BrowserContext, CDPSession, Locator, Page, Request } from 'playwri
 import type { PlaywrightProvider } from './provider.ts'
 import type { BrowserNode, BrowserSnapshot, DiagnosticsEntry, LoadState } from './types.ts'
 import type { RefSignature } from './page-snapshot.ts'
-import type { CookieRow } from './login-sites.ts'
+import { looksLikeToken, registrableDomain, type CookieRow } from './login-sites.ts'
 import { BrowserError } from './errors.ts'
 import { asTimeoutError, isAbortError, isContextDestroyed, isCrashError } from './page-diagnostics.ts'
 import { consoleMessages, networkRequests, pageData, trackPage } from './page-diagnostics.ts'
@@ -101,7 +101,29 @@ export class PlaywrightSession {
       ...(typeof cookie.expires === 'number' ? { expires: cookie.expires } : {}),
       ...(cookie.httpOnly === true ? { httpOnly: true } : {}),
       ...(cookie.secure === true ? { secure: true } : {}),
+      // The value is inspected here and reduced to one boolean; it never leaves this function.
+      ...(looksLikeToken(cookie.value) ? { tokenLike: true } : {}),
     }))
+  }
+
+  /**
+   * Registrable domains of the pages this browser currently has open — the "first-party" set the
+   * login inference attributes cookies to. Taken from the live pages rather than the browser's
+   * history database: the plugin only claims what it can see, and never reads a new data source.
+   */
+  visitedHosts(): string[] {
+    const hosts = new Set<string>()
+    for (const page of this.context.pages()) {
+      try {
+        const url = page.url()
+        if (!url.startsWith('http://') && !url.startsWith('https://')) continue
+        const domain = registrableDomain(new URL(url).host)
+        if (domain !== '') hosts.add(domain)
+      } catch {
+        /* a page can be mid-navigation or already closed */
+      }
+    }
+    return [...hosts]
   }
   /** Run one operation under busy tracking: idle disposal defers until it settles. */
   run<T>(operation: () => Promise<T>): Promise<T> {
