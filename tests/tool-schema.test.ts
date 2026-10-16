@@ -1,5 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { Context } from '@deepseek-ai/cordis'
@@ -136,4 +137,48 @@ test('invalid tool prefixes fail plugin load', async () => {
   await root.plugin(BrowserRuntime)
   root.browser.registerProvider(new PlaywrightProvider(pwConfig))
   assert.throws(() => browserTool.apply(root, { ...toolConfig, toolPrefix: 'Bad-Prefix!' }), /toolPrefix/)
+})
+
+test('README parameter signatures match the live schemas', async () => {
+  // The README's signature list is GENERATED from the tool surface, never hand-written — a model
+  // reading the docs and a model reading the schema must see the same parameter names and the same
+  // requiredness. This pins both directions: a tool missing from the list fails, and a parameter
+  // whose name or required flag drifted fails. 2026-10-16: review A1/B2 found the docs had no
+  // signatures at all, so a caller had to guess (and `browser_fill`'s `value` guess failed).
+  const { root } = await assemble({ ...toolConfig, allowEvaluate: true, allowCdp: true, registerDisabledTools: true })
+  const readme = readFileSync(new URL('../README.md', import.meta.url), 'utf8')
+  const declared = new Map<string, { name: string; required: boolean }[]>()
+  for (const line of readme.split('\n')) {
+    const row = /^- `(browser_[a-z_]+)` — (.*)$/.exec(line.trim())
+    if (row === null) continue
+    const signature = row[2].replace(/ _\(gated: registered only when enabled\)_$/, '')
+    const params =
+      signature === '_none_'
+        ? []
+        : signature.split(',').map((part) => {
+            const one = /^`([^`]+)`([*?])$/.exec(part.trim())
+            assert.ok(one !== null, 'unparseable parameter in the README signature list: ' + part)
+            return { name: (one as RegExpExecArray)[1], required: (one as RegExpExecArray)[2] === '*' }
+          })
+    declared.set(row[1], params)
+  }
+  const live = root.tools.schemas()
+  assert.deepEqual(
+    [...declared.keys()].sort(),
+    live.map((schema) => schema.name).sort(),
+    'the README signature list must name exactly the registered tools',
+  )
+  for (const schema of live) {
+    const params = schema.parameters as { properties?: Record<string, unknown>; required?: string[] }
+    const required = new Set(params.required ?? [])
+    const expected = Object.keys(params.properties ?? {}).map((name) => ({
+      name,
+      required: required.has(name),
+    }))
+    assert.deepEqual(
+      declared.get(schema.name),
+      expected,
+      schema.name + ': the README signature drifted from its schema',
+    )
+  }
 })

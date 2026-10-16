@@ -26,6 +26,8 @@ languages, the individual entries follow the language the surrounding code and d
 ### Added
 
 - **`tests/doc-reality.test.ts` 第 6 条守卫**：文档里的 `dsh plugin … add <spec>` 必须指向真实来源（本包名、本仓库 `github:` 或 URL、`link:`），引用上游命令的行除外。
+- **README 的工具参数签名（评审 B2）**：新增 “Parameter signatures” 段，列出全部 21 个工具（18 常驻 + 3 个闸门，闸门工具带标记）的参数与必填性（`*` 必填 / `?` 可选）。
+  **签名是从活的工具面导出的，不是手写的**；`tests/tool-schema.test.ts` 新增守卫逐项比对 README 与 schema —— 工具多一个少一个、参数名或必填性漂移都会红，并且这条守卫是用“故意把 README 写错一版”验证过确实会红的。中文说明的工具表本来就有参数列，英文 README 之前完全没有，调用方只能靠猜（`browser_fill` 的 `value` 就是这么猜错的）。
 - 测试：schema 层断言别名在 schema 中可见、`ref` 是唯一必填；行为层断言用 `value` 填的值**真的进了页面**（以它触发的搜索结果为证），以及缺值时错误同时点出两种写法与 `browser_click`。
 
 ## 0.5.5

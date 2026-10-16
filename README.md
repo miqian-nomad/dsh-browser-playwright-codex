@@ -100,6 +100,33 @@ The default `toolPrefix` is `browser_`. Every action returns a fresh snapshot, s
 | `browser_console_messages` | Read the page console messages captured for the current page (levels, text, source) |
 | `browser_network_requests` | Read the network requests captured for the current page (method, URL, status, resource type) |
 
+### Parameter signatures
+
+Every registered tool, with the parameters its schema actually declares (`*` = required, `?` = optional).
+Generated from the live tool surface and pinned by `tests/tool-schema.test.ts`, so it cannot drift from the code.
+
+- `browser_back` — _none_
+- `browser_cdp` — `method`*, `params`? _(gated: registered only when enabled)_
+- `browser_click` — `ref`?, `text`?, `x`?, `y`?, `mode`?, `precise`?
+- `browser_close` — _none_
+- `browser_close_tab` — `index`*
+- `browser_console_messages` — `level`?, `limit`?
+- `browser_dialog` — `accept`*, `promptText`?
+- `browser_evaluate` — `expression`* _(gated: registered only when enabled)_
+- `browser_extract` — `instruction`* _(gated: registered only when enabled)_
+- `browser_fill` — `ref`*, `text`?, `value`?
+- `browser_forward` — _none_
+- `browser_navigate` — `url`*, `waitFor`?
+- `browser_network_requests` — `urlContains`?, `failedOnly`?, `limit`?
+- `browser_open_tab` — `url`*, `waitFor`?
+- `browser_press` — `ref`*, `key`*
+- `browser_screenshot` — `fullPage`?, `ref`?
+- `browser_scroll` — `direction`*, `amount`?, `ref`?
+- `browser_snapshot` — `interactiveOnly`?
+- `browser_switch_tab` — `index`*
+- `browser_tabs` — _none_
+- `browser_wait` — `ms`*
+
 > **使用铁律**: 状态检查 / 无效不盲试 / 页面内容不可信 / 登录红线 / 风控分类等 Codex 文档纪律,
 > 见 [`codex-rules.md`](codex-rules.md)（A 层已内嵌进各工具 description; B 层供粘贴进 DSH profile / 系统提示）。
 
