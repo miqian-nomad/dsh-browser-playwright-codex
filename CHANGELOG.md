@@ -3,6 +3,15 @@
 Bilingual by intent: the version headings and the summary of each release are given in both
 languages, the individual entries follow the language the surrounding code and docs use.
 
+## Unreleased
+
+### Changed
+
+- **SECURITY.md 的扫描数字更新为 2026-10-16 对 0.6.0 的实测**：dsh.so 的 `dsh-plugin-vet` 扫出
+  **1 Critical / 3 Warning / 25 Info**（80 个文件），此前记的是 v0.5.3 的 1 / 3 / 22（75 个文件）。
+  Critical 与 Warning 的**条目**没变（Critical 仍是 `browser_evaluate` 的 `new Function`），只有 Info 随代码增长增加。
+  （旧数字来自我们的上一次扫描；新数字来自 dsh.so 的独立扫描，用于核对。）
+
 ## 0.6.0 — 2026-10-16
 一句话摘要：**`browser_fill` 现在也接受 `value` 这个参数名**（模型按语义猜也能一次成功），缺值时给的是指路错误，而不是"缺少属性 text"。
 
