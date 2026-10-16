@@ -3,10 +3,10 @@
 Bilingual by intent: the version headings and the summary of each release are given in both
 languages, the individual entries follow the language the surrounding code and docs use.
 
-## Unreleased
-
+## 0.6.1 — 2026-10-16
 ### Changed
 
+- **清掉仓库里的本机绝对路径**：`DIALOG-POLICY.md` 里那条 `D:\dsh-plugins\…` 与 `codex-rules.md` 里那条 `C:\Users\…\.codex\…` 换成通用说法；`ci.yml` 里写死的验收计数（"(52 checks)"，实际 57 项）改成由脚本自己打印，从此不会再漂移。三处都是外部模型评审当场读出来的。
 - **SECURITY.md 的扫描数字更新为 2026-10-16 对 0.6.0 的实测**：dsh.so 的 `dsh-plugin-vet` 扫出
   **1 Critical / 3 Warning / 25 Info**（80 个文件），此前记的是 v0.5.3 的 1 / 3 / 22（75 个文件）。
   Critical 与 Warning 的**条目**没变（Critical 仍是 `browser_evaluate` 的 `new Function`），只有 Info 随代码增长增加。
