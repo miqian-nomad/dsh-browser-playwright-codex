@@ -1,4 +1,5 @@
 import { test, before, after } from 'node:test'
+import fs from 'node:fs'
 import assert from 'node:assert/strict'
 import { createServer, type Server } from 'node:http'
 import { readFile } from 'node:fs/promises'
@@ -8,6 +9,7 @@ import { PlaywrightProvider } from '../src/provider.ts'
 import type { PlaywrightConfig } from '../src/config.ts'
 import { BrowserError } from '../src/errors.ts'
 import type { BrowserNode } from '../src/types.ts'
+import { getLoginSites } from '../src/runtime-state.ts'
 
 // 期望值按 legacy（兼容模式）的树写；隔离掉设置页的真实用户状态，避免假失败。
 process.env.DSH_BROWSER_STATE_FILE = path.join(os.tmpdir(), 'dsh-browser-tests-state-isolated.json')
@@ -246,4 +248,39 @@ test('click by visible label reaches the element through the page-side probe', a
     'the landing note should name the clicked label; got: ' + String(snap.landingNote),
   )
   assert.match(JSON.stringify(snap), /clicks: 1/)
+})
+
+test('快照路径也要认出"值像令牌"的 cookie（否则快照视图会少报登录）', async () => {
+  // 2026-10-16 用真实导出文件核对时发现：provider 的快照路径直接把导出文件的行丢给
+  // summarizeLoginSites，而导出文件里只有原始 value、没有 tokenLike —— 于是"值像令牌"这条信号
+  // 永远为假，同一个文件在快照路径下报 12 个登录、在线路径报 86 个。
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'dsh-provider-state-'))
+  const stateFile = path.join(dir, 'dsh-storage-state.json')
+  fs.writeFileSync(
+    stateFile,
+    JSON.stringify({
+      cookies: [
+        {
+          name: 'sid',
+          value: 'eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxIn0.dBjftJeZ4CVPmB92K27uhbUJU1p1r_wW1gFWFOEjXk',
+          domain: '.example.com',
+          path: '/',
+          expires: Math.floor(Date.now() / 1000) + 86400,
+          httpOnly: true,
+        },
+      ],
+      origins: [],
+    }),
+  )
+  const provider = new PlaywrightProvider({
+    ...config,
+    launch: { ...config.launch, persistent: true, profileDir: dir },
+  })
+  const published = getLoginSites()
+  assert.ok(published !== undefined, 'provider 构造时就该发布一份（来自导出文件）')
+  const site = published.sites.find((s) => s.domain === 'example.com')
+  assert.ok(site !== undefined)
+  assert.equal(site.tokenLike, 1, '快照路径必须从 value 算出 tokenLike')
+  assert.equal(site.likely, true, 'httpOnly + 令牌形状 → 推测登录')
+  provider.dispose?.()
 })
