@@ -66,6 +66,13 @@ export interface LoginSites {
     likelyTotal: number;
     /** Domains excluded because the browser never visited them (analytics/ad endpoints). */
     thirdPartyTotal: number;
+    /**
+     * Whether first-party attribution could be applied. `unfiltered` means no visited-domain set was
+     * available (no live pages and no exported origins), so the list may contain third-party domains —
+     * the card says so instead of silently looking authoritative. 2026-10-16: the offline run of the
+     * real export file hit exactly this, and a silent fallback is how a feature overstates itself.
+     */
+    attribution: 'first-party' | 'unfiltered';
     /** The capped, sorted list actually shown. */
     sites: LoginSite[];
 }

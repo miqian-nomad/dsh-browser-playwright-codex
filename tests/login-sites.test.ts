@@ -192,6 +192,12 @@ test('第一方归属：浏览器没访问过的域只计数、不进列表（Fi
     '只列访问过的域',
   )
   assert.equal(payload.thirdPartyTotal, 1, '没访问过、也不在域级名单里的域只报个数')
+  assert.equal(payload.attribution, 'first-party', '拿到访问集合时必须标明做了第一方归属')
+  assert.equal(
+    summarizeLoginSites([cookie('sid', 'x.example', { httpOnly: true })], 'live', NOW).attribution,
+    'unfiltered',
+    '拿不到访问集合时必须如实标成未过滤，而不是假装过滤过了',
+  )
   assert.equal(payload.total, 1)
 })
 
