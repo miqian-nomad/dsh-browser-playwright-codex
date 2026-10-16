@@ -13,7 +13,7 @@
  */
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { readFileSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 
 const read = (rel: string): string => readFileSync(new URL('../' + rel, import.meta.url), 'utf8')
 const repo = JSON.parse(read('package.json')) as { version: string }
@@ -78,9 +78,17 @@ test('cross-doc: 「已登录的站点」在各文档里的关键说法一致', 
   assert.deepEqual(failures, [], '主插件文档之间对不上:\n  ' + failures.join('\n  '))
 })
 
-test('cross-doc: 配套件文档与主插件的安全承诺一致', () => {
-  const toggleReadme = readFileSync(new URL('../../dsh-browser-toggle/README.md', import.meta.url), 'utf8')
-  const toggleZh = readFileSync(new URL('../../dsh-browser-toggle/中文说明.md', import.meta.url), 'utf8')
+test('cross-doc: 配套件文档与主插件的安全承诺一致', (t) => {
+  // 这条检查要读邻座仓库的文档，而 CI 只 checkout 这一个仓库 —— 没有配套件时**明确跳过**，
+  // 而不是让它去读不存在的文件（2026-10-16：这个测试第一次跑 CI 就把两个平台都弄红了）。
+  // 配套件那一半由它自己的测试负责（dsh-browser-toggle/tests/docs-claims.test.mjs）。
+  const toggleDir = new URL('../../dsh-browser-toggle/', import.meta.url)
+  if (!existsSync(new URL('README.md', toggleDir))) {
+    t.skip('邻座仓库 dsh-browser-toggle 不在检出里（CI 只 checkout 本仓库）')
+    return
+  }
+  const toggleReadme = readFileSync(new URL('README.md', toggleDir), 'utf8')
+  const toggleZh = readFileSync(new URL('中文说明.md', toggleDir), 'utf8')
   const security = read('SECURITY.md')
   const failures: string[] = []
   for (const [name, text] of [
