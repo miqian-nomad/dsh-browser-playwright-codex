@@ -105,7 +105,7 @@ export declare class PlaywrightSession {
      * Answer the pending native dialog and let the action blocked behind it
      * finish. This is the only place a dialog is ever accepted or dismissed.
      */
-    resolveDialog(accept: boolean, promptText: string | undefined, signal: AbortSignal | undefined): Promise<BrowserSnapshot>;
+    resolveDialog(accept: boolean, promptText: string | undefined, signal?: AbortSignal): Promise<BrowserSnapshot>;
     /** Read the snapshot tree from one page (must run inside a run()). */
     capture(page: Page, opts: {
         interactiveOnly?: boolean;
@@ -153,7 +153,7 @@ export declare class PlaywrightSession {
     buildRefSignatures(nodes: readonly BrowserNode[]): Map<string, RefSignature>;
     /** The document nonce shared by this snapshot's refs, or undefined. */
     refNonce(nodes: readonly BrowserNode[]): string | undefined;
-    navigate(url: string, waitUntil: LoadState, signal: AbortSignal | undefined): Promise<BrowserSnapshot | {
+    navigate(url: string, waitUntil: LoadState, signal?: AbortSignal): Promise<BrowserSnapshot | {
         url: string;
         title: string;
         nodes: never[];
@@ -180,13 +180,13 @@ export declare class PlaywrightSession {
      * an overlaying element can never swallow the click silently. Returns the
      * first unobstructed {x, y}, or throws describing what intercepted it.
      */
-    resolveClickPoint(locator: Locator, signal: AbortSignal | undefined): Promise<{
+    resolveClickPoint(locator: Locator, signal?: AbortSignal): Promise<{
         x: number;
         y: number;
         hitDesc: string;
         hitSelf: boolean;
     }>;
-    click(ref: string, signal: AbortSignal | undefined): Promise<BrowserSnapshot | {
+    click(ref: string, signal?: AbortSignal): Promise<BrowserSnapshot | {
         url: string;
         title: string;
         nodes: never[];
@@ -201,7 +201,7 @@ export declare class PlaywrightSession {
      * and the landing note names what was actually clicked plus how many
      * elements shared the label.
      */
-    clickText(text: string, signal: AbortSignal | undefined): Promise<BrowserSnapshot | {
+    clickText(text: string, signal?: AbortSignal): Promise<BrowserSnapshot | {
         url: string;
         title: string;
         nodes: never[];
@@ -248,7 +248,7 @@ export declare class PlaywrightSession {
         truncated: boolean;
         dialogNote: string;
     }>;
-    clickAt(x: number, y: number, signal: AbortSignal | undefined): Promise<BrowserSnapshot | {
+    clickAt(x: number, y: number, signal?: AbortSignal): Promise<BrowserSnapshot | {
         url: string;
         title: string;
         nodes: never[];
@@ -256,7 +256,7 @@ export declare class PlaywrightSession {
         truncated: boolean;
         dialogNote: string;
     }>;
-    clickAtRef(ref: string, signal: AbortSignal | undefined): Promise<BrowserSnapshot | {
+    clickAtRef(ref: string, signal?: AbortSignal): Promise<BrowserSnapshot | {
         url: string;
         title: string;
         nodes: never[];
@@ -264,10 +264,10 @@ export declare class PlaywrightSession {
         truncated: boolean;
         dialogNote: string;
     }>;
-    fill(ref: string, text: string, signal: AbortSignal | undefined): Promise<BrowserSnapshot>;
+    fill(ref: string, text: string, signal?: AbortSignal): Promise<BrowserSnapshot>;
     /** Read the field back and decide whether the fill landed. */
     verifyFill(locator: Locator, tag: string, text: string): Promise<boolean>;
-    press(ref: string, key: string, signal: AbortSignal | undefined): Promise<BrowserSnapshot | {
+    press(ref: string, key: string, signal?: AbortSignal): Promise<BrowserSnapshot | {
         url: string;
         title: string;
         nodes: never[];
@@ -283,14 +283,14 @@ export declare class PlaywrightSession {
      * moves is the only cheap proof that something appeared, so the returned
      * snapshot carries a note comparing them.
      */
-    hover(ref: string, signal: AbortSignal | undefined): Promise<BrowserSnapshot>;
+    hover(ref: string, signal?: AbortSignal): Promise<BrowserSnapshot>;
     /**
      * Hover a trigger the snapshot gave no ref, addressed by its visible label
      * (e.g. a plain span that reveals a menu on mouseenter). The label must
      * equal an element's own direct text; the deepest match wins, and the
      * landing note names what was hovered plus how many elements shared it.
      */
-    hoverText(text: string, signal: AbortSignal | undefined): Promise<BrowserSnapshot>;
+    hoverText(text: string, signal?: AbortSignal): Promise<BrowserSnapshot>;
     /**
      * Shared hover core: rest the pointer on a resolved locator, then report
      * what the actionable ref count did. The label names the target in the
@@ -298,17 +298,17 @@ export declare class PlaywrightSession {
      * target came from a ref).
      */
     hoverLocator(locator: Locator, signal: AbortSignal | undefined, label: string, shared: number): Promise<BrowserSnapshot>;
-    scroll(direction: 'up' | 'down', amount: number, ref: string, signal: AbortSignal | undefined): Promise<BrowserSnapshot>;
-    back(signal: AbortSignal | undefined): Promise<BrowserSnapshot>;
-    forward(signal: AbortSignal | undefined): Promise<BrowserSnapshot>;
-    wait(ms: number, signal: AbortSignal | undefined): Promise<void>;
+    scroll(direction: 'up' | 'down', amount: number, ref: string | undefined, signal?: AbortSignal): Promise<BrowserSnapshot>;
+    back(signal?: AbortSignal): Promise<BrowserSnapshot>;
+    forward(signal?: AbortSignal): Promise<BrowserSnapshot>;
+    wait(ms: number, signal?: AbortSignal): Promise<void>;
     tabs(): Promise<{
         index: number;
         url: string;
         title: string;
         active: boolean;
     }[]>;
-    switchTab(index: number, signal: AbortSignal | undefined): Promise<BrowserSnapshot | {
+    switchTab(index: number, signal?: AbortSignal): Promise<BrowserSnapshot | {
         url: string;
         title: string;
         nodes: never[];
@@ -316,8 +316,8 @@ export declare class PlaywrightSession {
         truncated: boolean;
         dialogNote: string;
     }>;
-    openTab(url: string, waitUntil: LoadState, signal: AbortSignal | undefined): Promise<BrowserSnapshot>;
-    closeTab(index: number, signal: AbortSignal | undefined): Promise<void>;
+    openTab(url: string, waitUntil: LoadState, signal?: AbortSignal): Promise<BrowserSnapshot>;
+    closeTab(index: number, signal?: AbortSignal): Promise<void>;
     /**
      * Screenshots get their own floor instead of reusing the navigation budget: a
      * full-page capture is sized by the page and encoded by the CPU, so a loaded machine
@@ -329,12 +329,12 @@ export declare class PlaywrightSession {
     screenshot(opts: {
         fullPage?: boolean;
         ref?: string;
-    } | undefined, signal: AbortSignal | undefined): Promise<{
+    } | undefined, signal?: AbortSignal): Promise<{
         mime: "image/png";
         bytes: Buffer<ArrayBufferLike>;
     }>;
     pageData(): Promise<unknown>;
-    evaluate(expression: string, signal: AbortSignal | undefined): Promise<unknown>;
+    evaluate(expression: string, signal?: AbortSignal): Promise<unknown>;
     /**
      * Send one raw CDP command on the current page's session and return its
      * result. This is the "direct protocol" escape hatch behind every other
@@ -343,7 +343,7 @@ export declare class PlaywrightSession {
      * are allowed) lives in the tool layer via lib/cdp-policy.js; this method
      * itself performs no filtering so internal callers keep full control.
      */
-    cdp(method: string, params: Record<string, unknown>, signal: AbortSignal | undefined): Promise<unknown>;
+    cdp(method: string, params: Record<string, unknown>, signal?: AbortSignal): Promise<unknown>;
     close(): Promise<void>;
     timeoutMs(): number;
     ensurePage(): Promise<Page>;

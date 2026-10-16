@@ -219,7 +219,7 @@ export class PlaywrightSession {
    * Answer the pending native dialog and let the action blocked behind it
    * finish. This is the only place a dialog is ever accepted or dismissed.
    */
-  async resolveDialog(accept: boolean, promptText: string | undefined, signal: AbortSignal | undefined) {
+  async resolveDialog(accept: boolean, promptText: string | undefined, signal?: AbortSignal) {
     return this.run(async () => {
       this.assertLive()
       if (typeof accept !== 'boolean') {
@@ -304,7 +304,7 @@ export class PlaywrightSession {
     }
     return undefined
   }
-  async navigate(url: string, waitUntil: LoadState, signal: AbortSignal | undefined) {
+  async navigate(url: string, waitUntil: LoadState, signal?: AbortSignal) {
     return navigate(this, url, waitUntil, signal)
   }
   async snapshot(opts?: { interactiveOnly?: boolean }) {
@@ -319,10 +319,10 @@ export class PlaywrightSession {
    * an overlaying element can never swallow the click silently. Returns the
    * first unobstructed {x, y}, or throws describing what intercepted it.
    */
-  async resolveClickPoint(locator: Locator, signal: AbortSignal | undefined) {
+  async resolveClickPoint(locator: Locator, signal?: AbortSignal) {
     return resolveClickPoint(this, locator, signal)
   }
-  async click(ref: string, signal: AbortSignal | undefined) {
+  async click(ref: string, signal?: AbortSignal) {
     return this.run(async () => {
       const locator = await this.refLocator(ref)
       return this.clickLocator(locator, signal, 'ref ' + ref, 0)
@@ -335,7 +335,7 @@ export class PlaywrightSession {
    * and the landing note names what was actually clicked plus how many
    * elements shared the label.
    */
-  async clickText(text: string, signal: AbortSignal | undefined) {
+  async clickText(text: string, signal?: AbortSignal) {
     return clickText(this, text, signal)
   }
   /**
@@ -393,20 +393,20 @@ export class PlaywrightSession {
   async clickLocator(locator: Locator, signal: AbortSignal | undefined, label: string, shared: number) {
     return clickLocator(this, locator, signal, label, shared)
   }
-  async clickAt(x: number, y: number, signal: AbortSignal | undefined) {
+  async clickAt(x: number, y: number, signal?: AbortSignal) {
     return clickAt(this, x, y, signal)
   }
-  async clickAtRef(ref: string, signal: AbortSignal | undefined) {
+  async clickAtRef(ref: string, signal?: AbortSignal) {
     return clickAtRef(this, ref, signal)
   }
-  async fill(ref: string, text: string, signal: AbortSignal | undefined) {
+  async fill(ref: string, text: string, signal?: AbortSignal) {
     return fill(this, ref, text, signal)
   }
   /** Read the field back and decide whether the fill landed. */
   async verifyFill(locator: Locator, tag: string, text: string) {
     return verifyFill(this, locator, tag, text)
   }
-  async press(ref: string, key: string, signal: AbortSignal | undefined) {
+  async press(ref: string, key: string, signal?: AbortSignal) {
     return press(this, ref, key, signal)
   }
   /**
@@ -417,7 +417,7 @@ export class PlaywrightSession {
    * moves is the only cheap proof that something appeared, so the returned
    * snapshot carries a note comparing them.
    */
-  async hover(ref: string, signal: AbortSignal | undefined) {
+  async hover(ref: string, signal?: AbortSignal) {
     return this.run(async () => {
       const locator = await this.refLocator(ref)
       return this.hoverLocator(locator, signal, 'ref ' + ref, 0)
@@ -429,7 +429,7 @@ export class PlaywrightSession {
    * equal an element's own direct text; the deepest match wins, and the
    * landing note names what was hovered plus how many elements shared it.
    */
-  async hoverText(text: string, signal: AbortSignal | undefined) {
+  async hoverText(text: string, signal?: AbortSignal) {
     return hoverText(this, text, signal)
   }
   /**
@@ -441,16 +441,16 @@ export class PlaywrightSession {
   async hoverLocator(locator: Locator, signal: AbortSignal | undefined, label: string, shared: number) {
     return hoverLocator(this, locator, signal, label, shared)
   }
-  async scroll(direction: 'up' | 'down', amount: number, ref: string, signal: AbortSignal | undefined) {
+  async scroll(direction: 'up' | 'down', amount: number, ref: string | undefined, signal?: AbortSignal) {
     return scroll(this, direction, amount, ref, signal)
   }
-  async back(signal: AbortSignal | undefined) {
+  async back(signal?: AbortSignal) {
     return back(this, signal)
   }
-  async forward(signal: AbortSignal | undefined) {
+  async forward(signal?: AbortSignal) {
     return forward(this, signal)
   }
-  async wait(ms: number, signal: AbortSignal | undefined) {
+  async wait(ms: number, signal?: AbortSignal) {
     return this.run(async () => {
       this.provider.touch(this.owner)
       await withAbort(new Promise((resolve) => setTimeout(resolve, ms)), signal)
@@ -473,13 +473,13 @@ export class PlaywrightSession {
       return out
     })
   }
-  async switchTab(index: number, signal: AbortSignal | undefined) {
+  async switchTab(index: number, signal?: AbortSignal) {
     return switchTab(this, index, signal)
   }
-  async openTab(url: string, waitUntil: LoadState, signal: AbortSignal | undefined) {
+  async openTab(url: string, waitUntil: LoadState, signal?: AbortSignal) {
     return openTab(this, url, waitUntil, signal)
   }
-  async closeTab(index: number, signal: AbortSignal | undefined) {
+  async closeTab(index: number, signal?: AbortSignal) {
     return closeTab(this, index, signal)
   }
   /**
@@ -492,7 +492,7 @@ export class PlaywrightSession {
   screenshotTimeoutMs() {
     return Math.max(this.timeoutMs(), 10_000)
   }
-  async screenshot(opts: { fullPage?: boolean; ref?: string } | undefined, signal: AbortSignal | undefined) {
+  async screenshot(opts: { fullPage?: boolean; ref?: string } | undefined, signal?: AbortSignal) {
     return this.run(async () => {
       this.assertLive()
       this.provider.touch(this.owner)
@@ -520,7 +520,7 @@ export class PlaywrightSession {
   async pageData() {
     return pageData(this)
   }
-  async evaluate(expression: string, signal: AbortSignal | undefined) {
+  async evaluate(expression: string, signal?: AbortSignal) {
     return this.run(async () => {
       this.assertLive()
       this.provider.touch(this.owner)
@@ -543,7 +543,7 @@ export class PlaywrightSession {
    * are allowed) lives in the tool layer via lib/cdp-policy.js; this method
    * itself performs no filtering so internal callers keep full control.
    */
-  async cdp(method: string, params: Record<string, unknown>, signal: AbortSignal | undefined) {
+  async cdp(method: string, params: Record<string, unknown>, signal?: AbortSignal) {
     return this.run(async () => {
       this.assertLive()
       this.provider.touch(this.owner)

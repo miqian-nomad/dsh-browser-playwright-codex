@@ -13,18 +13,20 @@
  * signal we want rather than a silent `undefined`.
  *
  * `CallId` / `ToolCallId` are nominal wrappers over a string whose runtime body
- * is the identity function, so this plugin defines its own instead of importing
- * theirs — a harness rename cannot break it, and no version range has to be
- * chased.
+ * is the identity function. The *type* now comes from the harness: its brand
+ * cannot be reproduced structurally, so a locally invented one produces values
+ * the harness rejects (2026-10-16: enabling type checking over `tests/` caught
+ * exactly that). Only the runtime identity function stays local, and a rename
+ * fails loudly at build time — which is the signal we want.
  * @module dsh-browser-playwright-codex/compat
  */
+import type { ToolCallId as HarnessToolCallId } from '@deepseek-ai/dsh-llm'
 
 /**
- * Correlates one model-issued tool call with its result. Structurally
- * compatible with the harness brand, owned by this plugin so the harness
- * cannot rename it out from under the tests.
+ * Correlates one model-issued tool call with its result: the harness's own brand,
+ * so values this plugin mints are accepted everywhere the harness expects one.
  */
-export type ToolCallId = string & { readonly __brand?: 'ToolCallId' }
+export type ToolCallId = HarnessToolCallId
 
 /**
  * Brand a string as a {@link ToolCallId}. Runtime identity, exactly like the

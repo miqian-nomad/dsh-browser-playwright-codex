@@ -119,7 +119,7 @@ export declare function hoverText(session: PlaywrightSession, text: string, sign
  * target came from a ref).
  */
 export declare function hoverLocator(session: PlaywrightSession, locator: Locator, signal: AbortSignal | undefined, label: string, shared: number): Promise<import("./types.ts").BrowserSnapshot>;
-export declare function scroll(session: PlaywrightSession, direction: 'up' | 'down', amount: number, ref: string, signal: AbortSignal | undefined): Promise<import("./types.ts").BrowserSnapshot>;
+export declare function scroll(session: PlaywrightSession, direction: 'up' | 'down', amount: number, ref: string | undefined, signal: AbortSignal | undefined): Promise<import("./types.ts").BrowserSnapshot>;
 export declare function back(session: PlaywrightSession, signal: AbortSignal | undefined): Promise<import("./types.ts").BrowserSnapshot>;
 export declare function forward(session: PlaywrightSession, signal: AbortSignal | undefined): Promise<import("./types.ts").BrowserSnapshot>;
 export declare function switchTab(session: PlaywrightSession, index: number, signal: AbortSignal | undefined): Promise<import("./types.ts").BrowserSnapshot | {

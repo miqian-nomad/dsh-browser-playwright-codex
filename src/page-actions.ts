@@ -667,7 +667,7 @@ export async function scroll(
   session: PlaywrightSession,
   direction: 'up' | 'down',
   amount: number,
-  ref: string,
+  ref: string | undefined,
   signal: AbortSignal | undefined,
 ) {
   return session.run(async () => {

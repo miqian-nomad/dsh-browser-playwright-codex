@@ -33,12 +33,16 @@ process.env.DSH_BROWSER_STATE_FILE = path.join(os.tmpdir(), 'dsh-browser-tests-s
 // Fixtures and providers
 // ---------------------------------------------------------------------------
 
-function providerConfig(overrides: Partial<PlaywrightConfig> = {}): PlaywrightConfig {
+/** 浅 Partial 会让 { launch: { persistent: false } } 缺字段；这里需要逐层可选。 */
+type DeepPartial<T> = { [K in keyof T]?: T[K] extends object ? DeepPartial<T[K]> : T[K] }
+
+function providerConfig(overrides: DeepPartial<PlaywrightConfig> = {}): PlaywrightConfig {
   const { launch, snapshot, ...rest } = overrides
   return {
     launch: {
       channel: 'chrome',
       headless: true,
+      persistent: false,
       viewport: { width: 1280, height: 800 },
       // 2026-10-06: was 2500. A cold windows-latest runner blew through it loading the *local*
       // fixture page (page.goto: Timeout 2500ms exceeded) and failed four tests that have nothing
@@ -50,9 +54,10 @@ function providerConfig(overrides: Partial<PlaywrightConfig> = {}): PlaywrightCo
     },
     idleTimeoutMs: 0,
     maxSessions: 6,
-    snapshot: { maxNodes: 500, maxNameLength: 120, maxTextLength: 300, ...snapshot },
+    snapshot: { engine: 'legacy', diff: false, maxNodes: 500, maxNameLength: 120, maxTextLength: 300, ...snapshot },
     ...rest,
-  }
+    // 合并的是深可选 override（测试垫片），断言成本配置：字段都由上面的基准补齐。
+  } as PlaywrightConfig
 }
 
 let store: StoreFixture
@@ -69,7 +74,7 @@ before(async () => {
   policyProvider = new PlaywrightProvider(providerConfig({ allowedDomains: ['127.0.0.1'] }))
   // Tiny token budgets exercise the truncation path on real pages.
   boundedProvider = new PlaywrightProvider(
-    providerConfig({ snapshot: { maxNodes: 60, maxNameLength: 20, maxTextLength: 60 } }),
+    providerConfig({ snapshot: { diff: false, maxNodes: 60, maxNameLength: 20, maxTextLength: 60 } }),
   )
   // A very short idle timer exercises real session disposal. In-flight
   // operations are protected by busy tracking, so no warmup is needed: even

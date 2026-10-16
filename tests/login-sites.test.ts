@@ -128,8 +128,20 @@ test('runtime-state 的读写是防御性拷贝', () => {
     capturedAt: NOW,
     cookies: 2,
     total: 1,
+    likelyTotal: 1,
+    thirdPartyTotal: 0,
+    attribution: 'live' === 'live' ? 'first-party' : 'unfiltered',
     sites: [
-      { domain: 'x.com', cookies: 2, httpOnly: 2, longLived: 0, sessionLike: 0, likely: true, signals: ['httpOnly'] },
+      {
+        domain: 'x.com',
+        cookies: 2,
+        httpOnly: 2,
+        longLived: 0,
+        sessionLike: 0,
+        tokenLike: 0,
+        likely: true,
+        signals: ['httpOnly'],
+      },
     ],
   })
   const first = getLoginSites()

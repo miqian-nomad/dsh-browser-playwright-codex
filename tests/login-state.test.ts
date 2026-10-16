@@ -48,7 +48,7 @@ function providerInTempProfile(): { provider: PlaywrightProvider; dir: string } 
     },
     idleTimeoutMs: 0,
     maxSessions: 1,
-    snapshot: { engine: 'legacy', maxNodes: 500, maxNameLength: 120, maxTextLength: 300 },
+    snapshot: { engine: 'legacy', diff: false, maxNodes: 500, maxNameLength: 120, maxTextLength: 300 },
   }
   return { provider: new PlaywrightProvider(config), dir }
 }

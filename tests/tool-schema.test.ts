@@ -20,13 +20,15 @@ const pwConfig: PlaywrightConfig = {
   launch: {
     channel: 'chrome',
     headless: true,
+    persistent: false,
+    profileDir: 'unused-schema-profile',
     viewport: { width: 1280, height: 800 },
     navigationTimeoutMs: 5000,
     ignoreHTTPSErrors: false,
   },
   idleTimeoutMs: 0,
   maxSessions: 2,
-  snapshot: { maxNodes: 200, maxNameLength: 120, maxTextLength: 300 },
+  snapshot: { engine: 'legacy', diff: false, maxNodes: 200, maxNameLength: 120, maxTextLength: 300 },
 }
 
 /** The shipped defaults: evaluate and cdp off, extract unconfigured. */

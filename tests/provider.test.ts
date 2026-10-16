@@ -18,6 +18,8 @@ const config: PlaywrightConfig = {
   launch: {
     channel: 'chrome',
     headless: true,
+    persistent: false,
+    profileDir: path.join(os.tmpdir(), 'dsh-browser-provider-profile'),
     viewport: { width: 1280, height: 800 },
     // 2026-10-06: was 2500. A cold windows-latest runner blew through it loading the *local*
     // fixture page (page.goto: Timeout 2500ms exceeded) and failed four tests that have nothing
@@ -28,7 +30,7 @@ const config: PlaywrightConfig = {
   },
   idleTimeoutMs: 0,
   maxSessions: 4,
-  snapshot: { maxNodes: 500, maxNameLength: 120, maxTextLength: 300 },
+  snapshot: { engine: 'legacy', diff: false, maxNodes: 500, maxNameLength: 120, maxTextLength: 300 },
 }
 
 let server: Server
@@ -222,14 +224,15 @@ test('the click geometry pipeline itself delivers the click, not the fallback', 
   assert.ok(button !== undefined, 'count button ref missing')
   const snap = await s.click(button)
   assert.match(
-    String(snap.landingNote),
+    String((snap as { landingNote?: string }).landingNote),
     /click delivered at/,
-    'the geometry path must deliver the click; got: ' + String(snap.landingNote),
+    'the geometry path must deliver the click; got: ' + String((snap as { landingNote?: string }).landingNote),
   )
   assert.doesNotMatch(
-    String(snap.landingNote),
+    String((snap as { landingNote?: string }).landingNote),
     /actionability click delivered/,
-    'the click must not fall back to Playwright actionability; got: ' + String(snap.landingNote),
+    'the click must not fall back to Playwright actionability; got: ' +
+      String((snap as { landingNote?: string }).landingNote),
   )
   assert.match(JSON.stringify(snap), /clicks: 1/)
 })
@@ -243,9 +246,9 @@ test('click by visible label reaches the element through the page-side probe', a
   await s.navigate(base + '/page.html', 'load')
   const snap = await s.clickText('Count clicks')
   assert.match(
-    String(snap.landingNote),
+    String((snap as { landingNote?: string }).landingNote),
     /Count clicks/,
-    'the landing note should name the clicked label; got: ' + String(snap.landingNote),
+    'the landing note should name the clicked label; got: ' + String((snap as { landingNote?: string }).landingNote),
   )
   assert.match(JSON.stringify(snap), /clicks: 1/)
 })

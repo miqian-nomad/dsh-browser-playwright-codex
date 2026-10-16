@@ -1,0 +1,15 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": true,
+    // 两个构建期脚本是纯 .mjs（无类型声明）：让 TS 读取但不检查它们。
+    "allowJs": true,
+    "checkJs": false,
+    // 测试里到处索引数组（lines[0]、rows[i]）；这一条在测试中的收益最低、噪音最大。
+    // 其余一切保持 strict，真正的类型错误照旧拦下。
+    "noUncheckedIndexedAccess": false,
+    "declaration": false,
+    "rootDir": "."
+  },
+  "include": ["src", "tests"]
+}

@@ -33,13 +33,15 @@ const pwConfig: PlaywrightConfig = {
   launch: {
     channel: 'chrome',
     headless: true,
+    persistent: false,
+    profileDir: path.join(os.tmpdir(), 'dsh-browser-tool-scenarios-profile'),
     viewport: { width: 1280, height: 800 },
     navigationTimeoutMs: 5000,
     ignoreHTTPSErrors: false,
   },
   idleTimeoutMs: 0,
   maxSessions: 6,
-  snapshot: { maxNodes: 500, maxNameLength: 120, maxTextLength: 300 },
+  snapshot: { engine: 'legacy', diff: false, maxNodes: 500, maxNameLength: 120, maxTextLength: 300 },
 }
 
 const toolConfig: ToolConfig = {
