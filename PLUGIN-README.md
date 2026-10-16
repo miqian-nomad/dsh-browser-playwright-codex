@@ -13,6 +13,20 @@ dsh plugin --profile <name> add dsh-browser-playwright-codex
 
 The bundle mounts three rows: the `ctx.browser` seam (`service`), the Playwright provider (`playwright`), and the model-facing tool family (`tool`).
 
+### Your first task
+
+Install it and ask for something that leaves a visible result — there is nothing else to configure:
+
+> Open `https://news.ycombinator.com` and list the titles of the first five stories with their links.
+
+> Go to my orders page on `<site>` and tell me the delivery address on the most recent order.
+
+> Fill in this contact form, but stop and show me the filled form before you submit it.
+
+What you should see: a real browser window on your desktop doing the clicking, and the page coming back to
+the model as a `ref`-numbered list. The first time it meets a sign-in, a 2FA prompt or a verification page
+it **stops and tells you** — take the window over by hand and it continues from where it left off.
+
 ### Browser binary
 
 The provider probes `chromium` → `chrome` → `msedge` → `edge` channels automatically; any installed Chromium-family browser works with **zero download**. To use Playwright-managed Chromium instead:
@@ -165,7 +179,10 @@ npm run cost       # resident prompt cost of the tool schemas, per surface
 npm run build      # tsc → lib/
 ```
 
-`scripts/` is self-contained: `dsh-browser-verify.mjs`, `doctor.mjs` and `measure-prompt-cost.mjs` live inside the package and resolve their imports relatively, so copying this directory elsewhere keeps every check runnable. A thin forwarder at `D:\dsh-plugins\_deps\scripts\dsh-browser-verify.mjs` keeps the old command (and the toolbox panel entry) working.
+Two of those scripts ship with the package and work against an installed copy, because they need nothing
+but `lib/` and the harness: `node scripts/dsh-browser-verify.mjs` (the acceptance suite) and
+`node scripts/doctor.mjs` (re-checks the harness exports after an upgrade). The rest are repository-only
+and run from a checkout — `measure-prompt-cost.mjs` reads `src/`, so it cannot work from a tarball.
 
 ### Test suites
 

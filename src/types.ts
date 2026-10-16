@@ -29,6 +29,18 @@ export interface BrowserNode {
   readonly children: readonly BrowserNode[]
 }
 
+/**
+ * Metadata of the main document response that produced a snapshot, read from the
+ * network layer. Challenge detection consults this first: a response header is the
+ * interceptor's own published API (`cf-mitigated: challenge`), unlike its wording.
+ */
+export interface DocumentResponse {
+  readonly status: number
+  readonly url: string
+  /** Response headers as Playwright reports them (names lowercased). */
+  readonly headers: Readonly<Record<string, string>>
+}
+
 /** Bounded accessibility snapshot of the current page. */
 export interface BrowserSnapshot {
   readonly url: string
@@ -62,6 +74,18 @@ export interface BrowserSnapshot {
    * and a user who picked smart mode kept believing it was running.
    */
   engineNote?: string
+  /**
+   * Metadata of the main document response, when the capture observed one. It is
+   * the first thing challenge detection reads, because it is the interceptor's
+   * own API rather than its prose.
+   */
+  response?: DocumentResponse
+  /**
+   * Advisory note appended when an action left the page identical. This is the
+   * no-progress backstop: it covers anti-bot walls whose vendor we have no
+   * signature for, by asking "did anything happen" instead of "which wall is this".
+   */
+  stallNote?: string
 }
 
 /** One element that entered the tree since the previous snapshot. */

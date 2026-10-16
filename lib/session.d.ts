@@ -5,7 +5,7 @@
  */
 import type { BrowserContext, CDPSession, Locator, Page, Request } from 'playwright-core';
 import type { PlaywrightProvider } from './provider.ts';
-import type { BrowserNode, BrowserSnapshot, DiagnosticsEntry, LoadState } from './types.ts';
+import type { BrowserNode, BrowserSnapshot, DiagnosticsEntry, DocumentResponse, LoadState } from './types.ts';
 import type { RefSignature } from './page-snapshot.ts';
 import { type CookieRow } from './login-sites.ts';
 import type { ActionResult, PendingDialogRecord } from './provider.ts';
@@ -44,6 +44,15 @@ export declare class PlaywrightSession {
         entry: DiagnosticsEntry;
         startedAt: number;
     }>;
+    /**
+     * Main document response per page. Challenge detection reads this before it
+     * reads a word of the page: a response header is the interceptor's own API.
+     */
+    docResponses: WeakMap<Page, DocumentResponse>;
+    /** Fingerprint of the previous capture's page state (no-progress backstop). */
+    lastFingerprint: string | undefined;
+    /** Consecutive captures that produced an identical page-state fingerprint. */
+    unchangedStreak: number;
     /** Ring capacity per stream. */
     diagLimit: number;
     /** ref -> feature signature of the previous capture (diff baseline). */
@@ -87,14 +96,7 @@ export declare class PlaywrightSession {
      * cached data (page.url() needs no round trip) — page.evaluate() and
      * page.title() would both stall behind the dialog.
      */
-    blockedSnapshot(page: Page, pending: PendingDialogRecord | undefined): {
-        url: string;
-        title: string;
-        nodes: never[];
-        totalRefs: number;
-        truncated: boolean;
-        dialogNote: string;
-    };
+    blockedSnapshot(page: Page, pending: PendingDialogRecord | undefined): BrowserSnapshot;
     /**
      * Run one page action that may raise a native dialog. Such an action never
      * resolves while the dialog is up, so race it against the dialog appearing
@@ -109,7 +111,7 @@ export declare class PlaywrightSession {
     /** Read the snapshot tree from one page (must run inside a run()). */
     capture(page: Page, opts: {
         interactiveOnly?: boolean;
-    } | undefined): Promise<BrowserSnapshot>;
+    } | undefined, afterAction?: boolean): Promise<BrowserSnapshot>;
     /**
      * Semantic-tree capture via Playwright's official ariaSnapshot(mode:'ai').
      * An unavailable or unreadable aria tree (`missing`) degrades to the legacy
@@ -153,24 +155,10 @@ export declare class PlaywrightSession {
     buildRefSignatures(nodes: readonly BrowserNode[]): Map<string, RefSignature>;
     /** The document nonce shared by this snapshot's refs, or undefined. */
     refNonce(nodes: readonly BrowserNode[]): string | undefined;
-    navigate(url: string, waitUntil: LoadState, signal?: AbortSignal): Promise<BrowserSnapshot | {
-        url: string;
-        title: string;
-        nodes: never[];
-        totalRefs: number;
-        truncated: boolean;
-        dialogNote: string;
-    }>;
+    navigate(url: string, waitUntil: LoadState, signal?: AbortSignal): Promise<BrowserSnapshot>;
     snapshot(opts?: {
         interactiveOnly?: boolean;
-    }): Promise<BrowserSnapshot | {
-        url: string;
-        title: string;
-        nodes: never[];
-        totalRefs: number;
-        truncated: boolean;
-        dialogNote: string;
-    }>;
+    }): Promise<BrowserSnapshot>;
     /**
      * Codex-style click-point resolution. Tries a scroll-alignment ladder
      * (centre, then end, then start). For each alignment: scroll the element
@@ -186,14 +174,7 @@ export declare class PlaywrightSession {
         hitDesc: string;
         hitSelf: boolean;
     }>;
-    click(ref: string, signal?: AbortSignal): Promise<BrowserSnapshot | {
-        url: string;
-        title: string;
-        nodes: never[];
-        totalRefs: number;
-        truncated: boolean;
-        dialogNote: string;
-    }>;
+    click(ref: string, signal?: AbortSignal): Promise<BrowserSnapshot>;
     /**
      * Click an element the snapshot gave no ref, addressed by its visible label
      * (e.g. a menu item revealed by browser_click with mode "hover" that is plain text). The
@@ -201,14 +182,7 @@ export declare class PlaywrightSession {
      * and the landing note names what was actually clicked plus how many
      * elements shared the label.
      */
-    clickText(text: string, signal?: AbortSignal): Promise<BrowserSnapshot | {
-        url: string;
-        title: string;
-        nodes: never[];
-        totalRefs: number;
-        truncated: boolean;
-        dialogNote: string;
-    }>;
+    clickText(text: string, signal?: AbortSignal): Promise<BrowserSnapshot>;
     /**
      * Enforce the navigation policy for the link a click is about to follow.
      * Click navigation does not run through navigate(), so this is the only place
@@ -240,41 +214,13 @@ export declare class PlaywrightSession {
      * then report what actually received the click. The label names the target
      * in the landing note; shared is how many elements matched it (0 for refs).
      */
-    clickLocator(locator: Locator, signal: AbortSignal | undefined, label: string, shared: number): Promise<BrowserSnapshot | {
-        url: string;
-        title: string;
-        nodes: never[];
-        totalRefs: number;
-        truncated: boolean;
-        dialogNote: string;
-    }>;
-    clickAt(x: number, y: number, signal?: AbortSignal): Promise<BrowserSnapshot | {
-        url: string;
-        title: string;
-        nodes: never[];
-        totalRefs: number;
-        truncated: boolean;
-        dialogNote: string;
-    }>;
-    clickAtRef(ref: string, signal?: AbortSignal): Promise<BrowserSnapshot | {
-        url: string;
-        title: string;
-        nodes: never[];
-        totalRefs: number;
-        truncated: boolean;
-        dialogNote: string;
-    }>;
+    clickLocator(locator: Locator, signal: AbortSignal | undefined, label: string, shared: number): Promise<BrowserSnapshot>;
+    clickAt(x: number, y: number, signal?: AbortSignal): Promise<BrowserSnapshot>;
+    clickAtRef(ref: string, signal?: AbortSignal): Promise<BrowserSnapshot>;
     fill(ref: string, text: string, signal?: AbortSignal): Promise<BrowserSnapshot>;
     /** Read the field back and decide whether the fill landed. */
     verifyFill(locator: Locator, tag: string, text: string): Promise<boolean>;
-    press(ref: string, key: string, signal?: AbortSignal): Promise<BrowserSnapshot | {
-        url: string;
-        title: string;
-        nodes: never[];
-        totalRefs: number;
-        truncated: boolean;
-        dialogNote: string;
-    }>;
+    press(ref: string, key: string, signal?: AbortSignal): Promise<BrowserSnapshot>;
     /**
      * Hover the referenced element: rest the pointer on it so hover-revealed
      * content appears (CSS :hover rules, JS mouseenter handlers, submenus,
@@ -308,14 +254,7 @@ export declare class PlaywrightSession {
         title: string;
         active: boolean;
     }[]>;
-    switchTab(index: number, signal?: AbortSignal): Promise<BrowserSnapshot | {
-        url: string;
-        title: string;
-        nodes: never[];
-        totalRefs: number;
-        truncated: boolean;
-        dialogNote: string;
-    }>;
+    switchTab(index: number, signal?: AbortSignal): Promise<BrowserSnapshot>;
     openTab(url: string, waitUntil: LoadState, signal?: AbortSignal): Promise<BrowserSnapshot>;
     closeTab(index: number, signal?: AbortSignal): Promise<void>;
     /**

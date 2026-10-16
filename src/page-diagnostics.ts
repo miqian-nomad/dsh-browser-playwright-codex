@@ -78,10 +78,26 @@ export function trackPage(session: PlaywrightSession, page: Page) {
     })
     page.on('response', (response) => {
       const slot = session.requestEntries.get(response.request())
-      if (slot === undefined) return
-      slot.entry.status = response.status()
-      slot.entry.ms = Date.now() - slot.startedAt
-      session.requestEntries.delete(response.request())
+      if (slot !== undefined) {
+        slot.entry.status = response.status()
+        slot.entry.ms = Date.now() - slot.startedAt
+        session.requestEntries.delete(response.request())
+      }
+      // The main document response carries whatever the interceptor put on the
+      // wire. Challenge detection reads this before it reads a single word of the
+      // page: `cf-mitigated: challenge` is Cloudflare's published detection
+      // contract, and unlike page wording it cannot be reworded by accident.
+      try {
+        if (!response.request().isNavigationRequest()) return
+        if (response.frame() !== page.mainFrame()) return
+        session.docResponses.set(page, {
+          status: response.status(),
+          url: response.url(),
+          headers: { ...response.headers() },
+        })
+      } catch {
+        // A response that detached mid-flight must never break capture.
+      }
     })
     page.on('requestfailed', (request) => {
       const slot = session.requestEntries.get(request)

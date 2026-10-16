@@ -26,14 +26,7 @@ export declare function assertActionable(_session: PlaywrightSession, locator: L
  * and hand the caller the pending state instead (Playwright-MCP pattern).
  */
 export declare function runAction(session: PlaywrightSession, page: Page, action: () => Promise<unknown>): Promise<ActionResult>;
-export declare function navigate(session: PlaywrightSession, url: string, waitUntil: LoadState, signal: AbortSignal | undefined): Promise<import("./types.ts").BrowserSnapshot | {
-    url: string;
-    title: string;
-    nodes: never[];
-    totalRefs: number;
-    truncated: boolean;
-    dialogNote: string;
-}>;
+export declare function navigate(session: PlaywrightSession, url: string, waitUntil: LoadState, signal: AbortSignal | undefined): Promise<import("./types.ts").BrowserSnapshot>;
 /**
  * Codex-style click-point resolution. Tries a scroll-alignment ladder
  * (centre, then end, then start). For each alignment: scroll the element
@@ -56,55 +49,20 @@ export declare function resolveClickPoint(session: PlaywrightSession, locator: L
  * and the landing note names what was actually clicked plus how many
  * elements shared the label.
  */
-export declare function clickText(session: PlaywrightSession, text: string, signal: AbortSignal | undefined): Promise<import("./types.ts").BrowserSnapshot | {
-    url: string;
-    title: string;
-    nodes: never[];
-    totalRefs: number;
-    truncated: boolean;
-    dialogNote: string;
-}>;
+export declare function clickText(session: PlaywrightSession, text: string, signal: AbortSignal | undefined): Promise<import("./types.ts").BrowserSnapshot>;
 /**
  * Shared click core: enforce the URL policy for link targets, run the
  * Codex-style geometry ladder with the Playwright actionability fallback,
  * then report what actually received the click. The label names the target
  * in the landing note; shared is how many elements matched it (0 for refs).
  */
-export declare function clickLocator(session: PlaywrightSession, locator: Locator, signal: AbortSignal | undefined, label: string, shared: number): Promise<import("./types.ts").BrowserSnapshot | {
-    url: string;
-    title: string;
-    nodes: never[];
-    totalRefs: number;
-    truncated: boolean;
-    dialogNote: string;
-}>;
-export declare function clickAt(session: PlaywrightSession, x: number, y: number, signal: AbortSignal | undefined): Promise<import("./types.ts").BrowserSnapshot | {
-    url: string;
-    title: string;
-    nodes: never[];
-    totalRefs: number;
-    truncated: boolean;
-    dialogNote: string;
-}>;
-export declare function clickAtRef(session: PlaywrightSession, ref: string, signal: AbortSignal | undefined): Promise<import("./types.ts").BrowserSnapshot | {
-    url: string;
-    title: string;
-    nodes: never[];
-    totalRefs: number;
-    truncated: boolean;
-    dialogNote: string;
-}>;
+export declare function clickLocator(session: PlaywrightSession, locator: Locator, signal: AbortSignal | undefined, label: string, shared: number): Promise<import("./types.ts").BrowserSnapshot>;
+export declare function clickAt(session: PlaywrightSession, x: number, y: number, signal: AbortSignal | undefined): Promise<import("./types.ts").BrowserSnapshot>;
+export declare function clickAtRef(session: PlaywrightSession, ref: string, signal: AbortSignal | undefined): Promise<import("./types.ts").BrowserSnapshot>;
 export declare function fill(session: PlaywrightSession, ref: string, text: string, signal: AbortSignal | undefined): Promise<import("./types.ts").BrowserSnapshot>;
 /** Read the field back and decide whether the fill landed. */
 export declare function verifyFill(_session: PlaywrightSession, locator: Locator, tag: string, text: string): Promise<boolean>;
-export declare function press(session: PlaywrightSession, ref: string, key: string, signal: AbortSignal | undefined): Promise<import("./types.ts").BrowserSnapshot | {
-    url: string;
-    title: string;
-    nodes: never[];
-    totalRefs: number;
-    truncated: boolean;
-    dialogNote: string;
-}>;
+export declare function press(session: PlaywrightSession, ref: string, key: string, signal: AbortSignal | undefined): Promise<import("./types.ts").BrowserSnapshot>;
 /**
  * Hover a trigger the snapshot gave no ref, addressed by its visible label
  * (e.g. a plain span that reveals a menu on mouseenter). The label must
@@ -122,13 +80,6 @@ export declare function hoverLocator(session: PlaywrightSession, locator: Locato
 export declare function scroll(session: PlaywrightSession, direction: 'up' | 'down', amount: number, ref: string | undefined, signal: AbortSignal | undefined): Promise<import("./types.ts").BrowserSnapshot>;
 export declare function back(session: PlaywrightSession, signal: AbortSignal | undefined): Promise<import("./types.ts").BrowserSnapshot>;
 export declare function forward(session: PlaywrightSession, signal: AbortSignal | undefined): Promise<import("./types.ts").BrowserSnapshot>;
-export declare function switchTab(session: PlaywrightSession, index: number, signal: AbortSignal | undefined): Promise<import("./types.ts").BrowserSnapshot | {
-    url: string;
-    title: string;
-    nodes: never[];
-    totalRefs: number;
-    truncated: boolean;
-    dialogNote: string;
-}>;
+export declare function switchTab(session: PlaywrightSession, index: number, signal: AbortSignal | undefined): Promise<import("./types.ts").BrowserSnapshot>;
 export declare function openTab(session: PlaywrightSession, url: string, waitUntil: LoadState, signal: AbortSignal | undefined): Promise<import("./types.ts").BrowserSnapshot>;
 export declare function closeTab(session: PlaywrightSession, index: number, signal: AbortSignal | undefined): Promise<void>;

@@ -691,7 +691,7 @@ export async function scroll(
     // loaders a beat, then settle (bounded) before capturing.
     await withAbort(new Promise((resolve) => setTimeout(resolve, 450)), signal)
     await session.waitForPageStable(page, 1200)
-    return session.capture(page, undefined)
+    return session.capture(page, undefined, true)
   })
 }
 

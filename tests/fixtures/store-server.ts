@@ -259,6 +259,33 @@ async function handle(req: IncomingMessage, res: ServerResponse, orders: Map<str
   const path = url.pathname
   const method = (req.method ?? 'GET').toUpperCase()
 
+  // -- Interception fixtures -------------------------------------------------
+  // A challenge page as the network layer actually presents it. The header is
+  // Cloudflare's published detection contract, so this fixture is what proves the
+  // whole chain end to end: Playwright header capture -> snapshot.response ->
+  // the header tier of challenge detection -> the note the model reads.
+  if (path === '/challenge/cloudflare') {
+    res.writeHead(403, { 'content-type': 'text/html; charset=utf-8', 'cf-mitigated': 'challenge' })
+    res.end(
+      '<!doctype html><html><head><meta charset="utf-8"><title>Just a moment...</title></head>' +
+        '<body><h1>Checking your browser</h1><button>Verify you are human</button>' +
+        '<iframe title="reCAPTCHA" src="about:blank"></iframe></body></html>',
+    )
+    return
+  }
+  // A wall with no signature at all: no vendor header, no vendor widget, and
+  // wording we deliberately do not know ("请稍等" is not "请稍候"). Nothing but
+  // the no-progress backstop can catch this one, which is the point of tier 4:
+  // it stands in for every vendor we have never seen.
+  if (path === '/challenge/unknown') {
+    res.writeHead(403, { 'content-type': 'text/html; charset=utf-8' })
+    res.end(
+      '<!doctype html><html><head><meta charset="utf-8"><title>请稍等</title></head>' +
+        '<body><button>继续</button></body></html>',
+    )
+    return
+  }
+
   // -- JSON APIs -------------------------------------------------------------
   if (path === '/api/recent') {
     await delay(200)

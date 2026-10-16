@@ -387,6 +387,22 @@ function convertAriaNode(
 ): MutableBrowserNode | null {
   const actionable = isActionableRole(node.role)
   if (opts.interactiveOnly === true && !actionable) {
+    // Frames are the one non-actionable node kept: their accessible name is the
+    // embedded widget's own title, and that title appears nowhere else in the
+    // tree (see the same rule in the legacy walker).
+    if (node.role === 'iframe') {
+      state.count += 1
+      if (state.count > opts.maxNodes) {
+        state.truncated = true
+        return null
+      }
+      const frameName = node.name !== '' ? node.name : (node.placeholder ?? '')
+      return {
+        role: node.role,
+        name: frameName.length > opts.maxNameLength ? frameName.slice(0, opts.maxNameLength) + '…' : frameName,
+        children: [],
+      }
+    }
     const kids: MutableBrowserNode[] = []
     for (const child of node.children) {
       const sub = convertAriaNode(child, opts, refs, roles, state)

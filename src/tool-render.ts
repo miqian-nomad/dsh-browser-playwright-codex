@@ -82,6 +82,13 @@ export function snapshotValue(snapshot: BrowserSnapshot): SnapshotValue {
   // is the difference between a checked assumption and a silent one.
   const engine = snapshot.engineNote
   if (engine !== undefined && engine !== '') notes.push('[page reader] ' + engine)
+  // The no-progress backstop rides with the other notes: it is advice about the
+  // action the model just took, so it has to be in that action's result. It is
+  // suppressed when a challenge was already identified, because "this is a wall,
+  // here is why" is the actionable message and stacking a second, vaguer warning
+  // on top of it only spends prompt budget on a case that is already decided.
+  const stall = snapshot.stallNote
+  if (challenge === null && stall !== undefined && stall !== '') notes.push(stall)
   const head = notes.length > 0 ? notes.join('\n\n') + '\n\n' : ''
   // Incremental diff rides along when the provider computed one (snapshot.diff).
   const diffBlock = snapshot.diff !== undefined ? '\n\n' + renderSnapshotDiff(snapshot.diff) : ''
@@ -92,7 +99,19 @@ export function snapshotValue(snapshot: BrowserSnapshot): SnapshotValue {
     truncated: snapshot.truncated,
     tree:
       head +
-      (challenge === null ? tree : challenge.engine + ': ' + challenge.hint + '.\n' + CHALLENGE_NOTE + '\n\n' + tree) +
+      (challenge === null
+        ? tree
+        : challenge.engine +
+          ' [' +
+          challenge.tier +
+          ': ' +
+          challenge.evidence +
+          ']: ' +
+          challenge.hint +
+          '.\n' +
+          CHALLENGE_NOTE +
+          '\n\n' +
+          tree) +
       diffBlock,
   }
 }

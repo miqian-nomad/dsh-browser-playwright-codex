@@ -221,3 +221,21 @@ test('ariaTreeToBrowserNodes names an input from its placeholder, like the legac
   assert.equal(built.nodes[0].name, '在这里输入')
   assert.equal(built.misaligned, false)
 })
+
+test('interactiveOnly still keeps an iframe, whose name is the embedded widget title', () => {
+  // Every other non-actionable node is pruned in this mode, but a frame's name is
+  // the embedded widget's own title and appears nowhere else — pruning it would
+  // hide a challenge widget from the check that is meant to recognise one.
+  const yaml = '- iframe "Widget containing a Cloudflare security challenge"\n- heading "Sign in"\n- button "Submit"\n'
+  const built = ariaTreeToBrowserNodes(parseAriaSnapshot(yaml), { ...OPTS, interactiveOnly: true }, ['e1'])
+  const roles = built.nodes.map((node) => node.role)
+  assert.ok(roles.includes('iframe'), 'the frame must survive, got ' + JSON.stringify(roles))
+  const frame = built.nodes.find((node) => node.role === 'iframe')
+  assert.equal(frame?.name, 'Widget containing a Cloudflare security challenge')
+  // It is not actionable, so it must not consume a ref from the DOM side.
+  assert.equal(frame?.ref, undefined)
+  assert.equal(
+    built.nodes.some((node) => node.role === 'heading'),
+    false,
+  )
+})

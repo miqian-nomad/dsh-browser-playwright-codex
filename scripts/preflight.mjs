@@ -52,6 +52,10 @@ const SHOULD_SHIP = [
   'cordis.patch.yml',
   'locale/en.json',
   'locale/zh.json',
+  // 这两个脚本随包发布，而且只依赖 lib/ 与 harness —— 也就是说装上 npm 包的用户能直接跑它们，
+  // README 就是这么承诺的。把整个 scripts/ 收窄成白名单时最容易顺手丢掉它们，所以钉在这里。
+  'scripts/doctor.mjs',
+  'scripts/dsh-browser-verify.mjs',
 ]
 for (const f of SHOULD_SHIP) if (!packed.has(f)) problems.push('包里缺文件：' + f)
 if (![...packed].some((p) => p.startsWith('lib/'))) problems.push('包里没有 lib/（插件实际加载的就是它）')

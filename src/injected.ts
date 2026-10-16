@@ -234,6 +234,19 @@ export const SNAPSHOT_SCRIPT = String.raw`
     // Nearest ancestor name, used to fold a child that only repeats it.
     const inherited = typeof inheritedName === 'string' ? inheritedName : ''
     if (opts.interactiveOnly && !actionable) {
+      // Frames are the one non-actionable node kept. An iframe's accessible name
+      // is the embedded widget's own title ("reCAPTCHA", "Widget containing a
+      // Cloudflare security challenge"), and that title appears nowhere else in
+      // the tree — pruning it would hide a challenge widget from exactly the
+      // check that is supposed to recognise one.
+      if (role === 'iframe') {
+        state.count += 1
+        if (state.count > opts.maxNodes) {
+          state.truncated = true
+          return null
+        }
+        return { role, name: nameOf(el, opts.maxNameLength, opts.maxTextLength, false), children: [] }
+      }
       const kids = []
       for (const child of el.children) {
         if (SKIP_TAGS.has(child.tagName.toLowerCase())) continue

@@ -3,6 +3,8 @@
  * @module dsh-browser-playwright-codex/tool-types
  */
 import type { StreamChunk } from '@deepseek-ai/dsh-llm';
+import type { ChallengeTier } from './challenge-signatures.ts';
+import type { DocumentResponse } from './types.ts';
 /**
  * JSON value: the shape every tool value must be serializable to, so the
  * framework can put it on the wire. Declared locally because the installed
@@ -42,6 +44,8 @@ export interface ScreenshotValue {
 /** Minimal node shape the challenge detector walks. */
 export interface ChallengeNode {
     readonly name?: string;
+    /** Accessible role. Both built-in engines provide one; it gates the wording tier. */
+    readonly role?: string;
     readonly children?: readonly ChallengeNode[];
 }
 /** The slice of a snapshot the challenge detector reads. */
@@ -49,11 +53,17 @@ export interface ChallengeSnapshot {
     readonly title?: string;
     readonly url?: string;
     readonly nodes?: readonly ChallengeNode[];
+    /** Main document response metadata; absent when no navigation response was seen. */
+    readonly response?: DocumentResponse;
 }
 /** What the challenge detector reports when a page is an anti-bot wall. */
 export interface ChallengeMatch {
     engine: string;
     hint: string;
+    /** How it was proven, strongest first. */
+    tier: ChallengeTier;
+    /** The concrete signal that fired, so a reader can judge the call instead of trusting it. */
+    evidence: string;
 }
 /** The attachments-service face consumed at execution time. */
 export interface AttachmentServiceLike {

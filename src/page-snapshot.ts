@@ -7,6 +7,7 @@ import type { Page } from 'playwright-core'
 import type { PlaywrightSession } from './session.ts'
 import type { BrowserNode, BrowserSnapshot } from './types.ts'
 import { captureAriaSnapshot } from './snapshot-aria.ts'
+import { detectNoProgress, snapshotFingerprint } from './challenge.ts'
 import { isContextDestroyed } from './page-diagnostics.ts'
 import type { SnapshotOptions } from './injected.ts'
 import { REF_PATTERN } from './config.ts'
@@ -108,7 +109,7 @@ export async function settleAndSnapshot(
       await page.waitForLoadState('load', { timeout: session.timeoutMs() }).catch(() => {})
     }
     await session.waitForPageStable(page, navChanged ? 1500 : 800)
-    return await session.capture(page, undefined)
+    return await session.capture(page, undefined, true)
   })
   if (raced.blocked) return session.blockedSnapshot(page, raced.pending)
   return raced.value as BrowserSnapshot
@@ -244,6 +245,57 @@ export function attachDiff(session: PlaywrightSession, snap: BrowserSnapshot): B
     if (!sigs.has(ref)) removed.push(ref)
   }
   return { ...snap, diff: { added, removed, changed, same, navigationReset: false } }
+}
+
+/**
+ * Attach the main document response metadata observed for this page, when there
+ * is one. Challenge detection reads it before it reads a word of the page: a
+ * response header is the interceptor's own published API, unlike its prose.
+ */
+export function attachDocResponse(session: PlaywrightSession, page: Page, snap: BrowserSnapshot): BrowserSnapshot {
+  const response = session.docResponses.get(page)
+  if (response === undefined) return snap
+  // Only the response that produced the document we are actually looking at
+  // counts. A single-page app changes the URL with no document load, and reusing
+  // the previous document's headers there would report a wall on a page that is
+  // fine. Falling back to the lower tiers is the fail-safe direction: they still
+  // run, and so does the no-progress backstop.
+  if (withoutHash(response.url) !== withoutHash(snap.url)) return snap
+  return { ...snap, response }
+}
+
+/** URL without its fragment, for comparing a page against the response it came from. */
+function withoutHash(url: string): string {
+  const hash = url.indexOf('#')
+  return hash === -1 ? url : url.slice(0, hash)
+}
+
+/**
+ * The no-progress backstop — the tier that needs no vendor signature at all. It
+ * compares this capture's page-state fingerprint with the previous one and, for a
+ * post-action capture, appends an advisory note when nothing moved. The note says
+ * it is a guess on purpose: covering walls we have no signature for is the point.
+ */
+export function attachNoProgress(
+  session: PlaywrightSession,
+  snap: BrowserSnapshot,
+  afterAction: boolean,
+): BrowserSnapshot {
+  const fingerprint = snapshotFingerprint({
+    url: snap.url,
+    title: snap.title,
+    refs: snap.totalRefs,
+    nodes: snap.nodes,
+  })
+  const identical = session.lastFingerprint !== undefined && session.lastFingerprint === fingerprint
+  session.unchangedStreak = identical ? session.unchangedStreak + 1 : 0
+  session.lastFingerprint = fingerprint
+  const note = detectNoProgress({
+    afterAction,
+    unchangedStreak: session.unchangedStreak,
+    refs: snap.totalRefs,
+  })
+  return note === null ? snap : { ...snap, stallNote: note }
 }
 
 /** Build ref -> feature signature map from a captured tree, with parent refs. */

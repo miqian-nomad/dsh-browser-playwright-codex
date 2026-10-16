@@ -1,11 +1,11 @@
 # autocommit.ps1 —— 每日自动存档：有改动就提交一条带时间戳的 commit。
 #
-# 用法:
-#   powershell -ExecutionPolicy Bypass -File D:\dsh-plugins\dsh-browser-playwright-codex\scripts\autocommit.ps1
+# 用法（路径以脚本自身位置为准，换台机器、换目录都不用改）:
+#   powershell -ExecutionPolicy Bypass -File <本仓库>\scripts\autocommit.ps1
 #
 # 注册成每天 23:55 的计划任务（一次即可，用户级，不需要管理员）:
 #   schtasks /create /tn "dsh-browser-playwright autocommit" /sc daily /st 23:55 ^
-#     /tr "powershell -ExecutionPolicy Bypass -File D:\dsh-plugins\dsh-browser-playwright-codex\scripts\autocommit.ps1"
+#     /tr "powershell -ExecutionPolicy Bypass -File <本仓库>\scripts\autocommit.ps1"
 #
 # 说明：这是"存档"，不是"分支管理"。它只提交，从不 push、reset 或丢弃改动，
 # 所以最坏情况也只是历史里多一条记录。

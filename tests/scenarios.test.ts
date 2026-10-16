@@ -15,6 +15,8 @@ import { PlaywrightProvider } from '../src/provider.ts'
 import type { PlaywrightConfig } from '../src/config.ts'
 import { BrowserError } from '../src/errors.ts'
 import type { BrowserNode, BrowserSession, BrowserSnapshot } from '../src/types.ts'
+import { detectChallenge } from '../src/challenge.ts'
+import { snapshotValue } from '../src/tool-render.ts'
 import {
   startStoreServer,
   CATALOG,
@@ -795,5 +797,88 @@ test('aria engine: a real page still exposes its links, hrefs and structure', as
     assert.ok(snap.totalRefs > 0, 'DOM-minted refs must be aligned onto the aria tree')
   } finally {
     await ariaEngine.dispose()
+  }
+})
+
+// ---------------------------------------------------------------------------
+// Challenge detection end to end: the network layer, not the page's wording
+// ---------------------------------------------------------------------------
+
+test('a real challenge page is caught from its own response header (tier 1)', async () => {
+  const s = await provider.acquire('challenge-header')
+  try {
+    const snap = await s.navigate(store.base + '/challenge/cloudflare', 'load')
+    // The plumbing under test: the page.on('response') listener must hand the
+    // main document's status and headers to the snapshot. Without this the
+    // strongest tier is silently dead in production while unit tests stay green.
+    assert.equal(snap.response?.status, 403)
+    assert.equal(snap.response?.headers['cf-mitigated'], 'challenge')
+    const tree = snapshotValue(snap).tree
+    assert.match(tree, /Cloudflare \[response-header: cf-mitigated: challenge\]/)
+    assert.match(tree, /NOT solvable by automation/)
+  } finally {
+    await s.close()
+  }
+})
+
+test('a wall with no signature at all is caught by the no-progress backstop (tier 4)', async () => {
+  const s = await provider.acquire('challenge-unknown')
+  try {
+    const before = await s.navigate(store.base + '/challenge/unknown', 'load')
+    // No vendor header, no vendor widget and wording we deliberately do not know
+    // ("请稍等" is not "请稍候"): nothing but the vendor-agnostic tier can catch
+    // this. That tier is the answer to "a new verification page appears tomorrow".
+    assert.equal(detectChallenge(before), null)
+    const refs: string[] = []
+    walk(before.nodes, (node) => {
+      if (node.ref !== undefined) refs.push(node.ref)
+    })
+    const target = refs[0]
+    assert.ok(target !== undefined, 'the unknown wall must expose its button')
+    const after = await s.click(target)
+    assert.ok(after.stallNote !== undefined, 'clicking a dead button on a dead page must raise the backstop')
+    assert.match(snapshotValue(after).tree, /no visible change/)
+  } finally {
+    await s.close()
+  }
+})
+
+test('interactiveOnly keeps the widget iframe whose title identifies a challenge', async () => {
+  const s = await provider.acquire('challenge-lean')
+  try {
+    await s.navigate(store.base + '/challenge/cloudflare', 'load')
+    const lean = await s.snapshot({ interactiveOnly: true })
+    // Turning the token-saving lever on must not turn challenge recognition off:
+    // an iframe's name is the embedded widget's title, and it is the only place
+    // that title appears in the tree.
+    const frames: string[] = []
+    walk(lean.nodes, (node) => {
+      if (node.role === 'iframe') frames.push(node.name)
+    })
+    assert.ok(frames.includes('reCAPTCHA'), 'the widget title must survive pruning, got ' + JSON.stringify(frames))
+  } finally {
+    await s.close()
+  }
+})
+
+test('a stale document response is not reused after an in-page URL change', async () => {
+  const s = await provider.acquire('challenge-stale')
+  try {
+    const first = await s.navigate(store.base + '/challenge/cloudflare', 'load')
+    assert.equal(first.response?.headers['cf-mitigated'], 'challenge')
+    // A single-page app changes the URL with no document load. The 403 belongs to
+    // the document *before* that route change, so reusing its header would report
+    // a wall on a page that may be perfectly fine. The detector must fall back to
+    // the lower tiers instead.
+    await s.evaluate("history.pushState({}, '', '/elsewhere')")
+    const later = await s.snapshot()
+    assert.equal(later.response, undefined)
+    // The page is still recognised — by a lower tier. What must be gone is the
+    // stale header, which is exactly what this asserts.
+    const found = detectChallenge(later)
+    assert.ok(found !== null, 'a lower tier must still catch this page')
+    assert.notEqual(found?.tier, 'response-header')
+  } finally {
+    await s.close()
   }
 })

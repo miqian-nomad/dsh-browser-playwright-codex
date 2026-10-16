@@ -80,17 +80,23 @@ export declare function captureLegacy(session: PlaywrightSession, page: Page, op
  * data-dsh-ref, so legacy and aria engines share the same contract.
  */
 export declare function attachDiff(session: PlaywrightSession, snap: BrowserSnapshot): BrowserSnapshot;
+/**
+ * Attach the main document response metadata observed for this page, when there
+ * is one. Challenge detection reads it before it reads a word of the page: a
+ * response header is the interceptor's own published API, unlike its prose.
+ */
+export declare function attachDocResponse(session: PlaywrightSession, page: Page, snap: BrowserSnapshot): BrowserSnapshot;
+/**
+ * The no-progress backstop — the tier that needs no vendor signature at all. It
+ * compares this capture's page-state fingerprint with the previous one and, for a
+ * post-action capture, appends an advisory note when nothing moved. The note says
+ * it is a guess on purpose: covering walls we have no signature for is the point.
+ */
+export declare function attachNoProgress(session: PlaywrightSession, snap: BrowserSnapshot, afterAction: boolean): BrowserSnapshot;
 /** Build ref -> feature signature map from a captured tree, with parent refs. */
 export declare function buildRefSignatures(_session: PlaywrightSession, nodes: readonly BrowserNode[]): Map<string, RefSignature>;
 export declare function snapshot(session: PlaywrightSession, opts?: {
     interactiveOnly?: boolean;
-}): Promise<BrowserSnapshot | {
-    url: string;
-    title: string;
-    nodes: never[];
-    totalRefs: number;
-    truncated: boolean;
-    dialogNote: string;
-}>;
+}): Promise<BrowserSnapshot>;
 export declare function refLocator(session: PlaywrightSession, ref: string): Promise<import("playwright-core").Locator>;
 export declare function assertLive(session: PlaywrightSession): void;

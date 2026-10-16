@@ -25,7 +25,11 @@ dsh plugin --profile <name> add github:miqian-nomad/dsh-browser-playwright-codex
   keeps working while it is minimised ([FOCUS-STEALING.md](FOCUS-STEALING.md)).
 - **遇事停下来叫人** — `alert` / `confirm` / `prompt` are parked and reported, answered only by an
   explicit `browser_dialog` call; a login, 2FA or captcha is handed back to you
-  ([DIALOG-POLICY.md](DIALOG-POLICY.md)).
+  ([DIALOG-POLICY.md](DIALOG-POLICY.md)). A challenge page is recognised from the interceptor's own
+  response headers first (`cf-mitigated: challenge` and friends), then from its widget, and only then
+  from wording; if none of those match, a page that stops changing after an action is reported as a
+  possible wall instead of being retried
+  ([docs/articles/dialogs-and-captcha.md](docs/articles/dialogs-and-captcha.md)).
 - **ref 失效会明说** — per-document nonce refs; a stale ref fails fast with an explanation instead of
   silently clicking a different element.
 - **强力工具默认关闭** — `browser_evaluate` / `browser_cdp` are **not registered at all** unless your
@@ -63,6 +67,28 @@ export this plugin imports still exists — that is the fast way to tell "the ha
 without a build step — `npm run build` is only needed after editing `src/`.
 
 The bundle mounts three rows: the `ctx.browser` seam (`service`), the Playwright provider (`playwright`), and the model-facing tool family (`tool`).
+
+### Your first task
+
+Install it and ask for something that leaves a visible result — there is nothing else to configure:
+
+> Open `https://news.ycombinator.com` and list the titles of the first five stories with their links.
+
+> Go to my orders page on `<site>` and tell me the delivery address on the most recent order.
+
+> Fill in this contact form, but stop and show me the filled form before you submit it.
+
+What you should see: a real browser window on your desktop doing the clicking, and the page coming back to
+the model as a `ref`-numbered list. The first time it meets a sign-in, a 2FA prompt or a verification page
+it **stops and tells you** — take the window over by hand and it continues from where it left off. The
+logins already in that profile are what make the rest work.
+
+Two habits worth having on day one:
+
+- **Let it look before it clicks.** Start from `browser_snapshot`; a `ref` is only valid in the result that
+  produced it (a stale one fails fast instead of clicking something else).
+- **Say "stop" for the irreversible step.** Submitting, paying, deleting and sending are the points where
+  you want to read the form first.
 
 ### Browser binary
 
@@ -204,6 +230,9 @@ whose snapshots are long, and both are off by default because both change what t
   anchor. Turn it on when a page re-renders often and you resent paying for the same tree twice.
 - **`interactiveOnlyDefault`** (tool row) — makes `browser_snapshot` default to actionable elements
   only; the model can still pass `interactiveOnly: false` per call when it needs the text around them.
+  Frames are kept either way: an iframe's accessible name is the embedded widget's own title, which is
+  how a challenge widget identifies itself, so pruning it would hide the wall the snapshot is meant to
+  reveal.
 
 Both are honest trades, not free wins: a diff is smaller but requires the model to hold the previous
 tree, and an interactive-only snapshot hides the prose the model may want to read. Measure before
@@ -254,7 +283,10 @@ npm run cost       # resident prompt cost of the tool schemas, per surface
 npm run build      # tsc → lib/
 ```
 
-`scripts/` is self-contained: `dsh-browser-verify.mjs`, `doctor.mjs` and `measure-prompt-cost.mjs` live inside the package and resolve their imports relatively, so copying this directory elsewhere keeps every check runnable. A thin forwarder at `D:\dsh-plugins\_deps\scripts\dsh-browser-verify.mjs` keeps the old command (and the toolbox panel entry) working.
+Two of those scripts ship with the package and work against an installed copy, because they need nothing
+but `lib/` and the harness: `node scripts/dsh-browser-verify.mjs` (the acceptance suite) and
+`node scripts/doctor.mjs` (re-checks the harness exports after an upgrade). The rest are repository-only
+and run from a checkout — `measure-prompt-cost.mjs` reads `src/`, so it cannot work from a tarball.
 
 ### Test suites
 
@@ -336,6 +368,7 @@ Written for people deciding whether to hand an agent their browser:
 - **Extract needs a dedicated model route** — it does not reuse the main request's route; misconfiguration fails loudly at call time.
 - **JS-driven navigations are not statically checkable** — `allowedDomains` covers `browser_navigate`, `browser_open_tab`, every click path (`browser_click`: ref, `precise`, raw-coordinate and `mode:"hover"` modes) and `browser_switch_tab`, but a button whose handler runs `location.href = …` can still leave the allowed hosts, and a tab that is already sitting on a disallowed host stays open (the agent simply refuses to drive it); deploy an external network guard for hard isolation.
 - **Stability waits are bounded by design** — a perpetually animating element falls back to a forced click on its current rect rather than stalling; a page that never settles is snapshotted after the cap. This is intentional: the agent must never hang.
+- **Challenge detection reads the responses it has actually seen** — the response-header tier applies to a document response this session observed after it attached to the tab. A tab that was already sitting on a challenge page when the session took it over falls through to the widget and wording tiers and, failing those, to the no-progress backstop: it reports a *possible* wall instead of guessing the vendor.
 
 ### Ref and lifecycle safety (fixed)
 

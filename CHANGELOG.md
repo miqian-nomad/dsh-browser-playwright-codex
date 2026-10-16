@@ -3,6 +3,35 @@
 Bilingual by intent: the version headings and the summary of each release are given in both
 languages, the individual entries follow the language the surrounding code and docs use.
 
+## 0.6.5 — 2026-10-16
+
+一句话摘要：**挑战页识别不再靠一份关键词表** —— 判定改成「厂商自有的机器信号优先，认不出来就问一句『页面变了吗』」，所以新出现的验证方式也能被接住；顺带清掉漏网的 4 处本机路径，并把 npm 包里 12 个用不上的开发脚本收成 2 个。
+
+### Changed
+
+- **挑战页识别重做成分层判定**（新增 `src/challenge-signatures.ts`，重写 `src/challenge.ts`）。原来只有一份中英混杂的词表，而且词表里**根本没有「验证码」「安全验证」「拖动滑块」这些中文说法** —— 也就是说 README 承诺的「遇到验证码会停下来」，在中文站点上大半不成立：百度系的「安全验证」、滑块页的「拖动滑块完成拼图」一个都识别不到，插件会当作普通页面继续点。现在按**稳定性**排序，而不是按覆盖率：
+  1. **主文档响应头** —— 厂商对外的公开 API：`cf-mitigated: challenge`（Cloudflare 官方文档就是教用户读这个头）、`x-amzn-waf-action: challenge`（AWS WAF）、`x-iinfo`（Imperva）、`x-datadome*`（DataDome）。为此在 `src/page-diagnostics.ts` 已有的 `page.on('response')` 里认出**主文档导航响应**，把 status 与头透传进快照（`BrowserSnapshot.response`）。只认**产生当前文档的那次响应**：单页应用改了 URL 却没有文档加载时，旧响应不再复用 —— 否则会在一个好好的页面上报出墙；退回低层是安全的失败方向。
+  2. **厂商控件自己的无障碍名** —— reCAPTCHA / hCaptcha / Turnstile / Arkose / PerimeterX 的 iframe 标题就是他们自己的产品名；非 iframe 节点上的同名 token 必须**另有**「请你验证」字样才算数，而且那份旁证语汇**排除了它自己**（`reCAPTCHA` 里就含 `captcha`，不排除的话这条守卫是空的 —— 第一版就是这样，被测试当场抓出来）。
+  3. **文案（最后手段）** —— 标题里的 `安全验证` / `Just a moment...`，或控件上的命令式文案（`请输入验证码`、`拖动滑块完成拼图`）；按「动词族」组合匹配而不是逐句枚举。**只有控件角色**（输入框 / 按钮 / 图片 / 滑块…）能凭「验证码」二字触发，`验证码说明` 这种帮助页链接不触发；`获取验证码` / `发送验证码` 这类正常登录控件也排除（另一个被测试抓出来的误判）。
+  4. **行为兜底（不认识任何厂商）** —— 动作之后 URL、标题、元素集合完全没变、且页面上几乎没有别的可点，就在这次结果里附一句「没有可见变化」，并**明说这是猜测**。这一层覆盖所有没有签名的厂商：新出现的验证方式靠它接住，代价只是多问用户一句，而不是拿账号去撞墙。
+- **`interactiveOnly` 不再把 iframe 剪掉**（`src/injected.ts` 与 `src/snapshot-aria.ts` 两个引擎都改）：iframe 的无障碍名就是内嵌控件自己的标题，是第 2 层唯一的证据。原来这个省 token 的开关一开，等于把验证码识别关掉 —— 一个**静默失效**。
+- **已经认出是拦截面时，不再叠那句兜底提示**：「这是墙、原因是什么」才是可执行的信息，再叠一句更含糊的警告只是多花 prompt。
+- **清掉仓库里漏网的 4 处本机绝对路径**（`README.md`、`PLUGIN-README.md`、`SNAPSHOT-RULES.md`、`scripts/autocommit.ps1`）。0.6.1 声称清干净了，实际漏了这四处；而它正是外部评审用来判断「这个项目离开作者的电脑就转不动」的证据。**这次改成脚本守**：`tests/doc-reality.test.ts` 新增守卫，扫全仓手写文本文件里「盘符 + 至少一段目录」的路径（已用探针验证：三条真实路径全部抓到，仓库里唯一命中是给读者的 `D:\path\to\…` 占位符，由白名单排除）。
+- **npm 包从 85 个文件收到 75 个**：`files` 里那一整个 `scripts/` 收成逐个文件的白名单，只留 `doctor.mjs` 与 `dsh-browser-verify.mjs`（这两个只依赖 `lib/` 与 harness，装到 npm 的用户**能直接跑**）。顺带修掉一处假承诺：README 原来说 `measure-prompt-cost.mjs` 也随包可跑，但它依赖 `src/` 与 `shipped-gates.mjs`，在装好的包里**从来跑不起来**。`scripts/preflight.mjs` 的 `SHOULD_SHIP` 现在钉住这两个脚本，防止以后再被顺手丢掉。
+- **新增上手一节「第一个任务」**（`README.md` / `PLUGIN-README.md` / `中文说明.md`）：三条可以直接复制的话 + 你会看到什么 + 第一天两个习惯（先看再点、不可逆的那步说停）。四家外部评审独立提到「装完不知道第一步干什么、文档过载」，而 `examples/` 目录一直不存在。
+
+### Added
+
+- `tests/challenge.test.ts`：**35 条**用例，正例与**必须不触发**的反例各占一半 —— 讲 reCAPTCHA 的文章、`验证码说明` 帮助链接、`获取验证码` 按钮、只是提到「请输入验证码」的长段落、普通搜索页、只有「安全」二字的标题。另有一条守卫：旁证语汇不得被任何厂商自己的名字满足。
+- `tests/scenarios.test.ts`：**4 条真浏览器端到端**。①真实 `cf-mitigated: challenge` 响应头一路走到渲染结果（钉住「监听 → 快照 → 判定 → 模型读到的文字」这条链，单测盖不住）；②一个**完全没有任何签名**的拦截面（标题「请稍等」、一个点不动的按钮）由第 4 层兜底抓住，测试**先断言 `detectChallenge` 返回 null**，证明它不是靠签名抓到的；③`interactiveOnly` 下 iframe 名字仍在；④单页应用改 URL 后旧响应头不复用。
+- `tests/snapshot-aria.test.ts`：`interactiveOnly` 保留 iframe 的用例。
+- `tests/doc-reality.test.ts`：本机路径守卫（见上）。
+
+### Fixed
+
+- **`PlaywrightSession.blockedSnapshot` 从未声明返回类型**，于是 `navigate()` 的推断返回类型变成一个联合类型，新加的字段在类型上根本不存在。类型检查抓出来的，不是运行期 —— 这正是把 `typecheck` 扩到 `tests/` 的价值。
+- **兜底指纹原来只读两层**：深层文字变化会被误判成「页面没变」，于是在一个正常页面上报出「没有可见变化」的假警告。现在读到 4 层。
+
 ## 0.6.1 — 2026-10-16
 ### Changed
 

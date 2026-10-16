@@ -181,3 +181,49 @@ test('the two response-size levers stay documented', () => {
     assert.ok(patch.includes(leaf), 'cordis.patch.yml no longer shows ' + leaf + ' as a configurable knob')
   }
 })
+
+/** Extensions worth scanning for a machine path. `lib/` is generated, so it is walked out. */
+const TEXT_EXTENSIONS = ['.md', '.ts', '.mjs', '.cjs', '.js', '.ps1', '.py', '.yml', '.yaml', '.json']
+
+/** Every hand-written text file in the repo (no `node_modules`, no `.git`, no generated `lib/`). */
+function textFiles(): string[] {
+  const walk = (dir: URL, prefix: string): string[] => {
+    const out: string[] = []
+    for (const entry of readdirSync(dir, { withFileTypes: true })) {
+      if (entry.name === 'node_modules' || entry.name === '.git' || entry.name === 'lib') continue
+      if (entry.isDirectory()) out.push(...walk(new URL(entry.name + '/', dir), prefix + entry.name + '/'))
+      else if (TEXT_EXTENSIONS.some((ext) => entry.name.endsWith(ext))) out.push(prefix + entry.name)
+    }
+    return out
+  }
+  return walk(ROOT, '')
+}
+
+/**
+ * A drive-letter path with at least one `dir\` segment. The segment requirement is what keeps
+ * this from firing on unrelated text: in `live:\n  ' + offenders.join(` the letter before the
+ * colon is preceded by another letter, and what follows the backslash is not a path segment.
+ */
+const MACHINE_PATH = /(?<![A-Za-z0-9])[A-Za-z]:\\(?:[^\\\s'"*()[\]{}]+\\)+[^\\\s'"*()[\]{}]*/g
+
+test('no machine-specific absolute path survives anywhere in the repo', () => {
+  // A path like `D:\dsh-plugins\…` means nothing on any other machine, and it is exactly the
+  // evidence two external reviewers used to conclude that this project "only runs on the
+  // author's Windows box" (2026-10-16). The 0.6.1 release cleaned two of them and missed
+  // three, so this is a guard now instead of another round of manual sweeping.
+  const offenders: string[] = []
+  for (const rel of textFiles()) {
+    if (HISTORY.has(rel)) continue
+    for (const match of read(rel).matchAll(MACHINE_PATH)) {
+      const hit = match[0]
+      // `D:\path\to\…` is a placeholder written *for* the reader, not a path on a real machine.
+      if (hit.includes('\\path\\to\\') || hit.includes('<') || hit.includes('…')) continue
+      offenders.push(rel + ': ' + hit)
+    }
+  }
+  assert.deepEqual(
+    offenders,
+    [],
+    'these files point at a path that exists on exactly one machine:\n  ' + offenders.join('\n  '),
+  )
+})

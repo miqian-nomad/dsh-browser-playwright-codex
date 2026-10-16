@@ -5,7 +5,7 @@
  */
 import type { BrowserContext, CDPSession, Locator, Page, Request } from 'playwright-core'
 import type { PlaywrightProvider } from './provider.ts'
-import type { BrowserNode, BrowserSnapshot, DiagnosticsEntry, LoadState } from './types.ts'
+import type { BrowserNode, BrowserSnapshot, DiagnosticsEntry, DocumentResponse, LoadState } from './types.ts'
 import type { RefSignature } from './page-snapshot.ts'
 import { looksLikeToken, registrableDomain, type CookieRow } from './login-sites.ts'
 import { BrowserError } from './errors.ts'
@@ -38,6 +38,8 @@ import {
 import {
   assertLive,
   attachDiff,
+  attachDocResponse,
+  attachNoProgress,
   buildRefSignatures,
   captureAria,
   captureLegacy,
@@ -78,6 +80,15 @@ export class PlaywrightSession {
   diagDropped = { console: 0, network: 0 }
   /** In-flight requests keyed by request object, for status and duration attribution. */
   requestEntries = new WeakMap<Request, { entry: DiagnosticsEntry; startedAt: number }>()
+  /**
+   * Main document response per page. Challenge detection reads this before it
+   * reads a word of the page: a response header is the interceptor's own API.
+   */
+  docResponses = new WeakMap<Page, DocumentResponse>()
+  /** Fingerprint of the previous capture's page state (no-progress backstop). */
+  lastFingerprint: string | undefined = undefined
+  /** Consecutive captures that produced an identical page-state fingerprint. */
+  unchangedStreak = 0
   /** Ring capacity per stream. */
   diagLimit = 200
   /** ref -> feature signature of the previous capture (diff baseline). */
@@ -197,7 +208,7 @@ export class PlaywrightSession {
    * cached data (page.url() needs no round trip) — page.evaluate() and
    * page.title() would both stall behind the dialog.
    */
-  blockedSnapshot(page: Page, pending: PendingDialogRecord | undefined) {
+  blockedSnapshot(page: Page, pending: PendingDialogRecord | undefined): BrowserSnapshot {
     return {
       url: page.url(),
       title: '',
@@ -261,13 +272,16 @@ export class PlaywrightSession {
     })
   }
   /** Read the snapshot tree from one page (must run inside a run()). */
-  async capture(page: Page, opts: { interactiveOnly?: boolean } | undefined) {
+  async capture(page: Page, opts: { interactiveOnly?: boolean } | undefined, afterAction = false) {
     this.provider.armDialogGuard(page)
     const raw =
       resolveSnapshotEngine(this.provider.config.snapshot.engine) === 'aria'
         ? await this.captureAria(page, opts)
         : await this.captureLegacy(page, opts)
-    return this.attachDiff(raw)
+    // Order matters: the response metadata is attached before the diff, so the
+    // snapshot the model reads carries the same evidence the detector used, and
+    // the no-progress backstop sees the final tree.
+    return this.attachDiff(attachNoProgress(this, attachDocResponse(this, page, raw), afterAction))
   }
   /**
    * Semantic-tree capture via Playwright's official ariaSnapshot(mode:'ai').
