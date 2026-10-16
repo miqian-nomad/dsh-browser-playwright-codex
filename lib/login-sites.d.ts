@@ -51,6 +51,8 @@ export interface LoginSites {
     /** The capped, sorted list actually shown. */
     sites: LoginSite[];
 }
+/** Whether a whole host is an analytics/CDN endpoint rather than a site you log into. */
+export declare function isTrackerHost(host: string): boolean;
 /**
  * Collapse a cookie host to its registrable domain. `www.x.com`, `.x.com` and `a.b.x.com`
  * all become `x.com`; `a.x.co.uk` becomes `x.co.uk`.

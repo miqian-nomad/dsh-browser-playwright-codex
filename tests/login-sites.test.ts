@@ -7,7 +7,7 @@
  */
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { registrableDomain, isTracker, summarizeLoginSites, type CookieRow } from '../src/login-sites.ts'
+import { registrableDomain, isTracker, isTrackerHost, summarizeLoginSites, type CookieRow } from '../src/login-sites.ts'
 import { getLoginSites, publishLoginSites } from '../src/runtime-state.ts'
 
 const NOW = 1_700_000_000_000
@@ -131,4 +131,23 @@ test('runtime-state 的读写是防御性拷贝', () => {
   const second = getLoginSites()
   assert.equal(second?.sites[0].domain, 'x.com', '调用方改返回值不能污染已发布的状态')
   assert.deepEqual(second?.sites[0].signals, ['httpOnly'])
+})
+test('整个域就是统计服务时不出现（真实 payload 抓到的误报：mmstat.com）', () => {
+  // 2026-10-16：这个功能第一次吐出真实名单时，mmstat.com（阿里的统计域）带着 30 个 cookie 排在
+  // 第 5 位，标着"推测登录" —— 但那只是逛过淘宝的痕迹。名字级名单拦不住"整个域就是统计端点"。
+  assert.equal(isTrackerHost('mmstat.com'), true)
+  assert.equal(isTrackerHost('hm.baidu.com'), true)
+  assert.equal(isTrackerHost('www.google-analytics.com'), true)
+  assert.equal(isTrackerHost('github.com'), false)
+  assert.equal(isTrackerHost('taobao.com'), false)
+  const payload = summarizeLoginSites(
+    [cookie('cna', 'mmstat.com'), cookie('sid', 'github.com', { httpOnly: true })],
+    'live',
+    NOW,
+  )
+  assert.deepEqual(
+    payload.sites.map((s) => s.domain),
+    ['github.com'],
+  )
+  assert.equal(payload.cookies, 1)
 })

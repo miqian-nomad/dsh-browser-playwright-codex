@@ -138,6 +138,34 @@ const TRACKER_PATTERNS: readonly RegExp[] = [
   /^CookieConsent$/i,
 ]
 
+/**
+ * Whole hosts that are analytics/CDN endpoints rather than sites you log into. The name list above
+ * cannot catch these: `mmstat.com` (Alibaba's stats host) sets cookies with innocent names, and a
+ * user who merely browsed Taobao would see it listed as a login. Found by looking at the first real
+ * payload this feature ever produced (231 domains; `mmstat.com` with 30 cookies, no httpOnly).
+ */
+const TRACKER_HOSTS: readonly RegExp[] = [
+  /(^|\.)mmstat\.com$/i,
+  /(^|\.)umeng\.com$/i,
+  /(^|\.)umengcloud\.com$/i,
+  /(^|\.)google-analytics\.com$/i,
+  /(^|\.)googletagmanager\.com$/i,
+  /(^|\.)doubleclick\.net$/i,
+  /(^|\.)hm\.baidu\.com$/i,
+  /(^|\.)cnzz\.com$/i,
+  /(^|\.)51\.la$/i,
+  /(^|\.)matomo\.cloud$/i,
+  /(^|\.)clarity\.ms$/i,
+  /(^|\.)hotjar\.com$/i,
+  /(^|\.)sentry\.io$/i,
+]
+
+/** Whether a whole host is an analytics/CDN endpoint rather than a site you log into. */
+export function isTrackerHost(host: string): boolean {
+  const clean = host.trim().replace(/^\./, '').toLowerCase()
+  return TRACKER_HOSTS.some((pattern) => pattern.test(clean))
+}
+
 /** Names that look like a server-side session / auth token. */
 const SESSION_NAME =
   /(^|[._-])(sid|sess|session|sessionid|jsessionid|phpsessid|auth|token|jwt|ticket|login|remember|account|uid|user)([._-]|$)/i
@@ -189,7 +217,7 @@ export function summarizeLoginSites(
     if (typeof row?.name !== 'string' || typeof row?.domain !== 'string') continue
     if (isTracker(row.name)) continue
     const domain = registrableDomain(row.domain)
-    if (domain === '') continue
+    if (domain === '' || isTrackerHost(row.domain)) continue
     counted += 1
     const entry = perDomain.get(domain) ?? {
       cookies: 0,
