@@ -1,0 +1,40 @@
+name: publish
+
+# 从 GitHub 的机器发布到 npm：本机到 registry.npmjs.org 不通（代理只到 GitHub），
+# 而 runner 的网络是通的。默认只跑 --dry-run，确认无误后再把 dry_run 关掉。
+#
+# 前置：仓库 secret 里要有 NPM_TOKEN（npm 的 Automation token，绕过 OTP）。
+on:
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: '只打包 + 预演（不真的发布）'
+        type: boolean
+        default: true
+      package:
+        description: '要发布的包（本仓库只有一个）'
+        type: string
+        default: '.'
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          registry-url: 'https://registry.npmjs.org'
+      - name: Install (repo has a lockfile; fall back if needed)
+        run: npm ci || npm install
+      - name: Dry run
+        if: ${{ inputs.dry_run }}
+        run: npm publish --dry-run
+      - name: Publish
+        if: ${{ !inputs.dry_run }}
+        run: npm publish --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
