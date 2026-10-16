@@ -81,4 +81,4 @@
 - 视口不随便改：`docs/capabilities/browser/viewport.md`
 - 风控分类边界：`docs/capabilities/tab/botDetection.md`
 - 故障不换机制 / 不 reselect / 句柄持久：`docs/browser-troubleshooting.md` + `skills/control-chrome/SKILL.md`
-- 完整清单归档在 Codex 插件目录：`C:\Users\Administrator.USER-20250528OP\.codex\plugins\cache\openai-bundled\chrome\26.803.81509\docs\`
+- 完整清单归档在 Codex 插件目录：（Codex 插件缓存目录下的完整清单）

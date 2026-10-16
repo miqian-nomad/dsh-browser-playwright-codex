@@ -65,7 +65,7 @@ jobs:
       - name: Unit + scenario tests
         run: npm test
 
-      - name: Self-contained acceptance (52 checks)
+      - name: Self-contained acceptance (count printed by the script)
         run: npm run verify
 
       - name: Formatting
