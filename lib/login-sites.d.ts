@@ -61,6 +61,14 @@ export interface LoginSite {
      * to the page title, and finally to the bare domain. Never a guess.
      */
     alias?: string;
+    /**
+     * Which company this domain belongs to, so sibling domains collapse into one row. Set only when the
+     * curated table knows the owner; a domain with no group renders on its own.
+     */
+    group?: {
+        key: string;
+        label: string;
+    };
     /** Short labels explaining the score — never cookie names. */
     signals: string[];
 }

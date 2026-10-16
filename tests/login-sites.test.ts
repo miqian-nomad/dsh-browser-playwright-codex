@@ -7,7 +7,7 @@
  */
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { siteAlias } from '../src/site-aliases.ts'
+import { siteAlias, siteGroup } from '../src/site-aliases.ts'
 import {
   registrableDomain,
   isTracker,
@@ -281,4 +281,17 @@ test('载荷里的每行都带上说明（有就带，没有就不带）', () =>
   const byDomain = new Map(payload.sites.map((s) => [s.domain, s]))
   assert.equal(byDomain.get('jinritemai.com')?.alias, '巨量千川（抖音电商广告后台）')
   assert.equal(byDomain.get('unknown-xyz.example')?.alias, undefined)
+})
+
+test('归属分组：同一家公司的域归到一组（用户要的"一个类型的放一起"）', () => {
+  // 真实名单里京东系占了二十来个域，各自一行会淹掉别的站。
+  assert.deepEqual(siteGroup('jd.com'), { key: 'jd', label: '京东系' })
+  assert.deepEqual(siteGroup('jddj.com'), { key: 'jd', label: '京东系' })
+  assert.deepEqual(siteGroup('taobao.com'), { key: 'alibaba', label: '阿里系' })
+  assert.deepEqual(siteGroup('douyin.com'), { key: 'bytedance', label: '字节系' })
+  assert.deepEqual(siteGroup('adroll.com'), { key: 'ads', label: '广告 / 统计平台' })
+  assert.equal(siteGroup('github.com'), undefined, '独苗不成组')
+  assert.equal(siteGroup('unknown-xyz.example'), undefined)
+  const payload = summarizeLoginSites([cookie('sid', 'jddj.com', { httpOnly: true })], 'live', NOW)
+  assert.deepEqual(payload.sites[0]?.group, { key: 'jd', label: '京东系' }, '载荷里要带上归属')
 })

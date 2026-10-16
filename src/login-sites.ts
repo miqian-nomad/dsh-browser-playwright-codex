@@ -20,7 +20,7 @@
  * @module dsh-browser-playwright-codex/login-sites
  */
 
-import { siteAlias } from './site-aliases.ts'
+import { siteAlias, siteGroup } from './site-aliases.ts'
 
 /** The cookie fields this module may look at. `value` is deliberately absent. */
 export interface CookieRow {
@@ -65,6 +65,11 @@ export interface LoginSite {
    * to the page title, and finally to the bare domain. Never a guess.
    */
   alias?: string
+  /**
+   * Which company this domain belongs to, so sibling domains collapse into one row. Set only when the
+   * curated table knows the owner; a domain with no group renders on its own.
+   */
+  group?: { key: string; label: string }
   /** Short labels explaining the score — never cookie names. */
   signals: string[]
 }
@@ -338,6 +343,7 @@ export function summarizeLoginSites(
     if (entry.longLived >= 1) signals.push('长效')
     const title = titles?.get(domain)?.replace(/\s+/g, ' ').trim().slice(0, 80)
     const alias = siteAlias(domain)
+    const group = siteGroup(domain)
     sites.push({
       domain,
       cookies: entry.cookies,
@@ -349,6 +355,7 @@ export function summarizeLoginSites(
       signals,
       ...(title !== undefined && title !== '' ? { title } : {}),
       ...(alias !== undefined ? { alias } : {}),
+      ...(group !== undefined ? { group } : {}),
     })
   }
 
