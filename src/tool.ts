@@ -17,7 +17,8 @@ import type {} from './service.ts'
 import type { BrowserSession, DiagnosticsValue } from './types.ts'
 import { BrowserError } from './errors.ts'
 import { registeredSuffixes, type ToolSuffix, type ToolSurfaceConfig } from './contract.ts'
-import { getEnabled, publishGates } from './runtime-state.ts'
+import { getEnabled, publishGates, publishLoginSites } from './runtime-state.ts'
+import { summarizeLoginSites } from './login-sites.ts'
 import { isCdpMethodAllowed, cdpDenialMessage } from './cdp-policy.ts'
 import type { AttachmentServiceLike, JsonValue, LlmServiceLike, OptionalServices } from './tool-types.ts'
 import { SCREENSHOT_SCHEMA, SNAPSHOT_SCHEMA, TABS_SCHEMA } from './tool-schemas.ts'
@@ -116,6 +117,25 @@ export function apply(ctx: Context, config: ToolConfig): void {
     return id === undefined ? 'anonymous' : String(id)
   }
   /** Acquire the calling session's live browser session. */
+  /**
+   * Publish the "which sites look logged in" summary for the settings card. Throttled, and
+   * every failure is swallowed: this is a display nicety and must never slow down or break an
+   * action. Nothing here is model-visible — it travels only to the settings route.
+   */
+  let lastLoginPublish = 0
+  const publishLogins = (session: BrowserSession): void => {
+    const now = Date.now()
+    if (now - lastLoginPublish < 5000) return
+    lastLoginPublish = now
+    void session
+      .cookieJar()
+      .then((rows) => {
+        publishLoginSites(summarizeLoginSites(rows, 'live', now))
+      })
+      .catch(() => {
+        /* display-only: a failed cookie read must not surface as a tool failure */
+      })
+  }
   const acquire = (exec: ToolExecution): Promise<BrowserSession> => {
     if (!getEnabled()) {
       throw new BrowserError(
@@ -123,7 +143,10 @@ export function apply(ctx: Context, config: ToolConfig): void {
         'dsh-browser-playwright-codex is disabled; open Settings → Plugins → 浏览器 and turn it on to use the browser',
       )
     }
-    return ctx.browser.acquire(ownerFor(exec), exec.signal)
+    return ctx.browser.acquire(ownerFor(exec), exec.signal).then((session) => {
+      publishLogins(session)
+      return session
+    })
   }
   const services = (): OptionalServices => {
     const out: OptionalServices = {}

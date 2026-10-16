@@ -3,13 +3,15 @@
  * @module dsh-browser-playwright-codex/provider
  */
 import { persistState, restoreState } from './login-state.ts'
+import { summarizeLoginSites, type CookieRow } from './login-sites.ts'
+import fs from 'node:fs'
 import { clearChromeLocks, ensureBrowser, ensureContext } from './browser-lifecycle.ts'
 import { type Browser, type BrowserContext, type Dialog, type Page } from 'playwright-core'
 import os from 'node:os'
 import path from 'node:path'
 import { PlaywrightSession } from './session.ts'
 import type { PlaywrightConfig } from './config.ts'
-import { getEnabled, publishConfiguredEngine } from './runtime-state.ts'
+import { getEnabled, publishConfiguredEngine, publishLoginSites } from './runtime-state.ts'
 import { BrowserError } from './errors.ts'
 import { SNAPSHOT_SCRIPT } from './injected.ts'
 import { isWindowMinimized } from './window-focus.ts'
@@ -77,6 +79,17 @@ export class PlaywrightProvider {
           : path.join(os.homedir(), '.dsh', 'browser-profiles', 'playwright')
       this.profileDir = dir
       this.stateFile = path.join(dir, 'dsh-storage-state.json')
+      // Show the last exported state on the settings card before the browser is even open. The
+      // file is the browser's own cookie export; unreadable/unparsable simply means "nothing to
+      // show yet". Values are dropped by summarizeLoginSites — only counts and signals survive.
+      try {
+        const exported = JSON.parse(fs.readFileSync(this.stateFile, 'utf8')) as { cookies?: unknown }
+        if (Array.isArray(exported.cookies)) {
+          publishLoginSites(summarizeLoginSites(exported.cookies as CookieRow[], 'snapshot', Date.now()))
+        }
+      } catch {
+        /* no state file yet, or it is not valid JSON: nothing to publish */
+      }
     }
   }
   available() {

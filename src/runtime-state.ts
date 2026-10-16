@@ -24,6 +24,7 @@
  * real user state.
  * @module dsh-browser-playwright-codex/runtime-state
  */
+import type { LoginSites } from './login-sites.ts'
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
@@ -49,6 +50,8 @@ let _configuredEngine: SnapshotEngine | undefined = undefined
 /** Effective tool gates, pushed in by the tool family when it is applied (display only). */
 let _gates: { allowEvaluate: boolean; allowCdp: boolean } | undefined = undefined
 const _subscribers = new Set<(enabled: boolean) => void>()
+/** Display-only login inference; see publishLoginSites. */
+let _loginSites: LoginSites | undefined = undefined
 
 function load() {
   // Re-read the file on every call: whichever side flips the switch, the
@@ -186,4 +189,23 @@ export function publishGates(gates: { allowEvaluate: boolean; allowCdp: boolean 
 /** The published gates, or undefined while the tool family has not been applied. */
 export function getGates(): { allowEvaluate: boolean; allowCdp: boolean } | undefined {
   return _gates === undefined ? undefined : { ..._gates }
+}
+
+/**
+ * The last computed "which sites look logged in" summary, or undefined before anything
+ * published one. In-memory only: it is derived from cookies, contains no cookie values or
+ * names, and must never be persisted — the moment it lands on disk it is a dossier.
+ * @param next - the summary to show on the settings card.
+ */
+export function publishLoginSites(next: LoginSites): void {
+  _loginSites = { ...next, sites: next.sites.map((site) => ({ ...site, signals: [...site.signals] })) }
+}
+
+/**
+ * The published login summary. The settings card reads this; no tool and no model can.
+ * @returns a defensive copy, or undefined while nothing has been published.
+ */
+export function getLoginSites(): LoginSites | undefined {
+  if (_loginSites === undefined) return undefined
+  return { ..._loginSites, sites: _loginSites.sites.map((site) => ({ ...site, signals: [...site.signals] })) }
 }

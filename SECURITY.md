@@ -117,3 +117,20 @@ npm run cost      # resident prompt cost of the registered tool surface
 
 Open an issue on this repository. If it is about the scanner, quote the table above and include the
 exact finding — the point of this file is that the answer does not have to be re-derived every time.
+
+## 5. 隐私：设置页的「已登录的站点」名单
+
+设置页多了一节只读展示：这台浏览器**像登录着**的站点。它由 provider 从浏览器自己给的 cookie 里推断，
+出去的内容只有域名、cookie 条数和几个布尔信号（httpOnly / 长有效期 / 名字像会话）——**没有 cookie 的名字，
+也没有值**；`src/login-sites.ts` 在唯一入口处就把 `value` 丢掉了，测试里有一条断言把整份产出
+序列化后搜不到任何名字或值。
+
+几条边界，写清楚是为了以后不被误改：
+
+- **不读 Chrome 的密码库**（`Login Data`）。只碰 cookie，且只碰浏览器交出来的那份。
+- **不落盘。** 这份摘要是内存态（`runtime-state` 的 `publishLoginSites`），DSH 重启即消失。
+  卡片上"隐藏某一行"是**浏览器 localStorage 里的显示偏好**，不是服务端记录。
+- **模型看不到。** 它不注册任何工具、不写进 diagnostics、也不出现在工具返回值里；唯一出口是
+  `GET /api/browser-playwright/logins`，而该路由**强制要求 `x-dsh-plugin: browser-toggle` 自定义头**
+  （自定义头会触发 CORS 预检，浏览器里的其它页面因此读不到它）。这条路由有测试盯着：不带头的请求必须 403。
+- **它只是推断。** "有 cookie"不等于"登录着"，所以界面写的是"推测登录"；需要更确定时请自己打开窗口看。

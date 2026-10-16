@@ -7,6 +7,7 @@ import type { BrowserContext, CDPSession, Locator, Page, Request } from 'playwri
 import type { PlaywrightProvider } from './provider.ts';
 import type { BrowserNode, BrowserSnapshot, DiagnosticsEntry, LoadState } from './types.ts';
 import type { RefSignature } from './page-snapshot.ts';
+import type { CookieRow } from './login-sites.ts';
 import type { ActionResult, PendingDialogRecord } from './provider.ts';
 /** Live session over one browser context owned by one caller. */
 export declare class PlaywrightSession {
@@ -50,6 +51,11 @@ export declare class PlaywrightSession {
     /** Nonce of the baseline ref space; a change means navigation reset. */
     lastRefNonce: string | undefined;
     constructor(provider: PlaywrightProvider, owner: string, context: BrowserContext);
+    /**
+     * The session's cookies, reduced to what the login inference needs. `value` is dropped here,
+     * at the only place cookies enter the summary path, so nothing downstream can leak it.
+     */
+    cookieJar(): Promise<readonly CookieRow[]>;
     /** Run one operation under busy tracking: idle disposal defers until it settles. */
     run<T>(operation: () => Promise<T>): Promise<T>;
     /** Fast actionability pre-check (visible/enabled/editable) before an action. */

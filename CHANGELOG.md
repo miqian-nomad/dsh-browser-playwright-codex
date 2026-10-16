@@ -25,6 +25,19 @@ languages, the individual entries follow the language the surrounding code and d
 
 ### Added
 
+- **设置页新增只读的「已登录的站点」名单**（配套件 `dsh-browser-toggle` 的卡片里）：provider 从浏览器自己的
+  cookie 推断哪些站点像登录着，按可注册域聚合（含 `com.cn` / `co.uk` 这类多段后缀），剔除分析/风控 cookie
+  （`_ga`、`__cf_bm`、`Hm_lvt_*`、`BAIDUID` 等），再按 httpOnly、有效期与名字特征打分，界面标"推测登录"。
+  **出去的内容只有域名、条数与布尔信号 —— 没有 cookie 的名字，也没有值**；`src/login-sites.ts` 在唯一入口
+  丢弃 `value`，测试断言整份产出序列化后搜不到任何名字或值。
+  数据是内存态（不落盘），模型看不到（不注册工具、不进 diagnostics），唯一出口是
+  `GET /api/browser-playwright/logins`，且强制 `x-dsh-plugin` 自定义头（不带即 403，有测试盯着）。
+  新增 `tests/login-sites.test.ts`（8 条）与 `src/login-sites.ts`；会话接口 `BrowserSession` 增加
+  `cookieJar()`（只返回 name/domain/expires/httpOnly/secure）。
+- **顺手补掉一个真实缺口**：`GET /api/browser-playwright/state` 此前**不校验** `x-dsh-plugin` 防伪头
+  （四个路由里唯一一个），现已补上；客户端读写都带头。这是加登录名单时顺手发现的 —— 一个暴露部署开关状态的
+  GET 不该裸奔。
+
 - **`tests/doc-reality.test.ts` 第 6 条守卫**：文档里的 `dsh plugin … add <spec>` 必须指向真实来源（本包名、本仓库 `github:` 或 URL、`link:`），引用上游命令的行除外。
 - **README 的工具参数签名（评审 B2）**：新增 “Parameter signatures” 段，列出全部 21 个工具（18 常驻 + 3 个闸门，闸门工具带标记）的参数与必填性（`*` 必填 / `?` 可选）。
   **签名是从活的工具面导出的，不是手写的**；`tests/tool-schema.test.ts` 新增守卫逐项比对 README 与 schema —— 工具多一个少一个、参数名或必填性漂移都会红，并且这条守卫是用“故意把 README 写错一版”验证过确实会红的。中文说明的工具表本来就有参数列，英文 README 之前完全没有，调用方只能靠猜（`browser_fill` 的 `value` 就是这么猜错的）。

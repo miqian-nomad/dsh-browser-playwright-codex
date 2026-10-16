@@ -3,6 +3,8 @@
  * @module dsh-browser-playwright-codex/types
  */
 
+import type { CookieRow } from './login-sites.ts'
+
 /** Page load condition a navigation waits for. */
 export type LoadState = 'load' | 'domcontentloaded' | 'networkidle'
 
@@ -204,6 +206,11 @@ export interface BrowserSession {
   ): Promise<ScreenshotCapture>
   /** Extract the page's bounded data: text, links, forms, frames. */
   pageData(): Promise<unknown>
+  /**
+   * Read this session's cookies for display-only login inference. Implementations must drop
+   * `value` before returning: the inference only needs names, domains and lifetime.
+   */
+  cookieJar(): Promise<readonly CookieRow[]>
   /** Evaluate one JavaScript expression and return its JSON result. */
   evaluate(expression: string, signal?: AbortSignal): Promise<unknown>
   /** Click the element whose visible text matches, by semantic locator. */

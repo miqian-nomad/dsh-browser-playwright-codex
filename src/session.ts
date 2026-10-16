@@ -7,6 +7,7 @@ import type { BrowserContext, CDPSession, Locator, Page, Request } from 'playwri
 import type { PlaywrightProvider } from './provider.ts'
 import type { BrowserNode, BrowserSnapshot, DiagnosticsEntry, LoadState } from './types.ts'
 import type { RefSignature } from './page-snapshot.ts'
+import type { CookieRow } from './login-sites.ts'
 import { BrowserError } from './errors.ts'
 import { asTimeoutError, isAbortError, isContextDestroyed, isCrashError } from './page-diagnostics.ts'
 import { consoleMessages, networkRequests, pageData, trackPage } from './page-diagnostics.ts'
@@ -87,6 +88,20 @@ export class PlaywrightSession {
     this.provider = provider
     this.owner = owner
     this.context = context
+  }
+  /**
+   * The session's cookies, reduced to what the login inference needs. `value` is dropped here,
+   * at the only place cookies enter the summary path, so nothing downstream can leak it.
+   */
+  async cookieJar(): Promise<readonly CookieRow[]> {
+    const raw = await this.context.cookies()
+    return raw.map((cookie) => ({
+      name: cookie.name,
+      domain: cookie.domain,
+      ...(typeof cookie.expires === 'number' ? { expires: cookie.expires } : {}),
+      ...(cookie.httpOnly === true ? { httpOnly: true } : {}),
+      ...(cookie.secure === true ? { secure: true } : {}),
+    }))
   }
   /** Run one operation under busy tracking: idle disposal defers until it settles. */
   run<T>(operation: () => Promise<T>): Promise<T> {

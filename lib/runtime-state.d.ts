@@ -1,3 +1,30 @@
+/**
+ * Shared user settings for dsh-browser-playwright-codex, used by the three host
+ * entries (browser / browser-playwright / browser-tool) and by the settings-page
+ * switches in dsh-browser-toggle.
+ *
+ * Two settings, both user-facing:
+ *   - `enabled` (default true)  — are the browser tools available at all.
+ *   - `engine`  (default: unset) — how a page is read into the snapshot tree.
+ *       'legacy' = the plugin's own DOM walk (most tested).
+ *       'aria'   = the browser's official accessibility tree (what a screen
+ *                  reader sees), usually more faithful on complex pages.
+ *     Unset means "follow the configured default", which is 'legacy'.
+ *
+ * State persists to ~/.dsh/dsh-browser-playwright.state.json so both settings
+ * survive a DSH restart. The FILE name deliberately keeps the pre-rename
+ * spelling: it is persisted user state, and renaming it would silently reset the
+ * user's switches.
+ *
+ * The file is re-read on every call (no read-once caching), so a change made on
+ * one side (web or desktop) is visible to the other immediately, and flipping a
+ * switch needs no restart and no config edit.
+ *
+ * `DSH_BROWSER_STATE_FILE` redirects the file; tests use it so they never touch
+ * real user state.
+ * @module dsh-browser-playwright-codex/runtime-state
+ */
+import type { LoginSites } from './login-sites.ts';
 /** How a page is read into a snapshot tree. */
 export type SnapshotEngine = 'legacy' | 'aria';
 /** Current enable state (loads from disk on first call). */
@@ -43,3 +70,15 @@ export declare function getGates(): {
     allowEvaluate: boolean;
     allowCdp: boolean;
 } | undefined;
+/**
+ * The last computed "which sites look logged in" summary, or undefined before anything
+ * published one. In-memory only: it is derived from cookies, contains no cookie values or
+ * names, and must never be persisted — the moment it lands on disk it is a dossier.
+ * @param next - the summary to show on the settings card.
+ */
+export declare function publishLoginSites(next: LoginSites): void;
+/**
+ * The published login summary. The settings card reads this; no tool and no model can.
+ * @returns a defensive copy, or undefined while nothing has been published.
+ */
+export declare function getLoginSites(): LoginSites | undefined;
