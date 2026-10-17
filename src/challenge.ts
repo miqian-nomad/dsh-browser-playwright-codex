@@ -11,7 +11,6 @@ import {
   CAPTCHA_ROLES,
   CAPTCHA_WORD,
   CHALLENGE_SIGNATURES,
-  WIDGET_CORROBORATION,
   WORDING_COMMAND,
   WORDING_EXCLUDE,
   WORDING_TITLE,
@@ -20,10 +19,27 @@ import {
 
 /** How many accessible names the wording tiers may look at. */
 const MAX_NAMES = 60
-/** Cap on the joined text handed to the wording tiers. */
-const MAX_TEXT = 900
+/**
+ * The widget tier reads deeper than the wording tiers. Measured 2026-10-17 on
+ * nopecha.com/demo/hcaptcha: a real hCaptcha iframe named
+ * "包含 hCaptcha 安全挑战复选框的小部件" sits below depth 2, so a three-level scan
+ * never saw it and the real widget was reported as NO MATCH. Vendor widgets are
+ * usually mounted inside a wrapper stack; control labels are not.
+ */
+const WIDGET_DEPTH = 8
+/** Cap on names the widget tier walks (deeper scan, so a larger budget). */
+const MAX_WIDGET_NAMES = 150
 /** A control label is short; a sentence that merely mentions captchas is not. */
 const MAX_CONTROL_LABEL = 32
+/**
+ * A title that mentions verification only counts on a page with (almost) nothing
+ * to click. Measured on real pages 2026-10-17: 百度's actual 安全验证 page has
+ * **0** actionable elements, while a Baidu *search result* page titled
+ * "安全验证_百度搜索" has 57 and "滑块验证_百度搜索" has 81. Without this gate the
+ * title tier fires on any search for those words — which is exactly the query a
+ * person investigating captchas types.
+ */
+const TITLE_WORDING_MAX_REFS = 5
 /** Cap on names folded into one page-state fingerprint. */
 const MAX_FINGERPRINT_NAMES = 200
 /**
@@ -95,12 +111,26 @@ export function detectChallenge(snapshot: ChallengeSnapshot): ChallengeMatch | n
   const url = snapshot.url ?? ''
   const names: ScannedNode[] = []
   scan(snapshot.nodes, 0, 2, names, MAX_NAMES)
+  // The widget tier gets its own, deeper scan (see WIDGET_DEPTH).
+  const widgetNames: ScannedNode[] = []
+  scan(snapshot.nodes, 0, WIDGET_DEPTH, widgetNames, MAX_WIDGET_NAMES)
   const headers = snapshot.response?.headers
+  const status = snapshot.response?.status
+  const refs = snapshot.refs
+  /**
+   * Some vendors put their header on every response, so the header alone is not a
+   * block: DataDome attaches `x-datadome*` to everything (their docs) and Imperva
+   * attaches `x-iinfo` to everything. A signature that lists `statuses` must have
+   * the status agree, or a perfectly good page is reported as a wall.
+   */
+  const statusAgrees = (required: readonly number[] | undefined): boolean =>
+    required === undefined || (status !== undefined && required.includes(status))
 
   // Tier 1 — the vendor's own response metadata. This is their published API:
   // Cloudflare documents cf-mitigated: challenge as the supported way to detect
   // a challenge page, so a rename breaks every customer integration, not just us.
   for (const signature of CHALLENGE_SIGNATURES) {
+    if (!statusAgrees(signature.statuses)) continue
     for (const rule of signature.headers ?? []) {
       const evidence = headerEvidence(rule, headers)
       if (evidence !== null) {
@@ -124,16 +154,21 @@ export function detectChallenge(snapshot: ChallengeSnapshot): ChallengeMatch | n
   for (const signature of CHALLENGE_SIGNATURES) {
     const tokens = signature.widgetTokens
     if (tokens === undefined) continue
-    for (const node of names) {
+    // No ref-count gate here on purpose. An earlier version required the page to be
+    // nearly unusable before a vendor iframe counted, which suppressed a genuine
+    // reCAPTCHA / hCaptcha / Turnstile simply because the login page around it had
+    // links (measured: a busy login page stopped being recognised at all). Login
+    // pages are the main case for this check, so the frame wins: a v3 badge on an
+    // ordinary page is reported as "a captcha is embedded here", which is true.
+    for (const node of widgetNames) {
+      // Frames only. The vendor's own widget is a frame in every real sample measured
+      // (reCAPTCHA, hCaptcha, Turnstile, Arkose): the deep scan exists to reach it.
+      // Accepting a token on an ordinary node was a regression — an article titled
+      // "How hCaptcha works" has h2/p nodes with the vendor word in them, and the
+      // wording elsewhere on the page ("verification", "challenge") then corroborated
+      // it, so a perfectly ordinary blog post rendered as a captcha wall.
+      if (node.role !== 'iframe' && node.role !== 'frame') continue
       if (!tokens.some((token) => token.test(node.name))) continue
-      const onFrame = node.role === 'iframe' || node.role === 'frame'
-      if (!onFrame) {
-        const others = [title, url, ...names.filter((other) => other !== node).map((other) => other.name)]
-          .join(' | ')
-          .slice(0, MAX_TEXT)
-        const corroborated = WIDGET_CORROBORATION.some((token) => token.test(others))
-        if (!corroborated) continue
-      }
       return {
         engine: signature.engine,
         hint: signature.hint,
@@ -144,30 +179,39 @@ export function detectChallenge(snapshot: ChallengeSnapshot): ChallengeMatch | n
   }
 
   // Tier 3 — wording, weakest of the three. A title is short and written by the
-  // interceptor, so it stands alone; on a node we require a command form (or a
-  // captcha control), which is the difference between a challenge and a help
-  // page about captchas.
+  // interceptor, so it stands almost alone: the one extra condition is that the
+  // page must also be unusable (see TITLE_WORDING_MAX_REFS). A caller that does
+  // not report a ref count is treated as "nothing to click", because the
+  // alternative is silently switching this tier off.
+  // Fail closed: a caller that does not report a ref count gets no title tier at all.
+  // Leaving the gate open when refs was missing is how the false positive came back
+  // (the tests themselves passed a BrowserSnapshot, which has totalRefs but no refs).
+  const unusablePage = refs !== undefined && refs <= TITLE_WORDING_MAX_REFS
   const head = title + ' ' + url
-  for (const signature of CHALLENGE_SIGNATURES) {
-    for (const pattern of signature.titleWording ?? []) {
+  if (unusablePage) {
+    for (const signature of CHALLENGE_SIGNATURES) {
+      for (const pattern of signature.titleWording ?? []) {
+        if (!pattern.test(head)) continue
+        return {
+          engine: signature.engine,
+          hint: signature.hint,
+          tier: 'wording',
+          evidence: 'title: ' + title.slice(0, 60),
+        }
+      }
+    }
+    for (const pattern of WORDING_TITLE) {
       if (!pattern.test(head)) continue
       return {
-        engine: signature.engine,
-        hint: signature.hint,
+        engine: 'human-verification',
+        hint: 'the page is asking to verify a human visitor',
         tier: 'wording',
         evidence: 'title: ' + title.slice(0, 60),
       }
     }
   }
-  for (const pattern of WORDING_TITLE) {
-    if (!pattern.test(head)) continue
-    return {
-      engine: 'human-verification',
-      hint: 'the page is asking to verify a human visitor',
-      tier: 'wording',
-      evidence: 'title: ' + title.slice(0, 60),
-    }
-  }
+  // Control-level wording is not gated the same way: it needs a short label on a
+  // control role, which an ordinary results page does not carry.
   for (const node of names) {
     if (node.name.length > MAX_CONTROL_LABEL) continue
     if (WORDING_EXCLUDE.some((pattern) => pattern.test(node.name))) continue
@@ -256,4 +300,41 @@ export function detectNoProgress(input: {
   const nearlyEmpty = input.refs <= NO_PROGRESS_MAX_REFS
   if (!nearlyEmpty && input.unchangedStreak < 2) return null
   return NO_PROGRESS_NOTE
+}
+
+/**
+ * Appended when a page has nothing to click and almost nothing to read. This is
+ * the blind spot the no-progress backstop cannot cover: that tier needs an action
+ * to compare before and after, and on a page with zero actionable elements the
+ * agent has no action to take — so the emptiest, most wall-like pages used to
+ * produce no message at all. Measured 2026-10-17 on 微博's visitor gate: the model
+ * received 364 characters, all of them "URL / Title / Refs: 0 / (no visible
+ * elements)", and nothing said the page was a gate rather than an empty document.
+ */
+export const SILENT_PAGE_NOTE =
+  '[nothing here] this page has no clickable elements and almost no text: it may be a gate or visitor check that resolves by itself, a page that is still loading, or a page that needs a person. Wait a moment and take one more browser_snapshot; if it still looks like this, tell the user what you were trying to open and ask them to look at the open window, instead of re-sending the same navigation.'
+
+/** A page with no named node at all counts as "almost no text". Strict on purpose:
+ * one heading plus one paragraph is a normal page, not a silent one. */
+const SILENT_PAGE_MAX_NAMES = 0
+
+/**
+ * Whether the page is a silent one: nothing to click and (almost) nothing to read.
+ * @param input - the action ref count and the accessible tree.
+ * @returns the advisory note, or null when the page has content worth reading.
+ */
+export function detectSilentPage(input: {
+  readonly refs: number
+  readonly nodes?: readonly ChallengeNode[] | undefined
+  readonly title?: string | undefined
+}): string | null {
+  if (input.refs > 0) return null
+  // A page with no title at all is a bare document (about:blank, a raw image):
+  // calling that "maybe a gate" is noise, not a warning.
+  if (input.title !== undefined && input.title.trim() === '') return null
+  const names: ScannedNode[] = []
+  // Read as deep as the widget scan: a page whose only text sits six levels down is
+  // a normal page, and a depth-4 scan called it "almost no text" (review, P1-3).
+  scan(input.nodes, 0, WIDGET_DEPTH, names, SILENT_PAGE_MAX_NAMES + 1)
+  return names.length <= SILENT_PAGE_MAX_NAMES ? SILENT_PAGE_NOTE : null
 }

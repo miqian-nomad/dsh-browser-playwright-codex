@@ -191,7 +191,12 @@ export function networkRequests(
   }
 }
 
-export async function pageData(session: PlaywrightSession) {
+/**
+ * Bounded page data for browser_extract. Credential values (password fields and
+ * password-autocomplete fields) are blanked inside the page before the payload
+ * leaves the browser: the extract prompt is sent to an auxiliary model.
+ */
+export async function pageData(session: PlaywrightSession): Promise<unknown> {
   return session.run(async () => {
     session.assertLive()
     session.provider.touch(session.owner)
@@ -200,7 +205,41 @@ export async function pageData(session: PlaywrightSession) {
       const fn = (window as unknown as { __dshPageData?: (o: unknown) => unknown }).__dshPageData
       if (typeof fn !== 'function')
         return { url: location.href, title: document.title, text: '', truncated: false, links: [], inputs: [] }
-      return fn({ maxTextChars: 30000, maxLinks: 300, maxInputs: 200 })
+      const data = fn({ maxTextChars: 30000, maxLinks: 300, maxInputs: 200 }) as {
+        inputs?: Array<Record<string, unknown>>
+      } | null
+      // Credentials never leave the page. __dshPageData reads every field's current
+      // value, and browser_extract pastes that object into an auxiliary model's
+      // prompt, so a login or change-password page put the plaintext password into
+      // that prompt (audit B3). The field itself stays — "there is a password box
+      // here" is useful page structure — but its value is blanked. The collector and
+      // this pass use the same selector over the same document, so the i-th entry is
+      // the i-th field.
+      if (data !== null && Array.isArray(data.inputs)) {
+        const fields = document.querySelectorAll('input, select, textarea')
+        for (let index = 0; index < data.inputs.length; index += 1) {
+          const entry = data.inputs[index]
+          const field = fields[index]
+          if (entry === undefined || field === undefined) continue
+          const type = (field.getAttribute('type') ?? '').toLowerCase()
+          const autocomplete = (field.getAttribute('autocomplete') ?? '').toLowerCase()
+          if (
+            type === 'password' ||
+            autocomplete.includes('current-password') ||
+            autocomplete.includes('new-password') ||
+            // One-time codes and card numbers are just as sensitive as passwords: a
+            // 2FA code in the prompt can be replayed, and a card number is payment
+            // data (independent review, P2-7). The field stays, its value does not.
+            autocomplete.includes('one-time-code') ||
+            autocomplete.includes('cc-number') ||
+            autocomplete.includes('cc-csc') ||
+            autocomplete.includes('cc-exp')
+          ) {
+            entry['value'] = ''
+          }
+        }
+      }
+      return data
     }
     let data
     try {

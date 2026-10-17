@@ -6,7 +6,7 @@ the thing worth being careful about. This file answers the two questions a reade
 1. **What can it do to me?**
 2. **Why does dsh.so's scanner report a Critical finding?**
 
-If you only read one line: **the two findings are the implementation of `browser_evaluate`, a tool
+If you only read one line: **the Critical finding is the implementation of `browser_evaluate`, a tool
 this package ships switched off** — it is not registered at all until a deployment turns it on.
 
 ---
@@ -20,13 +20,13 @@ the agent is supposed to stop and hand the page back to you.
 
 **It is visible and interruptible.** The window lives on your desktop. You can watch every action,
 minimise it (the provider detects a minimised window and keeps working without raising it — see
-[FOCUS-STEALING.md](FOCUS-STEALING.md)), or close it: login state is exported first and restored on
+[FOCUS-STEALING.md](https://github.com/miqian-nomad/dsh-browser-playwright-codex/blob/main/FOCUS-STEALING.md)), or close it: login state is exported first and restored on
 the next launch.
 
 **Native dialogs are never auto-accepted.** `alert` / `confirm` / `prompt` / `beforeunload` are
 parked as a pending state, reported to the model, and answered only by an explicit `browser_dialog`
 call — a click that raises `confirm()` returns the parked dialog instead of accepting it. See
-[DIALOG-POLICY.md](DIALOG-POLICY.md).
+[DIALOG-POLICY.md](https://github.com/miqian-nomad/dsh-browser-playwright-codex/blob/main/DIALOG-POLICY.md).
 
 **Which hosts it may touch is policy, not goodwill.** `allowedDomains` is enforced on every path that
 can navigate: `browser_navigate`, `browser_open_tab`, every click variant (ref, text, geometric,
@@ -55,7 +55,8 @@ While a gate is off the tool is **not registered at all**, so it does not exist 
 costs no prompt tokens. But this file travels inside the package, so if it enabled them, every
 installer would get a backdoor they never asked for; the opt-in belongs to the deployment, and it
 lives in that deployment's own patch layer (the bundled Settings card writes it, or edit your
-profile patch — see the configuration section of the [README](README.md)).
+profile patch — see the configuration section of the
+[README](https://github.com/miqian-nomad/dsh-browser-playwright-codex/blob/main/README.md#configuration)).
 
 **No telemetry.** The plugin does not phone home and does not upload page content anywhere. The only
 outbound traffic is what the page itself requests — plus one exception you control: `browser_extract`
@@ -71,8 +72,10 @@ Nothing else.
 ## 2. What the scanner reports, and which gate contains it
 
 dsh.so runs `dsh-plugin-vet` over the whole repository. Their scan of **0.6.0 (2026-10-16)** reports
-**1 Critical, 3 Warning, 25 Info** across 80 files — and it is **right about the capability**. Here is
-each one, with the gate that decides whether it is reachable at all.
+**1 Critical, 3 Warning, 25 Info** across 80 files — and it is **right about the capability**. Below is what
+each reported item actually is, and what decides whether it is reachable. Not every item sits behind a
+capability gate: the login-state write happens whenever login persistence works, and the acceptance script's
+local server exists only while that script runs.
 
 > For the record: their v0.4.9 scan — before this plugin was split into responsibility-scoped modules —
 > reported 2 Critical, 5 Warning, 26 Info across 57 files. Counts move as the scanner and the code
@@ -85,6 +88,9 @@ each one, with the gate that decides whether it is reachable at all.
 | Warning | HTTP request to a bare IP (`scripts/dsh-browser-verify.mjs`) | The acceptance suite starts a **local** `http.server` on `127.0.0.1` with a fixture page, so `npm run verify` needs no DSH and no internet. | Only when you run that script. |
 | Info ×25 | `localStorage` reads, `process.env` reads, hardcoded `127.0.0.1`, dev-only probe scripts | Restoring login state; test hooks (`DSH_BROWSER_STATE_FILE`, `PLAYWRIGHT_DOWNLOAD_HOST`); and scripts under `scripts/analysis/` that the scanner itself marks *"Dev-only file — not executed at install/runtime"*. | — |
 
+The scanner counts the two `fs.writeFileSync` call sites (the login-state export and the small runtime-state
+file) as **two separate Warning findings**; they share one row above because they are one persistence path.
+
 Two honest notes:
 
 - These numbers **will not go to zero**, because `browser_evaluate` exists in the code whether or not
@@ -92,22 +98,23 @@ Two honest notes:
 - We did **not** try to hide the finding (moving the call, obfuscating it, or suppressing the rule).
   That would be deceiving the tool that is trying to protect users, and it would make this file a lie.
 - Module names, not line numbers: this file used to cite a line number in `src/playwright.ts`, which the
-  0.5.x split made meaningless (the code lives in `src/session.ts` now, and that file is a 55-line
-  entry point). File names survive refactors; line numbers do not.
+  0.5.x split made meaningless (the code lives in `src/session.ts` now, and its entry point
+  `src/playwright.ts` is 56 lines). File names survive refactors; line numbers do not.
 
 ## 3. How to check all of this yourself
 
 ```sh
-npm test          # 100+ unit, scenario and guard tests: contracts, tool schemas, scenarios,
+npm test          # 219 tests: contracts, tool schemas, scenarios,
                   # aria engine, CDP policy, diff, click/tab allow-lists, snapshot rendering,
                   # prompt budget, docs-vs-reality consistency
-npm run verify    # 57 self-contained acceptance checks: no DSH, no network, local fixture server
+npm run verify    # 57 self-contained acceptance checks in a checkout (56 checks + 1 skipped
+                  # from an npm install, where there is no src/): no DSH, no network, local fixture server
 npm run doctor    # the host packages this plugin imports are still exporting what it uses
 npm run cost      # resident prompt cost of the registered tool surface
 ```
 
 - CI runs the whole suite on **ubuntu-latest and windows-latest** for every push
-  ([workflow](.github/workflows/ci.yml)).
+  ([workflow](https://github.com/miqian-nomad/dsh-browser-playwright-codex/blob/main/.github/workflows/ci.yml)).
 - The gates really are off in the package:
   `git show v0.4.7:cordis.patch.yml` (0.4.7 is where that changed).
 - Sandbox evidence, produced by someone else: [dsh.so's L4/L5 records](https://www.dsh.so/zh/artifact/dsh-browser-playwright-codex/)

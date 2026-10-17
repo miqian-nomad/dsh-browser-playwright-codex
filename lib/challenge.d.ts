@@ -58,3 +58,23 @@ export declare function detectNoProgress(input: {
     readonly unchangedStreak: number;
     readonly refs: number;
 }): string | null;
+/**
+ * Appended when a page has nothing to click and almost nothing to read. This is
+ * the blind spot the no-progress backstop cannot cover: that tier needs an action
+ * to compare before and after, and on a page with zero actionable elements the
+ * agent has no action to take — so the emptiest, most wall-like pages used to
+ * produce no message at all. Measured 2026-10-17 on 微博's visitor gate: the model
+ * received 364 characters, all of them "URL / Title / Refs: 0 / (no visible
+ * elements)", and nothing said the page was a gate rather than an empty document.
+ */
+export declare const SILENT_PAGE_NOTE = "[nothing here] this page has no clickable elements and almost no text: it may be a gate or visitor check that resolves by itself, a page that is still loading, or a page that needs a person. Wait a moment and take one more browser_snapshot; if it still looks like this, tell the user what you were trying to open and ask them to look at the open window, instead of re-sending the same navigation.";
+/**
+ * Whether the page is a silent one: nothing to click and (almost) nothing to read.
+ * @param input - the action ref count and the accessible tree.
+ * @returns the advisory note, or null when the page has content worth reading.
+ */
+export declare function detectSilentPage(input: {
+    readonly refs: number;
+    readonly nodes?: readonly ChallengeNode[] | undefined;
+    readonly title?: string | undefined;
+}): string | null;

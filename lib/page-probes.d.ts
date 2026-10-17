@@ -56,6 +56,18 @@ export declare const pageStabilityProbe: (arg: {
     timeoutMs: number;
 }) => Promise<boolean>;
 /**
+ * The href a click on this element would follow: the element's own href, or the
+ * nearest ancestor `<a href>` — crossing shadow-root boundaries, the same way the
+ * hit-test walks. Raw-coordinate clicks already check `closest('a[href]')`; ref and
+ * text clicks used to look only at the element itself, so a button/span nested in an
+ * off-domain `<a>` reached the outside host while every check passed. This probe is
+ * that missing layer: locator.evaluate(clickTargetHrefProbe).
+ *
+ * A policy check, not a navigation: `javascript:` hrefs are returned as-is and the
+ * caller's session policy keeps its existing exemption for them.
+ */
+export declare const clickTargetHrefProbe: (el: Element) => string | null;
+/**
  * The click-point hit test, moved out of the session so it lives with the other page-side
  * functions: it is serialized into the page by locator.evaluate(), so the same
  * "no named inner function bindings" rule applies (see the module header, and

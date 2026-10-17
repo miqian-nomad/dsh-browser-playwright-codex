@@ -53,6 +53,12 @@ export interface ChallengeSnapshot {
     readonly title?: string;
     readonly url?: string;
     readonly nodes?: readonly ChallengeNode[];
+    /**
+     * Actionable-element count. The wording tier uses it to tell a challenge page
+     * (nothing to click) from an ordinary page whose *title* merely contains the
+     * phrase — searching Baidu for "安全验证" produces exactly that false positive.
+     */
+    readonly refs?: number;
     /** Main document response metadata; absent when no navigation response was seen. */
     readonly response?: DocumentResponse;
 }

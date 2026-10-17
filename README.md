@@ -2,12 +2,13 @@
 
 > [![dsh.so 安装验证 · harness 0.2.0-rc.1](https://www.dsh.so/badge/install/dsh-browser-playwright-codex@0.2.0-rc.1.svg)](https://www.dsh.so/zh/artifact/dsh-browser-playwright-codex/) [![dsh.so 风险](https://www.dsh.so/badge/dsh-browser-playwright-codex.svg)](https://www.dsh.so/zh/artifact/dsh-browser-playwright-codex/)
 
-**一句话**：让 AI 用你**已经登录的账号**在真实网页上干活 —— 填表、抓取列表、多标签查后台；浏览器窗口就在你桌面上、你随时看得见；遇到登录、验证码、原生弹框，它会**停下来等你**，绝不替你点「确定」。
+**一句话**：让 AI 用你**已经登录的账号**在真实网页上干活 —— 填表、抓取列表、多标签查后台；浏览器窗口就在你桌面上、你随时看得见。原生弹框会被挂起、**绝不替你点「确定」**；验证码/登录页会被识别出来并把情况报给你、请你本人接手（识别不出来时也会停下来问人，而不是硬闯）。
 
 **In one line**: the agent drives a **visible, profile-backed browser window** with the logins you
 already have — filling in forms, scraping lists and working across tabs in real pages — through
-accessibility snapshots with stable element refs, and it stops for logins, captchas and native dialogs
-instead of guessing. No CSS-selector guessing, no full-DOM dumps.
+accessibility snapshots with stable element refs. Native dialogs are parked and reported instead of
+auto-accepted; a login, 2FA or challenge page is handed back to you rather than guessed at. No
+CSS-selector guessing, no full-DOM dumps.
 
 ```sh
 # from npm
@@ -22,14 +23,16 @@ dsh plugin --profile <name> add github:miqian-nomad/dsh-browser-playwright-codex
 - **登录一次，一直用** — a profile-backed window plus an exported session state, so a closed window or
   a restarted harness comes back logged in.
 - **全程看得见，也不抢你的焦点** — a real window you can watch, minimise or take over; the provider
-  keeps working while it is minimised ([FOCUS-STEALING.md](FOCUS-STEALING.md)).
+  keeps working while it is minimised ([FOCUS-STEALING.md](https://github.com/miqian-nomad/dsh-browser-playwright-codex/blob/main/FOCUS-STEALING.md)).
 - **遇事停下来叫人** — `alert` / `confirm` / `prompt` are parked and reported, answered only by an
-  explicit `browser_dialog` call; a login, 2FA or captcha is handed back to you
-  ([DIALOG-POLICY.md](DIALOG-POLICY.md)). A challenge page is recognised from the interceptor's own
-  response headers first (`cf-mitigated: challenge` and friends), then from its widget, and only then
-  from wording; if none of those match, a page that stops changing after an action is reported as a
-  possible wall instead of being retried
-  ([docs/articles/dialogs-and-captcha.md](docs/articles/dialogs-and-captcha.md)).
+  explicit `browser_dialog` call ([DIALOG-POLICY.md](https://github.com/miqian-nomad/dsh-browser-playwright-codex/blob/main/DIALOG-POLICY.md)).
+  A challenge page is recognised from the interceptor's own response headers first
+  (`cf-mitigated: challenge` and friends; `x-iinfo` / `x-datadome*` additionally need a blocking
+  status), then from the vendor widget's accessible name, then from wording; if none of those match,
+  a page that stops changing after an action is reported as a possible wall instead of being retried.
+  Recognition adds a note that tells the agent to stop and hand the window back to you — that note is
+  advice to the model, not a hard block; the mechanism-level guarantee exists for native dialogs only
+  ([docs/articles/dialogs-and-captcha.md](https://github.com/miqian-nomad/dsh-browser-playwright-codex/blob/main/docs/articles/dialogs-and-captcha.md)).
 - **ref 失效会明说** — per-document nonce refs; a stale ref fails fast with an explanation instead of
   silently clicking a different element.
 - **强力工具默认关闭** — `browser_evaluate` / `browser_cdp` are **not registered at all** unless your
@@ -37,9 +40,11 @@ dsh plugin --profile <name> add github:miqian-nomad/dsh-browser-playwright-codex
 
 **安全一览 / Security at a glance** — dsh.so's scanner flags this repository's **one Critical finding**, and that finding **is** the
 implementation of `browser_evaluate` (its dynamic evaluation), which this package ships switched off.
-[SECURITY.md](SECURITY.md) maps every finding to the gate that contains it, and explains what the plugin
-can and cannot do with your logins (URL policy, CDP allow-list, dialog policy, no telemetry, and it never
-types passwords or 2FA codes). Counts move as the scanner and the code change — their own report is the
+[SECURITY.md](https://github.com/miqian-nomad/dsh-browser-playwright-codex/blob/main/SECURITY.md) says what each
+finding actually is, whether a capability gate makes it reachable (two of the warnings are not gate-controlled:
+the login-state write and the local test server in the acceptance script), and explains what the plugin can and
+cannot do with your logins (URL policy, CDP allow-list, dialog policy, no telemetry, and it never types
+passwords or 2FA codes). Counts move as the scanner and the code change — their own report is the
 live number.
 
 ## Install
@@ -59,9 +64,15 @@ dsh plugin --profile <name> add github:miqian-nomad/dsh-browser-playwright-codex
 dsh plugin --profile <name> add link:<absolute path to this directory>
 ```
 
-**Compatibility.** Built and tested against DSH `0.2.0-rc.1` (`@deepseek-ai/*` peer ranges are deliberately
-`*` so a newer harness still installs). After a harness upgrade, `npm run doctor` re-checks that every named
-export this plugin imports still exists — that is the fast way to tell "the harness moved" from "the plugin broke".
+**Compatibility.** Built and tested against DSH `0.2.0-rc.1`. The dependency ranges are **floors, not
+wildcards**: peers `@deepseek-ai/cordis` `>=4.0.4`, `@deepseek-ai/dsh-llm` `>=0.2.0-rc.1`,
+`@deepseek-ai/dsh-tools` `>=0.2.0-rc.1`, and the direct dependency `@deepseek-ai/schemastery` `^3.18.4`. The
+floors exist so an empty project cannot resolve a very old `0.0.1-rc.*` build, while a newer harness still
+installs. One cost of npm's prerelease rules: a prerelease whose `[major, minor, patch]` tuple differs from
+`0.2.0` (for example `0.2.1-rc.*`) is outside a `>=0.2.0-rc.1` range, so you may see a **peer warning** — a
+warning, not an install failure (pnpm does not enforce peer ranges strictly by default). After a harness
+upgrade, `npm run doctor` re-checks that every named export this plugin imports still exists — that is the
+fast way to tell "the harness moved" from "the plugin broke".
 
 `lib/` ships in the repository (and there is deliberately no `prepare` hook), so a fresh clone loads
 without a build step — `npm run build` is only needed after editing `src/`.
@@ -80,8 +91,9 @@ Install it and ask for something that leaves a visible result — there is nothi
 
 What you should see: a real browser window on your desktop doing the clicking, and the page coming back to
 the model as a `ref`-numbered list. The first time it meets a sign-in, a 2FA prompt or a verification page
-it **stops and tells you** — take the window over by hand and it continues from where it left off. The
-logins already in that profile are what make the rest work.
+it **reports the page back to you** — take the window over by hand and it continues from where it left off.
+Native dialogs are the one case that is enforced at the interface: they are parked and never auto-accepted.
+The logins already in that profile are what make the rest work.
 
 Two habits worth having on day one:
 
@@ -104,7 +116,7 @@ Or pin a binary: `launch.executablePath` / `launch.channel` in the plugin config
 
 ## Tools
 
-The default `toolPrefix` is `browser_`. Every action returns a fresh snapshot, so refs always come from the latest result. The registered set is capability-gated: `browser_evaluate`, `browser_cdp` and `browser_extract` appear only when their capability is switched on (their schemas are resident in the system prompt on every turn, so a tool that could only answer "disabled" would be pure prompt cost). Count the live surface with `npm run cost` — the shipped `cordis.patch.yml` keeps **both power gates off** (since 0.4.7), so a profile mounting this bundle sees **18 tools**; 19 or 20 once your deployment opts into `evaluate` / `cdp`, 21 once `extract` is configured. How to opt in: [SECURITY.md](SECURITY.md) §1.
+The default `toolPrefix` is `browser_`. Every action returns a fresh snapshot, so refs always come from the latest result. The registered set is capability-gated: `browser_evaluate`, `browser_cdp` and `browser_extract` appear only when their capability is switched on (their schemas are resident in the system prompt on every turn, so a tool that could only answer "disabled" would be pure prompt cost). Count the live surface with `npm run cost` — the shipped `cordis.patch.yml` keeps **both power gates off** (since 0.4.7), so a profile mounting this bundle sees **18 tools**; 19 or 20 once your deployment opts into `evaluate` / `cdp`, 21 once `extract` is configured. How to opt in: paste the snippet under Known Limitations below, or use the settings card in `dsh-browser-toggle`.
 
 | Tool | Purpose |
 |---|---|
@@ -118,10 +130,10 @@ The default `toolPrefix` is `browser_`. Every action returns a fresh snapshot, s
 | `browser_wait` | Wait a bounded duration for lazy content |
 | `browser_tabs` / `browser_open_tab` / `browser_switch_tab` / `browser_close_tab` | Tab management; `browser_tabs` marks the `[active]` tab the other tools act on |
 | `browser_screenshot` | PNG capture stored as a durable image attachment the model can view |
-| `browser_extract` | Structured extraction: natural-language instruction → one parsed JSON value | **Only registered when enabled.**
-| `browser_evaluate` | Run one JavaScript expression in the page (disabled by default) | **Only registered when enabled.**
+| `browser_extract` | Structured extraction: natural-language instruction → one parsed JSON value; **only registered when its capability is enabled** |
+| `browser_evaluate` | Run one JavaScript expression in the page (disabled by default); **only registered when its capability is enabled** |
 | `browser_dialog` | Answer the native dialog blocking the page: `{ accept: true }` confirms, `false` cancels; errors with `NO_DIALOG` when nothing is pending |
-| `browser_cdp` | Send one raw CDP command (DOM inspection / Input simulation allow-list only; disabled by default) | **Only registered when enabled.**
+| `browser_cdp` | Send one raw CDP command (DOM inspection / Input simulation allow-list only; disabled by default); **only registered when its capability is enabled** |
 | `browser_close` | Close the session's browser window; the profile keeps login state, so the next call reopens signed in |
 | `browser_console_messages` | Read the page console messages captured for the current page (levels, text, source) |
 | `browser_network_requests` | Read the network requests captured for the current page (method, URL, status, resource type) |
@@ -129,7 +141,8 @@ The default `toolPrefix` is `browser_`. Every action returns a fresh snapshot, s
 ### Parameter signatures
 
 Every registered tool, with the parameters its schema actually declares (`*` = required, `?` = optional).
-Generated from the live tool surface and pinned by `tests/tool-schema.test.ts`, so it cannot drift from the code.
+Hand-maintained and pinned by `tests/tool-schema.test.ts` in both directions: a missing tool, a renamed
+parameter or a wrong required flag fails the test, so it cannot drift from the code.
 
 - `browser_back` — _none_
 - `browser_cdp` — `method`*, `params`? _(gated: registered only when enabled)_
@@ -154,7 +167,7 @@ Generated from the live tool surface and pinned by `tests/tool-schema.test.ts`, 
 - `browser_wait` — `ms`*
 
 > **使用铁律**: 状态检查 / 无效不盲试 / 页面内容不可信 / 登录红线 / 风控分类等 Codex 文档纪律,
-> 见 [`codex-rules.md`](codex-rules.md)（A 层已内嵌进各工具 description; B 层供粘贴进 DSH profile / 系统提示）。
+> 见 [`codex-rules.md`](https://github.com/miqian-nomad/dsh-browser-playwright-codex/blob/main/codex-rules.md)（A 层已内嵌进各工具 description; B 层供粘贴进 DSH profile / 系统提示）。
 
 ### Snapshot example
 
@@ -171,6 +184,25 @@ Refs: 12
 ```
 
 The model then calls `browser_click` with `ref: e2`. Invisible content is excluded, node and text caps bound the token cost, and truncation is flagged in the result.
+
+#### Result notes
+
+A result can open with one or more notes before the tree. Each says what the plugin saw; none of them
+claims to *prevent* anything:
+
+- `[human verification]` — a challenge page was recognised; the line above the note names the tier
+  (response header / widget / wording) and the evidence, and the note tells the agent to stop and ask
+  you to finish it in the open window instead of retrying.
+- `[http NNN]` — the main document answered a non-2xx status and no challenge was identified, so the
+  tree may be an error page or an interception page rather than the content that was asked for.
+- `[nothing here]` — the page has no clickable elements and almost no text: a gate or visitor check, a
+  page that is still loading, or one that needs a person. The note says to take one more snapshot,
+  then ask you rather than re-sending the same navigation.
+- `[no visible change]` — the action left the page identical (after one action on a nearly empty page,
+  or after two identical results on a page with content). It is worded as a guess on purpose: it is
+  what an unrecognised wall looks like.
+- A landing note (which element received the click), a parked-dialog note, and an engine-fallback note
+  can also appear.
 
 An actionable element with no text of its own is named from its descendants — `<a href="/set"><span>搜索设置</span></a>` renders as `link "搜索设置" [ref=e7]`, and `<a href="/b"><img alt="图标链接"></a>` as `link "图标链接" [ref=e8]` — so a visible label and the ref that carries it always appear on the same line. A non-actionable child that merely repeats an ancestor name is folded away, so each label appears once, on the line that carries the ref; container roles are never named from their content (a `<select>` shows its chosen option, the way a text input shows its value).
 
@@ -194,9 +226,10 @@ All tunables are patchable through the profile's `cordis.patch.yml` (later layer
       navigationTimeoutMs: 30000
       ignoreHTTPSErrors: false
     allowedDomains: []                  # e.g. ['github.com'] restricts navigation
-    idleTimeoutMs: 600000               # close idle windows after 10 min; 0 = never
+    idleTimeoutMs: 0                    # shipped value: never auto-close (schema default 600000 = 10 min)
     maxSessions: 8                      # LRU eviction (persistent mode: one window)
     snapshot:
+      engine: legacy                    # 'legacy' (default) or 'aria' (Playwright ariaSnapshot, refs aligned back)
       maxNodes: 500                     # token budget per snapshot tree
       maxNameLength: 120
       maxTextLength: 300
@@ -217,7 +250,12 @@ All tunables are patchable through the profile's `cordis.patch.yml` (later layer
       maxOutputTokens: 2000
 ```
 
-`browser_extract` needs an auxiliary LLM route (`extract.provider` + `extract.model`); without one it fails with an actionable error. With a route configured, `extract.maxInputChars` bounds the page text in that prompt, and the prompt names the cap when it truncates. A gated tool is **not registered at all** while its capability is off, so its schema never reaches the system prompt; set `registerDisabledTools: true` to keep the whole surface discoverable (the tool then answers with the error naming the switch). The shipped layer in [`cordis.patch.yml`](cordis.patch.yml) keeps `allowEvaluate` and `allowCdp` **off**, matching the schema defaults and this sample: that file travels inside the package, so anything it enabled would be enabled for everyone who installs it. Opt in per deployment, in that deployment's own patch layer. `browser_evaluate` executes arbitrary page JavaScript; `browser_cdp` stays off until `allowCdp: true`, and even then only the allow-list in `lib/cdp-policy.js` passes — network, storage, cookie, security and arbitrary-JS (`Runtime.evaluate`) commands are rejected with `CDP_DENIED`.
+`snapshot.engine` picks the page-reading engine: `'legacy'` (the default) walks the injected DOM,
+`'aria'` uses Playwright's official `ariaSnapshot({ mode: 'ai' })` and aligns the result back onto the
+same `ref` ids; an aria tree that cannot be parsed falls back to legacy rather than handing the model an
+empty tree. It is a `snapshot` key, next to `maxNodes` / `maxNameLength` / `maxTextLength` / `diff`.
+
+`browser_extract` needs an auxiliary LLM route (`extract.provider` + `extract.model`); without one it fails with an actionable error. With a route configured, `extract.maxInputChars` bounds the page text in that prompt, and the prompt names the cap when it truncates. A gated tool is **not registered at all** while its capability is off, so its schema never reaches the system prompt; set `registerDisabledTools: true` to keep the whole surface discoverable (the tool then answers with the error naming the switch). The shipped layer in [`cordis.patch.yml`](https://github.com/miqian-nomad/dsh-browser-playwright-codex/blob/main/cordis.patch.yml) keeps `allowEvaluate` and `allowCdp` **off**, matching the schema defaults and this sample: that file travels inside the package, so anything it enabled would be enabled for everyone who installs it. Opt in per deployment, in that deployment's own patch layer. `browser_evaluate` executes arbitrary page JavaScript; `browser_cdp` stays off until `allowCdp: true`, and even then only the allow-list in `lib/cdp-policy.js` passes — network, storage, cookie, security and arbitrary-JS (`Runtime.evaluate`) commands are rejected with `CDP_DENIED`.
 
 ### Two levers that shrink what tools *return*
 
@@ -277,6 +315,8 @@ npm install
 npm test           # full suite: engine/action integration on real Chrome, policy, rendering,
                    # schema assembly, plus the realistic scenario suites below
 npm run verify     # naming/folding + click/hover/dialog acceptance; self-contained, prints its own count
+                   # (57 in a checkout; from an npm install it prints 56 + "1 skipped", because the
+                   #  `lib/`-vs-`src/` check has no `src/` to compare against)
 npm run verify:live  # same, plus a live sample of a real page (needs network)
 npm run doctor     # does the installed harness still export everything this plugin imports?
 npm run cost       # resident prompt cost of the tool schemas, per surface
@@ -288,6 +328,10 @@ but `lib/` and the harness: `node scripts/dsh-browser-verify.mjs` (the acceptanc
 `node scripts/doctor.mjs` (re-checks the harness exports after an upgrade). The rest are repository-only
 and run from a checkout — `measure-prompt-cost.mjs` reads `src/`, so it cannot work from a tarball.
 
+One package-manager note: `package.json` declares `packageManager: pnpm@10.31.0`, while the commands above
+(and CI) use **npm** with the committed `package-lock.json` (`npm ci`). Pick one and stay in it — mixing the
+two in a checkout gives you two lockfiles and an ambiguous install.
+
 ### Test suites
 
 | Suite | Command | What it covers |
@@ -295,15 +339,15 @@ and run from a checkout — `measure-prompt-cost.mjs` reads `src/`, so it cannot
 | Unit + engine integration | `npm test` (included) | Snapshot rendering, schema assembly, URL policy, provider actions on real Chrome |
 | Realistic scenarios | `npm run test:scenarios` | Scripted-agent journeys over a realistic local store fixture: guest checkout with coupon and validation, login/session persistence, multi-tab research, lazy content, infinite scroll, modal dialogs, popups, screenshots, policy, owner isolation, idle disposal, snapshot budgets — at both the `BrowserSession` level and the model-facing `ctx.tools.execute` level (with fake attachments/LLM services) |
 | Regression verify | `npm run verify` | The executable spec of snapshot naming/folding plus ref/text click-hover, the pending-dialog protocol and the tool surface (expected names derived from `contract.ts`) |
-| Live smoke | `npm test:live` | Opt-in checks against the real internet (example.com, Wikipedia REST). Skipped unless `DSH_BROWSER_LIVE=1`; not part of CI |
+| Live smoke | `npm run test:live` | Opt-in checks against the real internet (example.com, Wikipedia REST). Skipped unless `DSH_BROWSER_LIVE=1`; not part of CI |
 
 The scenario suites are the plugin's most realistic tests: they drive the browser the way an agent does — snapshot, find a `ref`, act, re-snapshot — and therefore double as executable documentation of the model experience.
 
-From a DeepSeek Harness source checkout, load this plugin from TypeScript:
-
-```sh
-pnpm dsh web --patch ./browser-plugin/dev.cordis.yml
-```
+From a DeepSeek Harness source checkout, the bundle layer to load is this repository's
+[`cordis.patch.yml`](https://github.com/miqian-nomad/dsh-browser-playwright-codex/blob/main/cordis.patch.yml) — the
+same file the package ships. Register the checkout through your profile with
+`dsh plugin --profile <name> add link:<absolute path to this directory>` (above); this repository carries no
+separate dev patch file.
 
 ## Model Experience
 
@@ -323,7 +367,19 @@ Measured with ``npm run cost`` (per-turn, resident in the system prompt):
 | Shipped bundle layer (this package's `cordis.patch.yml`: both power gates off) | 18 | 12,755 | ≈ 3,543 |
 | Everything registered (`registerDisabledTools: true`, plus `extract`) | 21 | 15,608 | ≈ 4,336 |
 
-Three things changed here, and only one of them was about size. (1) The click family was rewritten so each rule is stated once instead of three times: -390 characters, with every rule, example and rationale pinned by `tests/tool-descriptions.test.ts`, so a trim that eats one fails the build. (2) A gated tool is registered only while its capability is live — `browser_extract` on this deployment: -456 characters ≈ 127 tokens/turn. (3) Four descriptions were corrected to match the code they describe (dialog blocking, the gated diagnostics `browser_fill` points at, persistent-mode `browser_close`, and the click family’s landing note), which added 211 characters back because the old wording promised behaviour the implementation did not have. Net: 18,065 → 17,886 characters with everything registered; the shipped layer's total is identical to the schema-defaults row above, because it keeps both power gates off — those schemas are not registered at all and cost nothing. What is left is per-tool prose rather than repetition, so a further cut trades away real guidance.
+This paragraph describes the 0.6.0 change; the table above is today's measurement. Three things changed
+there, and only one of them was about size. (1) The click family was rewritten so each rule is stated once
+instead of three times: -390 characters, with every rule, example and rationale pinned by
+`tests/tool-descriptions.test.ts`, so a trim that eats one fails the build. (2) A gated tool is registered only
+while its capability is live: `browser_extract`'s schema alone is about 456 characters (≈ 127 tokens/turn),
+which a deployment that leaves `extract` unconfigured does not pay — a separate comparison, so it is not part
+of the net below. (3) Four descriptions were corrected to match the code they describe (dialog blocking, the
+gated diagnostics `browser_fill` points at, persistent-mode `browser_close`, and the click family’s landing
+note), which added 211 characters back because the old wording promised behaviour the implementation did not
+have. Net for that release: 18,065 → 17,886 characters with everything registered. The shipped layer's total
+is identical to the schema-defaults row above, because it keeps both power gates off — those schemas are not
+registered at all and cost nothing. What is left is per-tool prose rather than repetition, so a further cut
+trades away real guidance.
 
 #### KV Cache effect
 
@@ -335,15 +391,18 @@ The page state itself (DOM, cookies, storage) lives in the browser context and n
 
 ## Further reading
 
-Written for people deciding whether to hand an agent their browser:
+Written for people deciding whether to hand an agent their browser. These live in the GitHub repository
+(`docs/articles/`); the npm tarball ships only `README.md`, `CHANGELOG.md`, `SECURITY.md` and `NOTICE.md`, so the
+links below go to GitHub rather than to files inside the package:
 
-- [让 AI 用你已经登录的账号干活](docs/articles/login-state.md) — why session cookies are the hard part, and
+- [让 AI 用你已经登录的账号干活](https://github.com/miqian-nomad/dsh-browser-playwright-codex/blob/main/docs/articles/login-state.md) — why session cookies are the hard part, and
   what the export does to a minimised window.
-- [AI 开着浏览器抢你的焦点：三个根因](docs/articles/focus-stealing.md) — all three traced into source, with a
-  60-line reproduction script that needs no part of this plugin.
-- [遇到验证码和弹窗，为什么它不该替你点「确定」](docs/articles/dialogs-and-captcha.md) — mechanism-level
-  dialog parking, and the same philosophy behind stale refs failing loudly.
-- [官方 Discussions 发帖草稿](docs/articles/discussions-post.md) — a compatibility report in the format the
+- [AI 开着浏览器抢你的焦点：三个根因](https://github.com/miqian-nomad/dsh-browser-playwright-codex/blob/main/docs/articles/focus-stealing.md) — all three traced into source, with a
+  113-line reproduction script that needs no part of this plugin.
+- [遇到验证码和弹窗，为什么它不该替你点「确定」](https://github.com/miqian-nomad/dsh-browser-playwright-codex/blob/main/docs/articles/dialogs-and-captcha.md) — mechanism-level
+  dialog parking, what the challenge detector does and does not guarantee, and the same philosophy behind
+  stale refs failing loudly.
+- [官方 Discussions 发帖草稿](https://github.com/miqian-nomad/dsh-browser-playwright-codex/blob/main/docs/articles/discussions-post.md) — a compatibility report in the format the
   community asks for, ready to paste.
 
 ## Known Limitations and Deferred Work
@@ -366,9 +425,9 @@ Written for people deciding whether to hand an agent their browser:
   ```
 - **Chromium family only** — Firefox/WebKit channels are not probed; providers are swappable if another engine is needed.
 - **Extract needs a dedicated model route** — it does not reuse the main request's route; misconfiguration fails loudly at call time.
-- **JS-driven navigations are not statically checkable** — `allowedDomains` covers `browser_navigate`, `browser_open_tab`, every click path (`browser_click`: ref, `precise`, raw-coordinate and `mode:"hover"` modes) and `browser_switch_tab`, but a button whose handler runs `location.href = …` can still leave the allowed hosts, and a tab that is already sitting on a disallowed host stays open (the agent simply refuses to drive it); deploy an external network guard for hard isolation.
+- **JS-driven navigations are not statically checkable** — `allowedDomains` covers `browser_navigate`, `browser_open_tab`, every navigating click (`browser_click`: `ref`, `text`, `precise` and raw-coordinate modes) and `browser_switch_tab`; `mode: "hover"` reveals content without activating anything, so it is not checked against the URL policy. A button whose handler runs `location.href = …` can still leave the allowed hosts, and so can a `<form>` whose `action` points at another host (pressing its submit button is a navigation this check does not statically see), and a tab that is already sitting on a disallowed host stays open (the agent simply refuses to drive it); deploy an external network guard for hard isolation.
 - **Stability waits are bounded by design** — a perpetually animating element falls back to a forced click on its current rect rather than stalling; a page that never settles is snapshotted after the cap. This is intentional: the agent must never hang.
-- **Challenge detection reads the responses it has actually seen** — the response-header tier applies to a document response this session observed after it attached to the tab. A tab that was already sitting on a challenge page when the session took it over falls through to the widget and wording tiers and, failing those, to the no-progress backstop: it reports a *possible* wall instead of guessing the vendor.
+- **Challenge detection reads the responses it has actually seen** — the response-header tier applies to a document response this session observed after it attached to the tab. A tab that was already sitting on a challenge page when the session took it over falls through to the widget and wording tiers and, failing those, to the no-progress backstop: it reports a *possible* wall instead of guessing the vendor. A page that is not recognised still never goes silent: a non-2xx document carries an `[http NNN]` note, and a page with no clickable elements and almost no text carries a `[nothing here]` note.
 
 ### Ref and lifecycle safety (fixed)
 
@@ -388,7 +447,7 @@ MIT
 <!-- changelog:today -->
 ## 更新记录
 
-（此列表只记 **minor 里程碑**；每个补丁版本见 [CHANGELOG.md](CHANGELOG.md)。）
+（此列表只记 **minor 里程碑**；每个补丁版本见 [CHANGELOG.md](https://github.com/miqian-nomad/dsh-browser-playwright-codex/blob/main/CHANGELOG.md)。）
 
 ### 0.6.0（2026-10-16）
 
@@ -419,7 +478,7 @@ MIT
 
 ### 0.3.0（2026-09-26）
 
-- **源码化**：插件重新变成有源码的工程 —— `src/` 10 个 TypeScript 模块是唯一真源，`lib/` 由 `npm run build` 生成（10 个 .js + 10 个 .d.ts），不再手改产物。
+- **源码化**：插件重新变成有源码的工程 —— `src/` 10 个 TypeScript 模块（当时；现在 `src/` 是 32 个 `.ts`，`lib/` 是 32 个 `.js` + 32 个 `.d.ts`）是唯一真源，`lib/` 由 `npm run build` 生成，不再手改产物。
 - **代码规范**：引入 Prettier 配置（`.prettierrc.json`），`npm run format` / `npm run format:check` 统一格式；严格类型检查 0 错误。
 - **新增两只诊断工具**：`browser_console_messages`（控制台报错）与 `browser_network_requests`（网络请求），用于"点了没反应"时快速定位原因。
 - **接口与实现同步**：`BrowserSession` 补齐 9 个实现里已有的方法；`errors.ts` 补齐 12 个实际在用的错误码；`BrowserSnapshot` 补 `dialogNote` / `landingNote`；`TabInfo` 补 `active`；`runtime-state` / `cdp-policy` 新增类型声明。

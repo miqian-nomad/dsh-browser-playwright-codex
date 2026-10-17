@@ -18,3 +18,10 @@ ts_alone.txt
 test_clean.txt
 test_full.txt
 verify_clean.txt
+
+# 登录态。默认写在 ~/.dsh/browser-profiles/（仓库外），但如果谁把 launch.profileDir
+# 指进这份 checkout —— 比如 `profileDir: ./profile` —— 这个文件里是**明文的 cookie**，
+# 一旦提交到公开仓库就等于把登录态送出去。所以在这里挡住，而不是靠"默认不在仓库里"。
+dsh-storage-state.json
+browser-profiles/
+profile/

@@ -5,7 +5,7 @@
 import type { ContentBlock } from '@deepseek-ai/dsh-llm'
 import type { BrowserSnapshot, DiagnosticsValue } from './types.ts'
 import type { SnapshotValue, ScreenshotValue, TabsValue } from './tool-types.ts'
-import { CHALLENGE_NOTE, detectChallenge } from './challenge.ts'
+import { CHALLENGE_NOTE, detectChallenge, detectSilentPage } from './challenge.ts'
 import { renderSnapshot, renderSnapshotDiff } from './snapshot-render.ts'
 
 /**
@@ -70,9 +70,34 @@ export function renderDiagnostics(kind: string, value: DiagnosticsValue): string
 
 /** Project a provider snapshot into its canonical tool value. */
 export function snapshotValue(snapshot: BrowserSnapshot): SnapshotValue {
-  const challenge = detectChallenge(snapshot)
+  // The ref count travels with the snapshot on purpose: the wording tier needs it
+  // to tell a real wall (nothing to click) from a results page whose title merely
+  // contains the phrase. Measured on 百度: 0 refs on the challenge, 57/81 on the
+  // search pages titled "安全验证_百度搜索" / "滑块验证_百度搜索".
+  const challenge = detectChallenge({
+    url: snapshot.url,
+    title: snapshot.title,
+    nodes: snapshot.nodes,
+    refs: snapshot.totalRefs,
+    ...(snapshot.response !== undefined ? { response: snapshot.response } : {}),
+  })
   const tree = renderSnapshot(snapshot)
   const notes = []
+  // The HTTP status was captured for challenge detection but never shown, so a
+  // 404/500 error page reached the model looking like an ordinary page — measured
+  // 2026-10-17 on a real MDN 404: status 404, 35 refs, and nothing in the result
+  // said so. Suppressed when a challenge was identified, because that note
+  // already names the reason.
+  const status = snapshot.response?.status
+  if (challenge === null && status !== undefined && (status < 200 || status >= 300)) {
+    notes.push(
+      '[http ' +
+        String(status) +
+        '] the server answered ' +
+        String(status) +
+        ' for this document, so what follows may be an error page or an interception page rather than the content you asked for.',
+    )
+  }
   const dialog = snapshot.dialogNote
   if (dialog !== undefined && dialog !== '') notes.push(dialog)
   const landing = snapshot.landingNote
@@ -89,6 +114,17 @@ export function snapshotValue(snapshot: BrowserSnapshot): SnapshotValue {
   // on top of it only spends prompt budget on a case that is already decided.
   const stall = snapshot.stallNote
   if (challenge === null && stall !== undefined && stall !== '') notes.push(stall)
+  // The backstop above needs an action to compare before and after; a page with
+  // nothing to click never gets one, so the emptiest wall-like pages used to say
+  // nothing at all. Only on a successful status: a 4xx/5xx already has its own line.
+  const healthyStatus = status === undefined || (status >= 200 && status < 300)
+  // A parked dialog means the page is fine, it is the dialog that blocks us: the
+  // dialog note already says what to do, and adding "nothing here" contradicts it.
+  const dialogPending = snapshot.dialogNote !== undefined && snapshot.dialogNote !== ''
+  if (challenge === null && healthyStatus && !dialogPending) {
+    const silent = detectSilentPage({ refs: snapshot.totalRefs, nodes: snapshot.nodes, title: snapshot.title })
+    if (silent !== null) notes.push(silent)
+  }
   const head = notes.length > 0 ? notes.join('\n\n') + '\n\n' : ''
   // Incremental diff rides along when the provider computed one (snapshot.diff).
   const diffBlock = snapshot.diff !== undefined ? '\n\n' + renderSnapshotDiff(snapshot.diff) : ''

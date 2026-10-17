@@ -1,5 +1,8 @@
 # 原生弹窗（dialog）规范 —— 待处理状态模式
 
+> 适用范围：**只讲原生弹窗**（`alert` / `confirm` / `prompt` / `beforeunload`）。
+> 验证码 / 挑战页 / 拦截页是**另一套机制**（识别后提示模型交还给你，不是接口阻断），
+> 见 [`docs/articles/dialogs-and-captcha.md`](docs/articles/dialogs-and-captcha.md)；登录/2FA 连探测器都没有。
 > 采用 **Playwright 官方 MCP** 的做法（`@playwright/mcp` 的 `browser_handle_dialog`）。
 > 此前我们试过两种自创方案（自动取消 + 报告 / 回显原文才能接受），都不停地冒新漏洞。
 > 根因：**把"决定"和"触发"塞进同一次调用**，安全只能靠比对参数，于是永远能被绕过。

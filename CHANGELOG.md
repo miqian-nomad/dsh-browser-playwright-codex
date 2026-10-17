@@ -3,6 +3,34 @@
 Bilingual by intent: the version headings and the summary of each release are given in both
 languages, the individual entries follow the language the surrounding code and docs use.
 
+## 0.6.6 — 2026-10-17
+
+一句话摘要：**四份独立审查（文档漂移 / 代码对抗 / 发行打包 / 中性冷读）查出的问题集中修掉**——两条安全缺陷、几处"假成功/假失败"、随包自检的假承诺、发布门禁漏洞与一批文档漂移。
+
+### Security
+
+- **点击白名单可被祖先 `<a>` 绕过**：`browser_click` 的 `ref` / `text` / `precise` 三条路径只校验**被点元素自身**的 href，外层 `<a href="http://外站/">` 包住它时点击会导航到站外并返回成功。现在改为「自身 → 最近祖先 `<a href>`（穿 shadow host）」，与裸坐标路径同层，统一交给 URL 策略。两处独立审查各自用本地 fixture 复现过。
+- **密码/验证码/卡号曾进入 prompt**：`browser_extract` 把 `pageData()` 拼进辅助模型的 prompt，而 `pageData()` 采集输入框**当前值**——登录页的明文密码会随请求发出去（实测 prompt 里出现 `hunter2`）。现在 `type=password` 与 `autocomplete` 为 `current-password` / `new-password` / `one-time-code` / `cc-number` / `cc-csc` / `cc-exp` 的字段一律置空值，**字段本身保留**（模型仍知道"这里有个码要填"）。
+
+### Fixed
+
+- **填表核对两头错**：上一版把回读改成严格相等后，页面自动改写格式的输入框（全大写、千分位 `1,000`）被误判成"没写进去"，而 `browser_fill` 的描述恰恰把 input-mask / currency 列为预期场景；更早的版本则相反，`ABCD→ZZZZ`、`John→Jane` 会被判成功。现在的归一化只放过"页面改写、不是我们写错"：NFKC + 去大小写 + 去掉非字母数字；`1000≡1,000`、`abc≡ABC` 通过，`ABCD↔ZZZZ`、`1234↔12345` 仍然失败。contenteditable 也不再假失败（改读 `textContent`/`innerText`）。
+- **挑战页识别的两处回归**（本轮自查引入的）：给控件层加"页面得够空"的门控后，**正常登录页里嵌的真 reCAPTCHA / hCaptcha / Turnstile 完全不再识别**（登录页正是主要场景），已移除该门控；`CAPTCHA_ROLES` 曾删掉 `iframe`，导致名字就叫「验证码」的非厂商 iframe 不被识别，已恢复。
+- **`[nothing here]` 提示三类误报**：静默页扫描深度 4 → 8 层（正文藏得深的正常页曾被判"几乎没有文字"，与同一结果树里的正文自相矛盾）；无标题的裸文档（`about:blank`、直接打开图片）不再提示；有挂起弹窗时不出这条（否则与 `[dialog]` 指令冲突）。
+- **提示互斥**：已判定为拦截页时不再叠 `[http NNN]`；已识别为挑战时不再叠行为兜底提示。
+
+### Added
+
+- **测试 159 → 220**（+61）：挑战识别 50 条（含真实页面测得的门控数值与反例：讲 hCaptcha 的文章、`验证码说明` 帮助链接、`获取验证码` 按钮、百度搜索页标题）、真浏览器端到端 6 条（真实 `cf-mitigated` 头、无签名拦截面被行为兜底抓住、`interactiveOnly` 下 iframe 仍识别、单页应用改 URL 后旧响应头不复用、真实 404 显示状态码、真实访客门显示静默页提示）、安全回归 5 条（外链祖先点击被拒、密码/OTP 不进 prompt、contenteditable 成功、同长度不同值失败）、本机路径守卫。
+
+### Changed
+
+- **随包自检不再在 npm 安装形态崩溃**：`scripts/dsh-browser-verify.mjs` 的「`lib/` 与 `src/` 同步」一组在没有 `src/` 时**跳过**并打印说明，退出码 0 —— 安装形态显示「全部通过 (56 项，跳过 1 项)」，仓库形态仍是「(57 项)」。README / CHANGELOG 此前承诺的"装上即可跑"现在才真的成立。
+- **依赖不再全是 `*`**：`@deepseek-ai/schemastery` 固定 `^3.18.4`，peer `cordis >=4.0.4`、`dsh-llm` / `dsh-tools >=0.2.0-rc.1`。修前空项目安装会解析到 `dsh-tools 0.0.1-rc.1`、`dsh-llm 0.0.1-rc.5`（远旧于测试基线）；修后解析到 `0.2.0-rc.2`。代价：不同版本元组的预发布版（如 `0.2.1-rc.*`）会收到 **peer 警告**（不是失败，pnpm 默认不严格）。
+- **发布门禁补齐**：CI 增加 `npm run typecheck` 与 `npm run preflight`（与 `prepublishOnly` 对齐）；CI 与 publish 都新增「`npm run build` + `git diff --exit-code -- lib`」守卫——以前先 build 再比 mtime，`src` 改完忘重建也能全绿，而 `dsh plugin add github:…` 的安装路径会拿到旧 `lib/`。
+- **文档漂移**：独立审查列出 13 条硬错误 / 11 条过期 / 8 条矛盾 / 8 条缺失，全部修掉——随包文档死链由 12 条清零（改 GitHub 绝对链接）、测试计数与成本数字按实际命令重取、`npm test:live` 与 `browser-plugin/dev.cordis.yml` 这类跑不通/不存在的引用纠正、URL 白名单不再声称覆盖 `hover`（实际不覆盖）、补写 `snapshot.engine` 说明，并在 `中文说明.md` 新增 **§4.14 挑战页识别**（四层判定与两条结果提示，明确"产出提示不是阻断，认不出来就停下来问人"）。许可表述收敛为：代码与说明文档 MIT，CC BY-NC-SA 仅限 `FOCUS-STEALING.md` / `MODE-TRADE-OFFS.md` 两篇分析长文。
+- **`.gitignore` 补登录态**：`dsh-storage-state.json` / `browser-profiles/` / `profile/`。默认写在 `~/.dsh/browser-profiles/`（仓库外），但只要有人把 `launch.profileDir` 指进 checkout，那个文件里就是明文 cookie。
+
 ## 0.6.5 — 2026-10-16
 
 一句话摘要：**挑战页识别不再靠一份关键词表** —— 判定改成「厂商自有的机器信号优先，认不出来就问一句『页面变了吗』」，所以新出现的验证方式也能被接住；顺带清掉漏网的 4 处本机路径，并把 npm 包里 12 个用不上的开发脚本收成 2 个。

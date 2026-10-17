@@ -6,7 +6,7 @@ This document exists because the obvious fix for the focus-stealing bug — "jus
 
 **Environment / 环境**：Windows 11 x64 · Chrome 151 (`channel: 'chrome'`) · playwright-core 1.62.1 · plugin launch options (`viewport: null` headful / `1280x800` headless, `HUMANIZED_LAUNCH`, `--start-maximized` headful only).
 
-Reproduction scripts live in this repository's `scripts/` (`hl-compare.mjs`, `live-handoff-probe.mjs`, `needs-human-probe.mjs` — see the footer).
+Reproduction scripts live in this repository's `scripts/analysis/` (`hl-compare.mjs`, `live-handoff-probe.mjs`, `needs-human-probe.mjs` — see the footer).
 
 ---
 

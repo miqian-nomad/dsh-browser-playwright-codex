@@ -13,6 +13,8 @@
  *
  * 读 lib/，但**必须先 build**：npm run verify 会先跑 npm run build，直接
  * node scripts/... 跑则会撞上最后一组检查（lib/ 不旧于 src/）。
+ * npm 安装形态没有 src/（files 里不含它）：最后一组自动**跳过并说明**，不算失败，
+ * 所以从 npm 装上之后这条命令照样能跑通 —— README 的「装到即可跑」必须是真的。
  *
  * 为什么不像测试那样用 tsx 直读 src/：tsx（esbuild keepNames）会把传给
  * page.evaluate 的函数包成 __name(...)，而页面里没有这个符号 ——
@@ -20,7 +22,7 @@
  * 失效。lib/ 是编译产物，没有这层包裹，也正好是宿主真正加载的东西。
  */
 import http from 'node:http'
-import { readdirSync, statSync } from 'node:fs'
+import { existsSync, readdirSync, statSync } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { PlaywrightProvider } from '../lib/provider.js'
@@ -32,12 +34,13 @@ import { getEffectiveEngine, setSnapshotEngine } from '../lib/runtime-state.js'
 // 设置页的「页面识别方式」存在 ~/.dsh/dsh-browser-playwright.state.json，运行时状态层
 // 允许用 DSH_BROWSER_STATE_FILE 把它指向别处（src/runtime-state.ts 里为测试留的开关）。
 // 指向一个不存在的文件 = engine 回到配置默认值 legacy，本脚本的期望值就是按它写的。
-// 不隔离的话：用户把开关拨到「智能模式」，这份 57 项验收就会假失败（2026-10-01 实测）。
+// 不隔离的话：用户把开关拨到「智能模式」，这份验收就会假失败（2026-10-01 实测）。
 // 注意 [1]–[7] 因此都跑在兼容模式下；智能模式由 [8] 显式切过去跑（隔离状态文件里切，
 // 不碰用户的真实选择）。
 process.env.DSH_BROWSER_STATE_FILE = path.join(os.tmpdir(), 'dsh-browser-verify-state-isolated.json')
 
 let pass = 0
+let skipped = 0
 const failures = []
 function check(name, ok, detail) {
   if (ok) {
@@ -455,22 +458,31 @@ await provider.dispose()
 server.close()
 
 // [7] lib/ 是宿主真正加载的产物：源码改完没 build，跑绿了也是白跑。
+// npm 包里没有 src/（package.json 的 files 只收 lib/），安装形态下这一组无从比较：
+// 跳过并说明原因，不记失败、不影响退出码 —— 否则装上 npm 包之后这条命令必崩，
+// 与 README/CHANGELOG 的「装到即可跑」直接矛盾。
 console.log('[7] lib/ 与 src/ 同步（宿主加载 lib/）')
-const stale = []
-for (const file of readdirSync(new URL('../src', import.meta.url))) {
-  if (!file.endsWith('.ts') || file.endsWith('.d.ts')) continue
-  const src = statSync(new URL('../src/' + file, import.meta.url)).mtimeMs
-  const built = statSync(new URL('../lib/' + file.replace(/\.ts$/, '.js'), import.meta.url), {
-    throwIfNoEntry: false,
-  })
-  if (built === undefined || built.mtimeMs < src) stale.push(file.replace(/\.ts$/, '.js'))
+if (!existsSync(new URL('../src', import.meta.url))) {
+  skipped += 1
+  console.log('  （跳过）没有 src/：这是 npm 安装形态')
+} else {
+  const stale = []
+  for (const file of readdirSync(new URL('../src', import.meta.url))) {
+    if (!file.endsWith('.ts') || file.endsWith('.d.ts')) continue
+    const src = statSync(new URL('../src/' + file, import.meta.url)).mtimeMs
+    const built = statSync(new URL('../lib/' + file.replace(/\.ts$/, '.js'), import.meta.url), {
+      throwIfNoEntry: false,
+    })
+    if (built === undefined || built.mtimeMs < src) stale.push(file.replace(/\.ts$/, '.js'))
+  }
+  check('lib/ 不旧于 src/（旧了就先 npm run build）', stale.length === 0, stale.join(', '))
 }
-check('lib/ 不旧于 src/（旧了就先 npm run build）', stale.length === 0, stale.join(', '))
 
 console.log('')
+const skipNote = skipped > 0 ? '，跳过 ' + skipped + ' 项' : ''
 console.log(
   failures.length === 0
-    ? '全部通过 (' + pass + ' 项)'
+    ? '全部通过 (' + pass + ' 项' + skipNote + ')'
     : '失败 ' + failures.length + ' 项 / 共 ' + (pass + failures.length) + ' 项: ' + failures.join(', '),
 )
 process.exit(failures.length === 0 ? 0 : 1)

@@ -48,6 +48,15 @@ export interface ChallengeSignature {
     /** Case-insensitive header-name prefixes (e.g. DataDome's `x-datadome*`). */
     readonly headerPrefixes?: readonly string[];
     /**
+     * Status codes this signature must be corroborated by. Needed for vendors whose
+     * header is *not* challenge-specific: DataDome adds `x-datadome*` to every
+     * response (their docs say so, and they return `NA` when detection is off), and
+     * Imperva adds `x-iinfo` to everything it fronts. Measured 2026-10-17: a normal
+     * DataDome-fronted page answered 200 with `x-datadome: protected`, which an
+     * ungated rule would have reported as a wall.
+     */
+    readonly statuses?: readonly number[];
+    /**
      * Accessible-name tokens only this vendor's widget carries. On a non-iframe
      * node a token must ALSO be corroborated by {@link WIDGET_CORROBORATION}.
      */

@@ -62,4 +62,9 @@ export declare function networkRequests(session: PlaywrightSession, args: {
         failure: string | null | undefined;
     }[];
 };
+/**
+ * Bounded page data for browser_extract. Credential values (password fields and
+ * password-autocomplete fields) are blanked inside the page before the payload
+ * leaves the browser: the extract prompt is sent to an auxiliary model.
+ */
 export declare function pageData(session: PlaywrightSession): Promise<unknown>;

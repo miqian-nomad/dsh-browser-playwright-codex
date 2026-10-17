@@ -30,6 +30,12 @@ jobs:
           registry-url: 'https://registry.npmjs.org'
       - name: Install (repo has a lockfile; fall back if needed)
         run: npm ci || npm install
+      # 仓库里提交着 lib/，而 `dsh plugin add github:...` 装的是这棵树本身、不会 build。
+      # 发布前先 build 一次，产物与提交的 lib/ 不一致就拒绝发布 —— 否则用户拿到的是旧产物。
+      - name: Build
+        run: npm run build
+      - name: Committed lib/ is in sync with src/
+        run: git diff --exit-code -- lib
       - name: Dry run
         if: ${{ inputs.dry_run }}
         run: npm publish --dry-run

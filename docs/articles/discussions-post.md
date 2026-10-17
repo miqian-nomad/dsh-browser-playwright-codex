@@ -26,7 +26,7 @@
 ## A. 短版：插件兼容性报告
 
 ```
-插件：@miqian-nomad/dsh-browser-playwright-codex
+插件：dsh-browser-playwright-codex
       https://github.com/miqian-nomad/dsh-browser-playwright-codex
 dsh 版本：0.2.0-rc.1
 安装方式：源码（dsh plugin --profile web add github:miqian-nomad/dsh-browser-playwright-codex）
@@ -35,8 +35,8 @@ dsh 版本：0.2.0-rc.1
 补充信息（供并入数据时参考）：
 - 环境：Windows 11 x64，Node v24.16.0，本机已装 Chrome（插件自动探测 chromium→chrome→msedge→edge，无需下载浏览器）
 - 有头模式 + 持久 profile；最小化后连续切标签/开标签不抢焦点（复现脚本 scripts/analysis/repro-minimize.mjs）
-- 插件自带验收 57 项全过（不需要 DSH、不需要联网）：npm run verify
-- 单元/场景测试 100+ 项：npm test
+- 插件自带验收 57 项全过（npm 安装形态下显示 56 项 + 跳过 1 项，不需要 DSH、不需要联网）：npm run verify
+- 单元/场景测试 219 条：npm test
 - 安全边界与第三方扫描结论的逐条解释：SECURITY.md
 ```
 
@@ -51,7 +51,7 @@ dsh 版本：0.2.0-rc.1
 1. **窗口抢焦点有三个独立根因**，其中两个在 Playwright 上游、一个在持久化实现里：
    `switchTab` 的无条件 `bringToFront()`、`context.newPage()` 必然激活窗口、以及 `storageState()`
    为了覆盖未打开的 origin **会开一个临时页面**。第三个最隐蔽 —— 你以为"它自己跳"，其实是它在导出登录态。
-   → 60 行、不依赖插件的复现脚本在 `scripts/analysis/repro-minimize.mjs`。
+   → 113 行、不依赖插件的复现脚本在 `scripts/analysis/repro-minimize.mjs`。
 
 2. **"登录一次一直记得"的难点全在会话 cookie**（关窗即丢的那类）。做法：独立 profile + 关窗前导出、
    启动时回注；并且**最小化时跳过完整导出**（只取 cookies），否则修好了抢焦点又被导出拽回去。
@@ -62,8 +62,9 @@ dsh 版本：0.2.0-rc.1
    + 对齐层改为**校验身份**（角色不符就拒绝整棵树、退回兼容模式），并在验收里加了一个"隐藏元素排在按钮前面"的
    端到端用例。
 
-4. **遇事停下来等人**：原生对话框机制级挂起、验证码/登录交还给用户；CDP 只放行检查与输入模拟。
-   `SECURITY.md` 里逐条解释了第三方扫描报的那个 Critical 是什么、什么条件下才可达（默认关闭）。
+4. **遇事停下来等人**：原生对话框机制级挂起（接口上做不到偷偷接受）；验证码/登录是识别后在结果里
+   提示你接手，不是机制级阻断——这一点在 `SECURITY.md` 里写清楚了。CDP 只放行检查与输入模拟。
+   `SECURITY.md` 里还逐条解释了第三方扫描报的那个 Critical 是什么、什么条件下才可达（默认关闭）。
 
 5. 想要 GUI 开关：配套插件 `dsh-browser-toggle`（设置页卡片，可开关功能、切换页面识别方式、开关两个强力工具）。
 

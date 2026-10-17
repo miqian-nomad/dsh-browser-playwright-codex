@@ -17,6 +17,12 @@
 #     `playwright-core` is pinned to `~1.62.1` because FOCUS-STEALING.md cites 1.62.1 internals
 #     by line number.
 #   * The live-internet tests stay skipped by design (they need DSH_BROWSER_LIVE=1).
+#   * `prepublishOnly` is the release gate, and CI runs every release-gate step that can run
+#     here — `typecheck` and `preflight` included. Without them CI can be green while the last
+#     step of the release goes red (a split brain nobody wants to debug on release day).
+#   * `lib/` is committed. After the build we assert `git diff --exit-code -- lib` is clean, so a
+#     stale artifact cannot ship through `dsh plugin add github:...`, which installs this tree
+#     as-is and never runs the build.
 
 name: CI
 
@@ -65,11 +71,27 @@ jobs:
       - name: Unit + scenario tests
         run: npm test
 
+      - name: Typecheck (src + tests)
+        run: npm run typecheck
+
       - name: Self-contained acceptance (count printed by the script)
         run: npm run verify
+
+      # `npm run verify` builds first. The committed lib/ must be exactly what that build
+      # produces — otherwise the repository (and every github: install) serves an artifact that
+      # no source in the tree produced, while the same build on the runner stays green.
+      - name: Committed lib/ is in sync with src/
+        run: |
+          npm run build
+          git diff --exit-code -- lib
 
       - name: Formatting
         run: npm run format:check
 
       - name: Host API drift (doctor)
         run: npm run doctor
+
+      # Same gate `prepublishOnly` runs last. Keeping it here means release-time checks fail in
+      # CI first, not after the one-way npm publish.
+      - name: Preflight (release-gate parity)
+        run: npm run preflight

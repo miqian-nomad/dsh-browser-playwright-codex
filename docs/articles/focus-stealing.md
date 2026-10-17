@@ -22,7 +22,7 @@
 
 ## 怎么证明（不靠我说）
 
-仓库里有一个 60 行、**不依赖本插件**的复现脚本：
+仓库里有一个 113 行、**不依赖本插件**的复现脚本：
 
 ```sh
 node scripts/analysis/repro-minimize.mjs
@@ -51,7 +51,7 @@ AFTER   normal
 
 ```sh
 dsh plugin --profile web add github:miqian-nomad/dsh-browser-playwright-codex
-npm run verify     # 57 项自包含验收：不联网、不需要 DSH
+npm run verify     # 57 项自包含验收（npm 安装形态下 56 项 + 跳过 1 项）：不联网、不需要 DSH
 ```
 
 1. 最小化窗口 → 让 AI 连续切几次标签 → 窗口**仍然是最小化的**；

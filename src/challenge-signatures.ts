@@ -51,6 +51,15 @@ export interface ChallengeSignature {
   /** Case-insensitive header-name prefixes (e.g. DataDome's `x-datadome*`). */
   readonly headerPrefixes?: readonly string[]
   /**
+   * Status codes this signature must be corroborated by. Needed for vendors whose
+   * header is *not* challenge-specific: DataDome adds `x-datadome*` to every
+   * response (their docs say so, and they return `NA` when detection is off), and
+   * Imperva adds `x-iinfo` to everything it fronts. Measured 2026-10-17: a normal
+   * DataDome-fronted page answered 200 with `x-datadome: protected`, which an
+   * ungated rule would have reported as a wall.
+   */
+  readonly statuses?: readonly number[]
+  /**
    * Accessible-name tokens only this vendor's widget carries. On a non-iframe
    * node a token must ALSO be corroborated by {@link WIDGET_CORROBORATION}.
    */
@@ -102,16 +111,19 @@ export const CHALLENGE_SIGNATURES: readonly ChallengeSignature[] = Object.freeze
   {
     id: 'imperva-incapsula',
     engine: 'Imperva',
-    hint: 'Imperva (Incapsula) served this response from its edge, which is where its bot challenges live',
-    // Presence only: X-IInfo is an opaque per-response trace that Imperva adds
-    // to everything it fronts, so its value carries no comparable state.
+    hint: 'Imperva (Incapsula) blocked this request from its edge',
+    // Presence only: X-IInfo is an opaque per-response trace that Imperva adds to
+    // everything it fronts, so the header alone says nothing about a block — the
+    // status code has to agree.
     headers: [{ name: 'x-iinfo' }],
+    statuses: [403, 429, 503],
   },
   {
     id: 'datadome',
     engine: 'DataDome',
-    hint: 'DataDome attached its own metadata to this response',
+    hint: 'DataDome blocked this request',
     headerPrefixes: ['x-datadome'],
+    statuses: [403, 429, 503],
   },
   {
     id: 'recaptcha',

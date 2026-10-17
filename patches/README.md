@@ -2,7 +2,7 @@
 
 ## `upstream-window-activation.patch`
 
-Applies to **[ChenyuHeee/dsh-browser-playwright](https://github.com/ChenyuHeee/dsh-browser-playwright)** `main` (v0.1.1 source tree). Verified with `git apply --check` on a fresh clone; **not** compiled or run against upstream's test suite. The same helper code lives in this fork's `src/playwright.ts` (0.3.0+), where it does type-check and is exercised by tests — that is the strongest evidence available for these bodies, but it is not evidence about upstream's tree.
+Applies to **[ChenyuHeee/dsh-browser-playwright](https://github.com/ChenyuHeee/dsh-browser-playwright)** `main` (v0.1.1 source tree). Verified with `git apply --check` on a fresh clone; **not** compiled or run against upstream's test suite. The same helper code lives in this fork under `src/window-focus.ts` (0.3.0+; `src/playwright.ts` becomes a 56-line registration entry after the 0.5.x split), where it does type-check and is exercised by tests — that is the strongest evidence available for these bodies, but it is not evidence about upstream's tree.
 
 ```sh
 git clone https://github.com/ChenyuHeee/dsh-browser-playwright

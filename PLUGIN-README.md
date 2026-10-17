@@ -13,6 +13,14 @@ dsh plugin --profile <name> add dsh-browser-playwright-codex
 
 The bundle mounts three rows: the `ctx.browser` seam (`service`), the Playwright provider (`playwright`), and the model-facing tool family (`tool`).
 
+**Compatibility.** Built and tested against DSH `0.2.0-rc.1`. The dependency ranges are **floors, not
+wildcards**: peers `@deepseek-ai/cordis` `>=4.0.4`, `@deepseek-ai/dsh-llm` `>=0.2.0-rc.1`,
+`@deepseek-ai/dsh-tools` `>=0.2.0-rc.1`, and the direct dependency `@deepseek-ai/schemastery` `^3.18.4`. The
+floors stop an empty project from resolving a very old `0.0.1-rc.*` build while still letting a newer harness
+install; a prerelease whose `[major, minor, patch]` tuple differs from `0.2.0` (for example `0.2.1-rc.*`) is
+outside a `>=0.2.0-rc.1` range and may draw a **peer warning** — a warning, not an install failure (pnpm does
+not enforce peer ranges strictly by default). `npm run doctor` re-checks the harness exports after an upgrade.
+
 ### Your first task
 
 Install it and ask for something that leaves a visible result — there is nothing else to configure:
@@ -25,7 +33,8 @@ Install it and ask for something that leaves a visible result — there is nothi
 
 What you should see: a real browser window on your desktop doing the clicking, and the page coming back to
 the model as a `ref`-numbered list. The first time it meets a sign-in, a 2FA prompt or a verification page
-it **stops and tells you** — take the window over by hand and it continues from where it left off.
+it **reports the page back to you** — take the window over by hand and it continues from where it left off.
+Native dialogs are the exception that is enforced: they are parked and never auto-accepted.
 
 ### Browser binary
 
@@ -41,7 +50,7 @@ Or pin a binary: `launch.executablePath` / `launch.channel` in the plugin config
 
 ## Tools
 
-The default `toolPrefix` is `browser_`. Every action returns a fresh snapshot, so refs always come from the latest result. The registered set is capability-gated: `browser_evaluate`, `browser_cdp` and `browser_extract` appear only when their capability is switched on (their schemas are resident in the system prompt on every turn, so a tool that could only answer "disabled" would be pure prompt cost). Count the live surface with `npm run cost` — the shipped `cordis.patch.yml` keeps **both power gates off** (since 0.4.7), so a profile mounting this bundle sees **18 tools**; 19 or 20 once your deployment opts into `evaluate` / `cdp`, 21 once `extract` is configured. How to opt in: [SECURITY.md](SECURITY.md) §1.
+The default `toolPrefix` is `browser_`. Every action returns a fresh snapshot, so refs always come from the latest result. The registered set is capability-gated: `browser_evaluate`, `browser_cdp` and `browser_extract` appear only when their capability is switched on (their schemas are resident in the system prompt on every turn, so a tool that could only answer "disabled" would be pure prompt cost). Count the live surface with `npm run cost` — the shipped `cordis.patch.yml` keeps **both power gates off** (since 0.4.7), so a profile mounting this bundle sees **18 tools**; 19 or 20 once your deployment opts into `evaluate` / `cdp`, 21 once `extract` is configured. How to opt in: the snippet under “Known Limitations and Deferred Work” below, or the Settings card in [`dsh-browser-toggle`](https://github.com/miqian-nomad/dsh-browser-toggle).
 
 | Tool | Purpose |
 |---|---|
@@ -55,10 +64,10 @@ The default `toolPrefix` is `browser_`. Every action returns a fresh snapshot, s
 | `browser_wait` | Wait a bounded duration for lazy content |
 | `browser_tabs` / `browser_open_tab` / `browser_switch_tab` / `browser_close_tab` | Tab management; `browser_tabs` marks the `[active]` tab the other tools act on |
 | `browser_screenshot` | PNG capture stored as a durable image attachment the model can view |
-| `browser_extract` | Structured extraction: natural-language instruction → one parsed JSON value | **Only registered when enabled.**
-| `browser_evaluate` | Run one JavaScript expression in the page (disabled by default) | **Only registered when enabled.**
+| `browser_extract` | Structured extraction: natural-language instruction → one parsed JSON value; **only registered when its capability is enabled** |
+| `browser_evaluate` | Run one JavaScript expression in the page (disabled by default); **only registered when its capability is enabled** |
 | `browser_dialog` | Answer the native dialog blocking the page: `{ accept: true }` confirms, `false` cancels; errors with `NO_DIALOG` when nothing is pending |
-| `browser_cdp` | Send one raw CDP command (DOM inspection / Input simulation allow-list only; disabled by default) | **Only registered when enabled.**
+| `browser_cdp` | Send one raw CDP command (DOM inspection / Input simulation allow-list only; disabled by default); **only registered when its capability is enabled** |
 | `browser_close` | Close the session's browser window; the profile keeps login state, so the next call reopens signed in |
 | `browser_console_messages` | Read the page console messages captured for the current page (levels, text, source) |
 | `browser_network_requests` | Read the network requests captured for the current page (method, URL, status, resource type) |
@@ -66,7 +75,8 @@ The default `toolPrefix` is `browser_`. Every action returns a fresh snapshot, s
 ### Parameter signatures
 
 Every registered tool, with the parameters its schema actually declares (`*` = required, `?` = optional).
-Generated from the live tool surface and pinned by `tests/tool-schema.test.ts`, so it cannot drift from the code.
+Hand-maintained and pinned by `tests/tool-schema.test.ts` in both directions: a missing tool, a renamed
+parameter or a wrong required flag fails the test, so it cannot drift from the code.
 
 - `browser_back` — _none_
 - `browser_cdp` — `method`*, `params`? _(gated: registered only when enabled)_
@@ -107,7 +117,7 @@ Refs: 12
 - textbox "Search" [ref=e3]
 ```
 
-The model then calls `browser_click` with `ref: e2`. Invisible content is excluded, node and text caps bound the token cost, and truncation is flagged in the result.
+The model then calls `browser_click` with `ref: e2`. Invisible content is excluded, node and text caps bound the token cost, and truncation is flagged in the result. A result can open with one or more notes before the tree: `[human verification]` (a challenge page was recognised; the note tells the agent to hand it back to you, it does not block anything), `[http NNN]` (the main document answered a non-2xx status and no challenge was identified), `[nothing here]` (nothing to click and almost no text), `[no visible change]` (the action left the page identical — worded as a guess). A landing note, a parked-dialog note and an engine-fallback note can also appear.
 
 An actionable element with no text of its own is named from its descendants — `<a href="/set"><span>搜索设置</span></a>` renders as `link "搜索设置" [ref=e7]`, and `<a href="/b"><img alt="图标链接"></a>` as `link "图标链接" [ref=e8]` — so a visible label and the ref that carries it always appear on the same line. A non-actionable child that merely repeats an ancestor name is folded away, so each label appears once, on the line that carries the ref; container roles are never named from their content (a `<select>` shows its chosen option, the way a text input shows its value).
 
@@ -131,9 +141,10 @@ All tunables are patchable through the profile's `cordis.patch.yml` (later layer
       navigationTimeoutMs: 30000
       ignoreHTTPSErrors: false
     allowedDomains: []                  # e.g. ['github.com'] restricts navigation
-    idleTimeoutMs: 600000               # close idle windows after 10 min; 0 = never
+    idleTimeoutMs: 0                    # shipped value: never auto-close (schema default 600000 = 10 min)
     maxSessions: 8                      # LRU eviction (persistent mode: one window)
     snapshot:
+      engine: legacy                    # 'legacy' (default) or 'aria' (Playwright ariaSnapshot, refs aligned back)
       maxNodes: 500                     # token budget per snapshot tree
       maxNameLength: 120
       maxTextLength: 300
@@ -151,6 +162,11 @@ All tunables are patchable through the profile's `cordis.patch.yml` (later layer
       maxInputChars: 20000             # caps the page text handed to that model
       maxOutputTokens: 2000
 ```
+
+`snapshot.engine` picks the page-reading engine: `'legacy'` (the default) walks the injected DOM,
+`'aria'` uses Playwright's official `ariaSnapshot({ mode: 'ai' })` and aligns the result back onto the
+same `ref` ids; an aria tree that cannot be parsed falls back to legacy rather than handing the model an
+empty tree.
 
 `browser_extract` needs an auxiliary LLM route (`extract.provider` + `extract.model`); without one it fails with an actionable error. With a route configured, `extract.maxInputChars` bounds the page text in that prompt, and the prompt names the cap when it truncates. A gated tool is **not registered at all** while its capability is off, so its schema never reaches the system prompt; set `registerDisabledTools: true` to keep the whole surface discoverable (the tool then answers with the error naming the switch). The shipped layer in [`cordis.patch.yml`](cordis.patch.yml) keeps `allowEvaluate` and `allowCdp` **off**, matching the sample above: that file travels inside the package, so anything it enabled would be enabled for everyone who installs it. Opt in per deployment, in that deployment's own patch layer — or use the Settings card in [`dsh-browser-toggle`](https://github.com/miqian-nomad/dsh-browser-toggle). `browser_cdp` stays off until `allowCdp: true`; even then only the allow-list in `lib/cdp-policy.js` passes — network, storage, cookie, security and arbitrary-JS (`Runtime.evaluate`) commands are rejected with `CDP_DENIED`.
 
@@ -173,6 +189,8 @@ npm install
 npm test           # full suite: engine/action integration on real Chrome, policy, rendering,
                    # schema assembly, plus the realistic scenario suites below
 npm run verify     # naming/folding + click/hover/dialog acceptance; self-contained, prints its own count
+                   # (57 in a checkout; from an npm install it prints 56 + "1 skipped", because the
+                   #  `lib/`-vs-`src/` check has no `src/` to compare against)
 npm run verify:live  # same, plus a live sample of a real page (needs network)
 npm run doctor     # does the installed harness still export everything this plugin imports?
 npm run cost       # resident prompt cost of the tool schemas, per surface
@@ -184,6 +202,10 @@ but `lib/` and the harness: `node scripts/dsh-browser-verify.mjs` (the acceptanc
 `node scripts/doctor.mjs` (re-checks the harness exports after an upgrade). The rest are repository-only
 and run from a checkout — `measure-prompt-cost.mjs` reads `src/`, so it cannot work from a tarball.
 
+One package-manager note: `package.json` declares `packageManager: pnpm@10.31.0`, while the commands above
+(and CI) use **npm** with the committed `package-lock.json` (`npm ci`). Pick one and stay in it — mixing the
+two in a checkout gives you two lockfiles and an ambiguous install.
+
 ### Test suites
 
 | Suite | Command | What it covers |
@@ -191,15 +213,14 @@ and run from a checkout — `measure-prompt-cost.mjs` reads `src/`, so it cannot
 | Unit + engine integration | `npm test` (included) | Snapshot rendering, schema assembly, URL policy, provider actions on real Chrome |
 | Realistic scenarios | `npm run test:scenarios` | Scripted-agent journeys over a realistic local store fixture: guest checkout with coupon and validation, login/session persistence, multi-tab research, lazy content, infinite scroll, modal dialogs, popups, screenshots, policy, owner isolation, idle disposal, snapshot budgets — at both the `BrowserSession` level and the model-facing `ctx.tools.execute` level (with fake attachments/LLM services) |
 | Regression verify | `npm run verify` | The executable spec of snapshot naming/folding plus ref/text click-hover, the pending-dialog protocol and the tool surface (expected names derived from `contract.ts`) |
-| Live smoke | `npm test:live` | Opt-in checks against the real internet (example.com, Wikipedia REST). Skipped unless `DSH_BROWSER_LIVE=1`; not part of CI |
+| Live smoke | `npm run test:live` | Opt-in checks against the real internet (example.com, Wikipedia REST). Skipped unless `DSH_BROWSER_LIVE=1`; not part of CI |
 
 The scenario suites are the plugin's most realistic tests: they drive the browser the way an agent does — snapshot, find a `ref`, act, re-snapshot — and therefore double as executable documentation of the model experience.
 
-From a DeepSeek Harness source checkout, load this plugin from TypeScript:
-
-```sh
-pnpm dsh web --patch ./browser-plugin/dev.cordis.yml
-```
+From a DeepSeek Harness source checkout, the bundle layer to load is this repository's
+[`cordis.patch.yml`](cordis.patch.yml) — the same file the package ships. Register the checkout through your
+profile with `dsh plugin --profile <name> add link:<absolute path to this directory>` (above); this repository
+carries no separate dev patch file.
 
 ## Model Experience
 
@@ -219,7 +240,19 @@ Measured with ``npm run cost`` (per-turn, resident in the system prompt):
 | Shipped bundle layer (this package's `cordis.patch.yml`: both power gates off) | 18 | 12,755 | ≈ 3,543 |
 | Everything registered (`registerDisabledTools: true`, plus `extract`) | 21 | 15,608 | ≈ 4,336 |
 
-Three things changed here, and only one of them was about size. (1) The click family was rewritten so each rule is stated once instead of three times: -390 characters, with every rule, example and rationale pinned by `tests/tool-descriptions.test.ts`, so a trim that eats one fails the build. (2) A gated tool is registered only while its capability is live — `browser_extract` on this deployment: -456 characters ≈ 127 tokens/turn. (3) Four descriptions were corrected to match the code they describe (dialog blocking, the gated diagnostics `browser_fill` points at, persistent-mode `browser_close`, and the click family’s landing note), which added 211 characters back because the old wording promised behaviour the implementation did not have. Net: 18,065 → 17,886 characters with everything registered; the shipped layer's total is identical to the schema-defaults row above, because it keeps both power gates off — those schemas are not registered at all and cost nothing. What is left is per-tool prose rather than repetition, so a further cut trades away real guidance.
+This paragraph describes the 0.6.0 change; the table above is today's measurement. Three things changed
+there, and only one of them was about size. (1) The click family was rewritten so each rule is stated once
+instead of three times: -390 characters, with every rule, example and rationale pinned by
+`tests/tool-descriptions.test.ts`, so a trim that eats one fails the build. (2) A gated tool is registered only
+while its capability is live: `browser_extract`'s schema alone is about 456 characters (≈ 127 tokens/turn),
+which a deployment that leaves `extract` unconfigured does not pay — a separate comparison, so it is not part
+of the net below. (3) Four descriptions were corrected to match the code they describe (dialog blocking, the
+gated diagnostics `browser_fill` points at, persistent-mode `browser_close`, and the click family’s landing
+note), which added 211 characters back because the old wording promised behaviour the implementation did not
+have. Net for that release: 18,065 → 17,886 characters with everything registered. The shipped layer's total
+is identical to the schema-defaults row above, because it keeps both power gates off — those schemas are not
+registered at all and cost nothing. What is left is per-tool prose rather than repetition, so a further cut
+trades away real guidance.
 
 #### KV Cache effect
 
@@ -236,10 +269,22 @@ The page state itself (DOM, cookies, storage) lives in the browser context and n
 - **Selector-free, not vision-free** — interaction is a11y-tree based; purely visual widgets (canvas, WebGL, custom-drawn controls) may expose no refs. `browser_screenshot` + an image-capable model is the fallback.
 - **Cross-origin iframes** appear as leaf `(frame)` nodes without refs; same-origin frames are walked up to two levels deep.
 - **Evaluate gate is config, not approval** — enabling `allowEvaluate` trusts the model with arbitrary page JavaScript; compose it with the harness approval/permission policy for stricter control.
+- **The package ships both power gates OFF, and that is deliberate** — `cordis.patch.yml` is part of the package, so anything it enables is enabled for *everyone who installs this*. It therefore sets `allowEvaluate: false` and `allowCdp: false` (the code defaults), and each deployment opts in through its **own profile patch** (`~/.dsh/profiles/<name>/cordis.patch.yml`). A package that shipped them on would be handing every installer a backdoor they never asked for. Snippet:
+  ```yaml
+  # dsh replaces an entry's config object wholesale — list every key you rely on.
+  - id: browser-tool
+    config:
+      toolPrefix: 'browser_'
+      allowEvaluate: true    # registers browser_evaluate
+      allowCdp: true         # registers browser_cdp (needs a full DSH restart)
+      registerDisabledTools: false
+      maxWaitMs: 60000
+  ```
 - **Chromium family only** — Firefox/WebKit channels are not probed; providers are swappable if another engine is needed.
 - **Extract needs a dedicated model route** — it does not reuse the main request's route; misconfiguration fails loudly at call time.
-- **JS-driven navigations are not statically checkable** — `allowedDomains` covers `browser_navigate`, `browser_open_tab`, every click path (`browser_click`: ref, `precise`, raw-coordinate and `mode:"hover"` modes) and `browser_switch_tab`, but a button whose handler runs `location.href = …` can still leave the allowed hosts, and a tab that is already sitting on a disallowed host stays open (the agent simply refuses to drive it); deploy an external network guard for hard isolation.
+- **JS-driven navigations are not statically checkable** — `allowedDomains` covers `browser_navigate`, `browser_open_tab`, every navigating click (`browser_click`: `ref`, `text`, `precise` and raw-coordinate modes) and `browser_switch_tab`; `mode: "hover"` reveals content without activating anything, so it is not checked against the URL policy. A button whose handler runs `location.href = …` can still leave the allowed hosts, and so can a `<form>` whose `action` points at another host (pressing its submit button is a navigation this check does not statically see), and a tab that is already sitting on a disallowed host stays open (the agent simply refuses to drive it); deploy an external network guard for hard isolation.
 - **Stability waits are bounded by design** — a perpetually animating element falls back to a forced click on its current rect rather than stalling; a page that never settles is snapshotted after the cap. This is intentional: the agent must never hang.
+- **Challenge detection reads the responses it has actually seen** — the response-header tier applies to a document response this session observed after it attached to the tab. A tab that was already sitting on a challenge page when the session took it over falls through to the widget and wording tiers and, failing those, to the no-progress backstop: it reports a *possible* wall instead of guessing the vendor.
 
 ### Ref and lifecycle safety (fixed)
 

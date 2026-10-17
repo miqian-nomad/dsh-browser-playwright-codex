@@ -51,6 +51,15 @@ export declare function resolveClickPoint(session: PlaywrightSession, locator: L
  */
 export declare function clickText(session: PlaywrightSession, text: string, signal: AbortSignal | undefined): Promise<import("./types.ts").BrowserSnapshot>;
 /**
+ * The href a click on this element would navigate to, for the URL policy.
+ * Its own href is not enough: a button or span nested inside an off-domain
+ * `<a href>` has no href itself yet the click bubbles into that link and
+ * navigates. The raw-coordinate path already checks the closest ancestor
+ * link; ref and text clicks must apply the same rule (B2 in the audit).
+ * Returns null when no link is involved, which the policy lets through.
+ */
+export declare function clickTargetHref(locator: Locator): Promise<string | null>;
+/**
  * Shared click core: enforce the URL policy for link targets, run the
  * Codex-style geometry ladder with the Playwright actionability fallback,
  * then report what actually received the click. The label names the target
@@ -60,6 +69,17 @@ export declare function clickLocator(session: PlaywrightSession, locator: Locato
 export declare function clickAt(session: PlaywrightSession, x: number, y: number, signal: AbortSignal | undefined): Promise<import("./types.ts").BrowserSnapshot>;
 export declare function clickAtRef(session: PlaywrightSession, ref: string, signal: AbortSignal | undefined): Promise<import("./types.ts").BrowserSnapshot>;
 export declare function fill(session: PlaywrightSession, ref: string, text: string, signal: AbortSignal | undefined): Promise<import("./types.ts").BrowserSnapshot>;
+/**
+ * Normalize a field value before comparing. Two levels of forgiveness, both of them
+ * things a page does to a value *after* we wrote it, not differences in what we wrote:
+ * whitespace is collapsed, and everything that is not a letter or a digit is dropped
+ * (`1,000` ≡ `1000`) with case folded (`abc` ≡ `ABC`). That covers input masks and
+ * currency fields — which `browser_fill`'s own description names — while still failing
+ * a genuinely different value: `ABCD`→`ZZZZ`, `John`→`Jane` and `1234`→`12345` all
+ * differ once normalized. The old readback accepted a length tolerance and containment,
+ * which is how those used to report success (audit B4).
+ */
+export declare function normalizeFillText(value: string): string;
 /** Read the field back and decide whether the fill landed. */
 export declare function verifyFill(_session: PlaywrightSession, locator: Locator, tag: string, text: string): Promise<boolean>;
 export declare function press(session: PlaywrightSession, ref: string, key: string, signal: AbortSignal | undefined): Promise<import("./types.ts").BrowserSnapshot>;
