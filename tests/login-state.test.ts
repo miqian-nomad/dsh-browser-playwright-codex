@@ -25,7 +25,7 @@ import { PlaywrightProvider } from '../src/provider.ts'
 import type { PlaywrightConfig } from '../src/config.ts'
 
 // 隔离设置页的真实用户状态：这些用例的期望值与引擎选择无关，但读真实状态会让结果随用户设置漂移。
-process.env.DSH_BROWSER_STATE_FILE = path.join(os.tmpdir(), 'dsh-browser-tests-state-isolated.json')
+process.env.DSH_BROWSER_STATE_FILE = path.join(os.tmpdir(), 'dsh-browser-tests-state-login-state.json')
 
 type PersistArg = Parameters<PlaywrightProvider['persistState']>[0]
 

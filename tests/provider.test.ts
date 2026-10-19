@@ -12,7 +12,7 @@ import type { BrowserNode } from '../src/types.ts'
 import { getLoginSites } from '../src/runtime-state.ts'
 
 // 期望值按 legacy（兼容模式）的树写；隔离掉设置页的真实用户状态，避免假失败。
-process.env.DSH_BROWSER_STATE_FILE = path.join(os.tmpdir(), 'dsh-browser-tests-state-isolated.json')
+process.env.DSH_BROWSER_STATE_FILE = path.join(os.tmpdir(), 'dsh-browser-tests-state-provider.json')
 
 const config: PlaywrightConfig = {
   launch: {

@@ -29,7 +29,7 @@ import {
 // 这套用例的期望值是按「兼容模式」(legacy) 的树写的，所以必须把设置页那份用户状态隔离掉：
 // 否则用户把「页面识别方式」拨到智能模式后，同一份代码在这里会整片假失败
 // （2026-10-01 实测：真读用户状态 = 10 项挂；隔离后 = 0 项挂）。
-process.env.DSH_BROWSER_STATE_FILE = path.join(os.tmpdir(), 'dsh-browser-tests-state-isolated.json')
+process.env.DSH_BROWSER_STATE_FILE = path.join(os.tmpdir(), 'dsh-browser-tests-state-scenarios.json')
 
 // ---------------------------------------------------------------------------
 // Fixtures and providers
@@ -247,6 +247,50 @@ test('an element that is never on screen is reported as off-screen', async () =>
 // Scenario: guest checkout journey
 // ---------------------------------------------------------------------------
 
+
+/**
+ * The human types a secret in the visible window.
+ *
+ * `browser_fill` refuses credential fields by mechanism (password / one-time-code /
+ * card), so a journey that needs one models the person: set the value and fire the
+ * same events the browser would. The assertion that the agent is refused comes first,
+ * so this helper cannot hide a regression in the refusal itself.
+ */
+async function humanTypes(session: Awaited<ReturnType<typeof provider.acquire>>, label: string, value: string) {
+  const typed = await session.evaluate(`(() => {
+    const wanted = ${JSON.stringify(label)}
+    const fields = [...document.querySelectorAll('input, textarea')]
+    const el = fields.find((field) => {
+      const aria = field.getAttribute('aria-label') || ''
+      const placeholder = field.getAttribute('placeholder') || ''
+      const labelled = [...document.querySelectorAll('label')].find((l) => l.textContent && l.textContent.trim() === wanted)
+      const id = labelled ? labelled.getAttribute('for') : null
+      return aria === wanted || placeholder === wanted || (id !== null && field.id === id)
+    })
+    if (!el) throw new Error('no field labelled ' + wanted)
+    el.focus()
+    el.value = ${JSON.stringify(value)}
+    el.dispatchEvent(new Event('input', { bubbles: true }))
+    el.dispatchEvent(new Event('change', { bubbles: true }))
+    return el.value
+  })()`)
+  if (typed !== value) throw new Error('the human could not type into ' + label)
+}
+
+/** Refuse a credential fill, then let the human type it. */
+async function humanTypesInsteadOfFill(
+  session: Awaited<ReturnType<typeof provider.acquire>>,
+  ref: string,
+  label: string,
+  value: string,
+) {
+  await assert.rejects(session.fill(ref, value), (error: unknown) => {
+    assert.equal((error as { code?: string }).code, 'CREDENTIAL_FIELD')
+    return true
+  }, 'browser_fill must refuse credential fields')
+  await humanTypes(session, label, value)
+}
+
 test('guest checkout journey: search, variant, cart, coupon, validation, order', async () => {
   const s = await provider.acquire('guest-checkout')
   const qty = 2
@@ -325,8 +369,8 @@ test('guest checkout journey: search, variant, cart, coupon, validation, order',
   await s.fill(await field('Full name'), 'Ada Lovelace')
   await s.fill(await field('Email'), 'ada@example.com')
   await s.fill(await field('Shipping address'), '1 Analytical Engine Way')
-  await s.fill(await field('Card number'), '4111111111111111')
-  await s.fill(await field('Expiry (MM/YY)'), '12/30')
+  await humanTypesInsteadOfFill(s, await field('Card number'), 'Card number', '4111111111111111')
+  await humanTypesInsteadOfFill(s, await field('Expiry (MM/YY)'), 'Expiry (MM/YY)', '12/30')
   await s.click(await refOf(s, { role: 'button', name: 'Place order' }, 'place-order button (valid)'))
   const confirmed = await waitFor(s, (snap) => snap.url.includes('/order/ORD-'), 'order confirmation page')
   assert.match(text(confirmed), /Order confirmed/)
@@ -350,12 +394,12 @@ test('account journey: redirect, invalid login, session persistence across tabs,
   const emailRef = await refOf(s, { role: 'textbox', name: 'Email' }, 'login email')
   const passwordRef = await refOf(s, { role: 'textbox', name: 'Password' }, 'login password')
   await s.fill(emailRef, 'demo@store.test')
-  await s.fill(passwordRef, 'nope')
+  await humanTypesInsteadOfFill(s, passwordRef, 'Password', 'nope')
   await s.click(await refOf(s, { role: 'button', name: 'Sign in' }, 'sign-in button'))
   await waitFor(s, (snap) => text(snap).includes('Invalid email or password.'), 'invalid login alert')
 
   // 3. Correct credentials land on the account page.
-  await s.fill(passwordRef, 'secret123')
+  await humanTypesInsteadOfFill(s, passwordRef, 'Password', 'secret123')
   await s.click(await refOf(s, { role: 'button', name: 'Sign in' }, 'sign-in button (retry)'))
   const account = await waitFor(s, (snap) => snap.url.includes('/account'), 'account page')
   assert.match(text(account), /demo@store\.test/)
