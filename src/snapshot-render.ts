@@ -6,8 +6,110 @@
 
 import type { BrowserNode, BrowserSnapshot, SnapshotDiff, SnapshotDiffEntry } from './types.ts'
 
+/**
+ * Query parameters that only feed analytics or the site's own ranking pipeline.
+ * They make a rendered href several times longer than the link it names and the
+ * model never needs them: the ref (not the URL) is what clicks.
+ */
+const TRACKING_PARAMS = new Set([
+  'gclid',
+  'dclid',
+  'fbclid',
+  'msclkid',
+  'yclid',
+  'spm',
+  'scm',
+  'share_token',
+  'rsv_spt',
+  'rsv_iqid',
+  'rsv_bp',
+  'rsv_idx',
+  'rsv_enter',
+  'rsv_pq',
+  'rsv_t',
+  'rsv_dl',
+  'rsv_sug1',
+  'rsv_sug2',
+  'rsv_sug3',
+  'rsv_sug4',
+  'rsv_sug5',
+  'rsv_sug6',
+  'rsv_sug7',
+  'rsv_sug8',
+  'rsv_sug9',
+  'rsv_sug10',
+  'sa',
+  'usm',
+  'rqid',
+  'rsf',
+])
+
+/** Default cap for a rendered href, in characters. */
+export const MAX_HREF_LENGTH = 160
+
+/** Clip a string to a display budget, marking the cut. */
+function clip(value: string, maxLength: number): string {
+  return value.length <= maxLength ? value : value.slice(0, maxLength - 1) + '…'
+}
+
+/**
+ * Trim a href for display: drop analytics parameters and clip the whole thing.
+ * The snapshot's refs remain the interaction handle, so this only affects what
+ * the model reads, never what a click does.
+ *
+ * @param href - the raw href from the accessibility tree
+ * @param maxLength - display budget in characters
+ * @returns the shortened href
+ */
+export function trimUrlForDisplay(href: string, maxLength: number = MAX_HREF_LENGTH): string {
+  const hashAt = href.indexOf('#')
+  const hash = hashAt >= 0 ? href.slice(hashAt) : ''
+  const head = hashAt >= 0 ? href.slice(0, hashAt) : href
+  const queryAt = head.indexOf('?')
+  if (queryAt < 0) return clip(head + hash, maxLength)
+  const base = head.slice(0, queryAt)
+  const kept = head
+    .slice(queryAt + 1)
+    .split('&')
+    .filter((pair) => pair !== '')
+    .filter((pair) => {
+      let key = pair.split('=')[0] ?? ''
+      try {
+        key = decodeURIComponent(key)
+      } catch {
+        /* keep the raw key: an undecodable one is not a known tracker */
+      }
+      key = key.toLowerCase()
+      return !key.startsWith('utm_') && !TRACKING_PARAMS.has(key)
+    })
+  return clip(base + (kept.length > 0 ? '?' + kept.join('&') : '') + hash, maxLength)
+}
+
+/**
+ * A wrapper element with no name, ref, state or link of its own. Keeping it
+ * would push every real element one level deeper and repeat the word "generic"
+ * for every <div> on the page; dropping it keeps the structure the model needs
+ * (nesting of things that have names) without the noise.
+ */
+function isTransparentWrapper(node: BrowserNode): boolean {
+  return (
+    node.role === 'generic' &&
+    node.name === '' &&
+    node.ref === undefined &&
+    node.href === undefined &&
+    node.level === undefined &&
+    node.checked === undefined &&
+    node.selected === undefined &&
+    node.disabled === undefined
+  )
+}
+
 /** Render one node line into the accumulating line list. */
 function renderNode(node: BrowserNode, depth: number, lines: string[]): void {
+  if (isTransparentWrapper(node)) {
+    for (const child of node.children) renderNode(child, depth, lines)
+    return
+  }
   const indent = '  '.repeat(depth)
   let line = indent + '- ' + node.role
   if (node.name !== '') line += ' "' + node.name + '"'
@@ -18,7 +120,7 @@ function renderNode(node: BrowserNode, depth: number, lines: string[]): void {
   if (node.disabled === true) flags.push('disabled')
   if (node.ref !== undefined) flags.push('ref=' + node.ref)
   if (flags.length > 0) line += ' [' + flags.join(', ') + ']'
-  if (node.href !== undefined) line += ' -> ' + node.href
+  if (node.href !== undefined) line += ' -> ' + trimUrlForDisplay(node.href)
   lines.push(line)
   for (const child of node.children) renderNode(child, depth + 1, lines)
 }

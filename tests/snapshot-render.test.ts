@@ -65,3 +65,41 @@ test('renderSnapshotDiff marks a navigation reset', () => {
   assert.match(text, /navigation reset/)
   assert.match(text, /same: 0/)
 })
+
+test('anonymous generic wrappers collapse instead of nesting one level each', () => {
+  // Real pages wrap every link in several nameless <div>s; rendering each one as
+  // "- generic" both repeats the word and inflates the indentation.
+  const wrapper = (child: BrowserNode): BrowserNode => ({ role: 'generic', name: '', children: [child] })
+  const nodes: BrowserNode[] = [
+    wrapper(wrapper(wrapper({ role: 'link', name: 'Home', ref: 'e1', href: '/', children: [] }))),
+  ]
+  assert.equal(renderSnapshotTree(nodes), '- link "Home" [ref=e1] -> /')
+})
+
+test('a named or ref-bearing generic keeps its own line and its depth', () => {
+  const nodes: BrowserNode[] = [
+    { role: 'generic', name: 'Panel', children: [{ role: 'button', name: 'Go', ref: 'e2', children: [] }] },
+  ]
+  assert.equal(renderSnapshotTree(nodes), ['- generic "Panel"', '  - button "Go" [ref=e2]'].join('\n'))
+})
+
+test('displayed hrefs drop tracking parameters but keep meaningful ones', () => {
+  const nodes: BrowserNode[] = [
+    {
+      role: 'link',
+      name: 'Search',
+      ref: 'e1',
+      href: '/s?wd=%E9%93%B6%E8%A1%8C&rsv_idx=2&rsv_pq=abc&utm_source=x&gclid=y',
+      children: [],
+    },
+  ]
+  assert.equal(renderSnapshotTree(nodes), '- link "Search" [ref=e1] -> /s?wd=%E9%93%B6%E8%A1%8C')
+})
+
+test('a very long href is clipped and marked', () => {
+  const href = '/search?q=' + 'a'.repeat(400)
+  const nodes: BrowserNode[] = [{ role: 'link', name: 'Long', ref: 'e1', href, children: [] }]
+  const line = renderSnapshotTree(nodes)
+  assert.ok(line.length < 200, 'clipped line should stay short: ' + String(line.length))
+  assert.match(line, /…$/)
+})

@@ -20,6 +20,7 @@ languages, the individual entries follow the language the surrounding code and d
 ### Changed
 
 - **两个诊断工具改为门控**：`browser_console_messages` / `browser_network_requests` 不再常驻 —— 新增 `tool.diagnostics: false`（默认关），开启后才注册。常驻成本 **18 工具 12,755 字符 ≈ 3,543 token/轮 → 16 工具 11,005 字符 ≈ 3,057 token/轮（−486，−13.7%）**；全量注册仍是 21 工具 ≈ 4,336。
+- **快照瘦身（运行时大头）**：无名无状态的 `generic` 包装层不再逐层输出（真实页面常把一个链接包在 7~8 层 div 里），显示用 `href` 去掉追踪参数（`utm_*` / `gclid` / `rsv_*` / `sa` 等）并截到 160 字符。百度结果页形状的样本：**6,169 → 2,557 字符（−58.6%）**，行数 108 → 24。refs 与点击行为不变 —— 省的是模型读到的东西。
 - 闸门写入块改为**整行 config**（新标记 `# >>> dsh-browser:`），并兼容旧的 `dsh-browser-toggle` 标记就地替换 —— 避免同一个 id 被两段 patch 争抢。
 - `scripts/shipped-gates.mjs` 按新行名读取出厂闸门；`scripts/build-client.mjs` 把 `client/client.js` 复制进 `lib/`。
 

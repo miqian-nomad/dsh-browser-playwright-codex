@@ -4,6 +4,18 @@
  * @module dsh-browser-playwright-codex/snapshot-render
  */
 import type { BrowserNode, BrowserSnapshot, SnapshotDiff } from './types.ts';
+/** Default cap for a rendered href, in characters. */
+export declare const MAX_HREF_LENGTH = 160;
+/**
+ * Trim a href for display: drop analytics parameters and clip the whole thing.
+ * The snapshot's refs remain the interaction handle, so this only affects what
+ * the model reads, never what a click does.
+ *
+ * @param href - the raw href from the accessibility tree
+ * @param maxLength - display budget in characters
+ * @returns the shortened href
+ */
+export declare function trimUrlForDisplay(href: string, maxLength?: number): string;
 /**
  * Render a node tree as indented lines, one element per line.
  * @param nodes - the snapshot's root nodes.
