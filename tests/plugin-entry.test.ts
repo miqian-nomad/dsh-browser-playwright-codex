@@ -18,6 +18,8 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import * as entrySource from '../src/playwright.ts'
 import * as entryBuilt from '../lib/playwright.js'
+import * as indexSource from '../src/index.ts'
+import * as indexBuilt from '../lib/index.js'
 import * as toolEntry from '../src/tool.ts'
 
 /** The runtime surface the loader / other packages may rely on for the ./playwright subpath. */
@@ -103,14 +105,27 @@ test('产物与源码的 schema 行为一致（loader 加载的是产物）', ()
   assert.deepEqual(fromBuilt, fromSource, 'lib/ 与 src/ 漂了 —— 记得 npm run build')
 })
 
-test('cordis.patch.yml 的 loader 行指向的就是上面被测的这三个子路径', () => {
+test('cordis.patch.yml 只有一个 loader 行：包根本身（2026-10-19 合并后）', () => {
   const patch = readFileSync(new URL('../cordis.patch.yml', import.meta.url), 'utf8')
-  for (const sub of ['service', 'playwright', 'tool'] as const) {
-    assert.match(
-      patch,
-      new RegExp('dsh-browser-playwright-codex/' + sub),
-      `cordis.patch.yml 必须挂载 <pkg>/${sub}，否则这个测试覆盖的不是真正被加载的模块`,
-    )
+  assert.match(
+    patch,
+    /- id: browser\n\s+name: 'dsh-browser-playwright-codex'/,
+    'cordis.patch.yml must mount the package root as one row',
+  )
+  // dsh-client-modules rejects distinct active loader sources resolving to one package
+  // name, and the Settings card needs a client module — so subpath rows must not come back.
+  assert.doesNotMatch(
+    patch,
+    /dsh-browser-playwright-codex\/(service|playwright|tool)/,
+    'a second loader row for this package would make the client card illegal again',
+  )
+  for (const [label, mod] of [
+    ['src/index.ts', indexSource],
+    ['lib/index.js', indexBuilt],
+  ] as const) {
+    for (const key of ['name', 'apply', 'Config'] as const) {
+      assert.ok(key in mod, label + ' must export ' + key + ' (the loader reads it from the package root)')
+    }
   }
 })
 

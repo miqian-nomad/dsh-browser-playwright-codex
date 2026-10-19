@@ -1,7 +1,7 @@
 {
   "name": "dsh-browser-playwright-codex",
-  "version": "0.6.6",
-  "description": "Browser automation for DeepSeek Harness: fill in forms, scrape lists and work across tabs in real pages, using the logins you already have. Runs in a visible window that stays quiet when minimised, and stops for sign-ins, CAPTCHAs and native dialogs instead of confirming for you.",
+  "version": "0.7.0",
+  "description": "Browser automation for DeepSeek Harness, one plugin: fill in forms, scrape lists and work across tabs in real pages, using the logins you already have. Runs in a visible window that stays quiet when minimised; native dialogs are parked instead of confirmed, CAPTCHA pages are flagged with a note that says stop and hand the page back, password / one-time-code / card fields are refused by browser_fill, and the Settings card (enable/disable, page-reading mode, capability gates) now lives inside this package.",
   "license": "MIT",
   "type": "module",
   "main": "lib/index.js",
@@ -28,7 +28,14 @@
     },
     "./cordis.patch.yml": "./cordis.patch.yml",
     "./package.json": "./package.json",
-    "./locale/*.json": "./locale/*.json"
+    "./locale/*.json": "./locale/*.json",
+    "./client": {
+      "default": "./lib/client.js"
+    },
+    "./plugin": {
+      "types": "./lib/plugin.d.ts",
+      "default": "./lib/plugin.js"
+    }
   },
   "files": [
     "lib",
@@ -42,7 +49,7 @@
     "scripts/dsh-browser-verify.mjs"
   ],
   "scripts": {
-    "build": "node node_modules/typescript/bin/tsc -p tsconfig.json",
+    "build": "node node_modules/typescript/bin/tsc -p tsconfig.json && node scripts/build-client.mjs",
     "typecheck": "node node_modules/typescript/bin/tsc -p tsconfig.tests.json",
     "test": "node --test \"tests/*.test.ts\"",
     "test:scenarios": "node --test tests/scenarios.test.ts tests/tool-scenarios.test.ts",
@@ -82,8 +89,21 @@
   "dsh": {
     "bundle": {
       "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "inject": []
     }
   },
+  "engines": {
+    "node": "^22.19.0 || >=24.0.0"
+  },
+  "packageManager": "pnpm@10.31.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/miqian-nomad/dsh-browser-playwright-codex.git"
+  },
+  "homepage": "https://github.com/miqian-nomad/dsh-browser-playwright-codex#readme",
   "keywords": [
     "deepseek-harness",
     "dsh",
@@ -98,15 +118,7 @@
     "form-filling",
     "deepseek",
     "ai-agent",
-    "rpa"
-  ],
-  "engines": {
-    "node": "^22.19.0 || >=24.0.0"
-  },
-  "packageManager": "pnpm@10.31.0",
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/miqian-nomad/dsh-browser-playwright-codex.git"
-  },
-  "homepage": "https://github.com/miqian-nomad/dsh-browser-playwright-codex#readme"
+    "rpa",
+    "settings"
+  ]
 }

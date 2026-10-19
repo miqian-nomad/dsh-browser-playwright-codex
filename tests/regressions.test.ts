@@ -33,7 +33,7 @@ import type { PlaywrightSession } from '../src/session.ts'
 import type { BrowserNode } from '../src/types.ts'
 
 // The suite expects the legacy tree and must not inherit the user's settings-page choice.
-process.env.DSH_BROWSER_STATE_FILE = path.join(os.tmpdir(), 'dsh-browser-tests-state-isolated.json')
+process.env.DSH_BROWSER_STATE_FILE = path.join(os.tmpdir(), 'dsh-browser-tests-state-regressions.json')
 
 const config: PlaywrightConfig = {
   launch: {
@@ -323,4 +323,42 @@ test('verifyFill: strict equality after whitespace normalization, nothing else',
   } as unknown as Locator
   assert.equal(await verifyFill(session, editable, 'div', 'world'), true)
   assert.equal(await verifyFill(session, editable, 'div', 'elsewhere'), false)
+})
+
+// ---------------------------------------------------------------------------
+// 5. Credential fields: refused by mechanism, not by the model remembering
+// ---------------------------------------------------------------------------
+
+test('fill: password and one-time-code fields are refused with CREDENTIAL_FIELD', async () => {
+  const s = await provider.acquire('t-fill-credential')
+  try {
+    await s.navigate(base + '/editor', 'load')
+    await s.evaluate(`(() => {
+      const password = document.createElement('input')
+      password.type = 'password'
+      password.setAttribute('aria-label', 'Password')
+      document.body.appendChild(password)
+      const otp = document.createElement('input')
+      otp.type = 'text'
+      otp.setAttribute('autocomplete', 'one-time-code')
+      otp.setAttribute('aria-label', 'One time code')
+      document.body.appendChild(otp)
+      return true
+    })()`)
+    const snap = await s.snapshot({})
+    const passwordRef = findRef(snap.nodes, (node) => node.name === 'Password')
+    const otpRef = findRef(snap.nodes, (node) => node.name === 'One time code')
+    assert.ok(passwordRef !== undefined, 'the password input must have a ref')
+    assert.ok(otpRef !== undefined, 'the one-time-code input must have a ref')
+    const refused = (error: unknown) => {
+      assert.ok(error instanceof BrowserError, 'expected a BrowserError')
+      assert.equal(error.code, 'CREDENTIAL_FIELD')
+      assert.match(error.message, /human types those in the visible window/)
+      return true
+    }
+    await assert.rejects(s.fill(passwordRef, 'hunter2'), refused, 'a password field must not be filled')
+    await assert.rejects(s.fill(otpRef, '123456'), refused, 'a one-time-code field must not be filled')
+  } finally {
+    await s.close()
+  }
 })

@@ -526,13 +526,58 @@ export async function clickAtRef(session: PlaywrightSession, ref: string, signal
   })
 }
 
+/** Autocomplete tokens whose value is a secret the human should type in the window. */
+const CREDENTIAL_AUTOCOMPLETE = new Set([
+  'current-password',
+  'new-password',
+  'one-time-code',
+  'cc-number',
+  'cc-csc',
+  'cc-exp',
+  'cc-exp-month',
+  'cc-exp-year',
+])
+
+/**
+ * Does this field hold a secret (password, one-time code, card number)?
+ *
+ * Mechanism-level counterpart to the old promise "it never types your
+ * passwords": `browser_fill` refuses these fields so the promise is true by
+ * construction, not by the model remembering to behave. The visible window is
+ * where the human types them.
+ *
+ * @param spec - tag / type / autocomplete read from the live element
+ * @returns true when the field must be filled by the human
+ */
+export function isCredentialField(spec: { tag: string; type?: string; autocomplete?: string }): boolean {
+  const tag = spec.tag.toLowerCase()
+  if (tag !== 'input' && tag !== 'textarea') return false
+  if ((spec.type ?? '').toLowerCase() === 'password') return true
+  const tokens = (spec.autocomplete ?? '').toLowerCase().trim().split(/\s+/)
+  const token = tokens[tokens.length - 1] ?? ''
+  return CREDENTIAL_AUTOCOMPLETE.has(token)
+}
+
 export async function fill(session: PlaywrightSession, ref: string, text: string, signal: AbortSignal | undefined) {
   return session.run(async () => {
     const locator = await session.refLocator(ref)
     const page = session.currentPageSync()
     await session.waitForElementStable(locator)
     await session.assertActionable(locator, { editable: true })
-    const tag = await locator.evaluate((el) => el.tagName.toLowerCase()).catch(() => 'input')
+    const spec = await locator
+      .evaluate((el) => {
+        const tag = el.tagName.toLowerCase()
+        const type = tag === 'input' ? String((el as HTMLInputElement).type || '').toLowerCase() : ''
+        return { tag, type, autocomplete: el.getAttribute('autocomplete') ?? '' }
+      })
+      .catch(() => ({ tag: 'input', type: '', autocomplete: '' }))
+    if (isCredentialField(spec)) {
+      throw new BrowserError(
+        'CREDENTIAL_FIELD',
+        'browser_fill refuses credential fields (password, one-time code, card number): a human types those in the visible window. Ask the user to type it there, then take a fresh snapshot and continue with the rest.',
+      )
+    }
+    const tag = spec.tag
     let lastError
     let written = false
     for (let attempt = 0; attempt < 2; attempt += 1) {

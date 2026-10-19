@@ -14,7 +14,7 @@ import type { ToolConfig } from '../src/tool.ts'
 import { registeredToolNames, toolNames, type ToolSurfaceConfig } from '../src/contract.ts'
 
 // 隔离设置页的真实用户状态：这套用例的期望值按 legacy（兼容模式）的树写。
-process.env.DSH_BROWSER_STATE_FILE = path.join(os.tmpdir(), 'dsh-browser-tests-state-isolated.json')
+process.env.DSH_BROWSER_STATE_FILE = path.join(os.tmpdir(), 'dsh-browser-tests-state-tool-schema.json')
 
 const pwConfig: PlaywrightConfig = {
   launch: {
@@ -36,6 +36,7 @@ const defaultSurface: ToolSurfaceConfig = {
   allowEvaluate: false,
   allowCdp: false,
   extractConfigured: false,
+  diagnostics: false,
   registerDisabledTools: false,
 }
 
@@ -43,6 +44,7 @@ const toolConfig: ToolConfig = {
   toolPrefix: 'browser_',
   allowEvaluate: false,
   allowCdp: false,
+  diagnostics: false,
   registerDisabledTools: false,
   maxWaitMs: 60000,
   interactiveOnlyDefault: false,

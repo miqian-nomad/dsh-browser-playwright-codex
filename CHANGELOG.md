@@ -3,6 +3,27 @@
 Bilingual by intent: the version headings and the summary of each release are given in both
 languages, the individual entries follow the language the surrounding code and docs use.
 
+## 0.7.0 — 2026-10-19
+
+一句话摘要：**两个插件合成一个** —— 设置卡片并入本包；加载行从三行收成一行（这是 `dsh-client-modules` 允许本包带 client 模块的前提），独立的 `dsh-browser-toggle` 退役。
+
+### Breaking
+
+- **一个包一行 loader**：`cordis.patch.yml` 现在只插 `- id: browser` / `name: 'dsh-browser-playwright-codex'`，三块配置收进嵌套的 `service` / `playwright` / `tool`。旧的 `browser-playwright`、`browser-tool` 行不再被读取；loader 整体替换 config，迁移时三节都要写全（设置卡会自动重写 home 补丁层里的那一块）。
+- 版本跳到 0.7.0，因为配置形状变了。
+
+### Added
+
+- **设置卡随本包发布**：`dsh.client` + `./client` 导出，卡片仍在 `/api/browser-playwright/*` 上提供总开关、页面识别方式、两个强力工具闸门与已登录站点名单。
+- **单 loader 行守卫**（tests/plugin-entry.test.ts）：`cordis.patch.yml` 不得再出现本包的子路径行，否则卡片会重新变成非法。
+
+### Changed
+
+- **两个诊断工具改为门控**：`browser_console_messages` / `browser_network_requests` 不再常驻 —— 新增 `tool.diagnostics: false`（默认关），开启后才注册。常驻成本 **18 工具 12,755 字符 ≈ 3,543 token/轮 → 16 工具 11,005 字符 ≈ 3,057 token/轮（−486，−13.7%）**；全量注册仍是 21 工具 ≈ 4,384。
+- **快照瘦身（运行时大头）**：无名无状态的 `generic` 包装层不再逐层输出（真实页面常把一个链接包在 7~8 层 div 里），显示用 `href` 去掉追踪参数（`utm_*` / `gclid` / `rsv_*` / `sa` 等）并截到 160 字符。百度结果页形状的样本：**6,169 → 2,557 字符（−58.6%）**，行数 108 → 24。refs 与点击行为不变 —— 省的是模型读到的东西。
+- 闸门写入块改为**整行 config**（新标记 `# >>> dsh-browser:`），并兼容旧的 `dsh-browser-toggle` 标记就地替换 —— 避免同一个 id 被两段 patch 争抢。
+- `scripts/shipped-gates.mjs` 按新行名读取出厂闸门；`scripts/build-client.mjs` 把 `client/client.js` 复制进 `lib/`。
+
 ## 0.6.6 — 2026-10-17
 
 一句话摘要：**四份独立审查（文档漂移 / 代码对抗 / 发行打包 / 中性冷读）查出的问题集中修掉**——两条安全缺陷、几处"假成功/假失败"、随包自检的假承诺、发布门禁漏洞与一批文档漂移。

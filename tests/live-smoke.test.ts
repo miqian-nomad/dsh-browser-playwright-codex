@@ -18,7 +18,7 @@ import { PlaywrightProvider } from '../src/provider.ts'
 import type { PlaywrightConfig } from '../src/config.ts'
 
 // 隔离设置页的真实用户状态：这些用例的期望值按 legacy（兼容模式）的树写。
-process.env.DSH_BROWSER_STATE_FILE = path.join(os.tmpdir(), 'dsh-browser-tests-state-isolated.json')
+process.env.DSH_BROWSER_STATE_FILE = path.join(os.tmpdir(), 'dsh-browser-tests-state-live-smoke.json')
 
 const LIVE = process.env.DSH_BROWSER_LIVE === '1'
 

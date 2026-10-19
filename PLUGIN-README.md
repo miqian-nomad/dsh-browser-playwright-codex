@@ -50,7 +50,7 @@ Or pin a binary: `launch.executablePath` / `launch.channel` in the plugin config
 
 ## Tools
 
-The default `toolPrefix` is `browser_`. Every action returns a fresh snapshot, so refs always come from the latest result. The registered set is capability-gated: `browser_evaluate`, `browser_cdp` and `browser_extract` appear only when their capability is switched on (their schemas are resident in the system prompt on every turn, so a tool that could only answer "disabled" would be pure prompt cost). Count the live surface with `npm run cost` — the shipped `cordis.patch.yml` keeps **both power gates off** (since 0.4.7), so a profile mounting this bundle sees **18 tools**; 19 or 20 once your deployment opts into `evaluate` / `cdp`, 21 once `extract` is configured. How to opt in: the snippet under “Known Limitations and Deferred Work” below, or the Settings card in [`dsh-browser-toggle`](https://github.com/miqian-nomad/dsh-browser-toggle).
+The default `toolPrefix` is `browser_`. Every action returns a fresh snapshot, so refs always come from the latest result. The registered set is capability-gated: `browser_evaluate`, `browser_cdp` and `browser_extract` appear only when their capability is switched on (their schemas are resident in the system prompt on every turn, so a tool that could only answer "disabled" would be pure prompt cost). Count the live surface with `npm run cost` — the shipped `cordis.patch.yml` keeps **both power gates off** (since 0.4.7), so a profile mounting this bundle sees **16 tools**; 17 or 18 once your deployment opts into `evaluate` / `cdp`, 19 with `diagnostics: true`, 21 once `extract` is configured. How to opt in: the snippet under “Known Limitations and Deferred Work” below, or the Settings card in [`dsh-browser-toggle`](https://github.com/miqian-nomad/dsh-browser-toggle).
 
 | Tool | Purpose |
 |---|---|
@@ -69,8 +69,8 @@ The default `toolPrefix` is `browser_`. Every action returns a fresh snapshot, s
 | `browser_dialog` | Answer the native dialog blocking the page: `{ accept: true }` confirms, `false` cancels; errors with `NO_DIALOG` when nothing is pending |
 | `browser_cdp` | Send one raw CDP command (DOM inspection / Input simulation allow-list only; disabled by default); **only registered when its capability is enabled** |
 | `browser_close` | Close the session's browser window; the profile keeps login state, so the next call reopens signed in |
-| `browser_console_messages` | Read the page console messages captured for the current page (levels, text, source) |
-| `browser_network_requests` | Read the network requests captured for the current page (method, URL, status, resource type) |
+| `browser_console_messages` | Read the page console messages captured for the current page (levels, text, source); **only registered when `diagnostics: true`** |
+| `browser_network_requests` | Read the network requests captured for the current page (method, URL, status, resource type); **only registered when `diagnostics: true`** |
 
 ### Parameter signatures
 
@@ -126,41 +126,45 @@ An actionable element with no text of its own is named from its descendants — 
 All tunables are patchable through the profile's `cordis.patch.yml` (later layers win per row).
 
 ```yaml
+# ONE row for the whole capability (2026-10-19). A package with a client module (the
+# Settings card lives here) may only be mounted once, so the three concerns are nested.
 - id: browser
+  name: 'dsh-browser-playwright-codex'
   config:
-    provider: playwright                # explicit provider selection
-
-- id: browser-playwright
-  config:
-    launch:
-      channel: chrome                   # or chromium / msedge / edge
-      headless: false                   # visible window you can watch and rescue
-      persistent: true                  # profile-backed window, login survives close
-      # profileDir: ~/.dsh/browser-profiles/playwright by default
-      viewport: { width: 1280, height: 800 }
-      navigationTimeoutMs: 30000
-      ignoreHTTPSErrors: false
-    allowedDomains: []                  # e.g. ['github.com'] restricts navigation
-    idleTimeoutMs: 0                    # shipped value: never auto-close (schema default 600000 = 10 min)
-    maxSessions: 8                      # LRU eviction (persistent mode: one window)
-    snapshot:
-      engine: legacy                    # 'legacy' (default) or 'aria' (Playwright ariaSnapshot, refs aligned back)
-      maxNodes: 500                     # token budget per snapshot tree
-      maxNameLength: 120
-      maxTextLength: 300
-
-- id: browser-tool
-  config:
-    toolPrefix: browser_                # model-facing tool name prefix
-    allowEvaluate: false                # browser_evaluate gate
-    allowCdp: false                     # browser_cdp gate (DOM inspection / Input simulation allow-list)
-    registerDisabledTools: false        # register evaluate/cdp/extract even while off (discoverability vs resident prompt cost)
-    maxWaitMs: 60000                    # browser_wait bound
-    extract:
-      provider: deepseek-official       # optional: enables browser_extract
-      model: deepseek-v4-flash
-      maxInputChars: 20000             # caps the page text handed to that model
-      maxOutputTokens: 2000
+    service:
+      provider: playwright                # explicit provider selection
+    playwright:
+      launch:
+        channel: chrome                   # or chromium / msedge / edge
+        headless: false                   # visible window you can watch and rescue
+        persistent: true                  # profile-backed window, login survives close
+        # profileDir: ~/.dsh/browser-profiles/playwright by default
+        viewport: { width: 1280, height: 800 }
+        navigationTimeoutMs: 30000
+        ignoreHTTPSErrors: false
+      allowedDomains: []                  # e.g. ['github.com'] restricts navigation
+      idleTimeoutMs: 0                    # shipped value: never auto-close (schema default 600000 = 10 min)
+      maxSessions: 8                      # LRU eviction (persistent mode: one window)
+      snapshot:
+        engine: legacy                    # 'legacy' (default) or 'aria' (Playwright ariaSnapshot, refs aligned back)
+        maxNodes: 500                     # token budget per snapshot tree
+        maxNameLength: 120
+        maxTextLength: 300
+        diff: false                       # true = return "+/-/~" ref diffs instead of the full tree
+    tool:
+      toolPrefix: browser_                # model-facing tool name prefix
+      allowEvaluate: false                # browser_evaluate gate
+      allowCdp: false                     # browser_cdp gate (DOM inspection / Input simulation allow-list)
+      registerDisabledTools: false        # register gated tools even while off (discoverability vs resident prompt cost)
+      diagnostics: false                  # true = register browser_console_messages / browser_network_requests
+      interactiveOnlyDefault: false       # true = browser_snapshot returns actionable elements only
+      maxWaitMs: 60000                    # browser_wait bound
+      extract:
+        provider: deepseek-official       # optional: enables browser_extract
+        model: deepseek-v4-flash
+        maxInputChars: 20000              # caps the page text handed to that model
+        maxOutputTokens: 2000
+```
 ```
 
 `snapshot.engine` picks the page-reading engine: `'legacy'` (the default) walks the injected DOM,
@@ -236,9 +240,9 @@ Measured with ``npm run cost`` (per-turn, resident in the system prompt):
 
 | Surface | Tools | Schema characters | ≈ tokens/turn |
 |---|---|---|---|
-| Schema defaults (`Config({})`, no patch layer) | 18 | 12,755 | ≈ 3,543 |
-| Shipped bundle layer (this package's `cordis.patch.yml`: both power gates off) | 18 | 12,755 | ≈ 3,543 |
-| Everything registered (`registerDisabledTools: true`, plus `extract`) | 21 | 15,608 | ≈ 4,336 |
+| Schema defaults (`Config({})`, no patch layer) | 16 | 11,179 | ≈ 3,105 |
+| Shipped bundle layer (this package's `cordis.patch.yml`: both power gates off) | 16 | 11,179 | ≈ 3,105 |
+| Everything registered (`registerDisabledTools: true`, plus `extract`) | 21 | 15,782 | ≈ 4,384 |
 
 This paragraph describes the 0.6.0 change; the table above is today's measurement. Three things changed
 there, and only one of them was about size. (1) The click family was rewritten so each rule is stated once
@@ -272,13 +276,18 @@ The page state itself (DOM, cookies, storage) lives in the browser context and n
 - **The package ships both power gates OFF, and that is deliberate** — `cordis.patch.yml` is part of the package, so anything it enables is enabled for *everyone who installs this*. It therefore sets `allowEvaluate: false` and `allowCdp: false` (the code defaults), and each deployment opts in through its **own profile patch** (`~/.dsh/profiles/<name>/cordis.patch.yml`). A package that shipped them on would be handing every installer a backdoor they never asked for. Snippet:
   ```yaml
   # dsh replaces an entry's config object wholesale — list every key you rely on.
-  - id: browser-tool
+  - id: browser
+    name: 'dsh-browser-playwright-codex'
     config:
-      toolPrefix: 'browser_'
-      allowEvaluate: true    # registers browser_evaluate
-      allowCdp: true         # registers browser_cdp (needs a full DSH restart)
-      registerDisabledTools: false
-      maxWaitMs: 60000
+      service: { provider: playwright }
+      playwright: { launch: { headless: false, persistent: true }, idleTimeoutMs: 0, maxSessions: 8, snapshot: { diff: false } }
+      tool:
+        toolPrefix: 'browser_'
+        allowEvaluate: true    # registers browser_evaluate
+        allowCdp: true         # registers browser_cdp (needs a full DSH restart)
+        registerDisabledTools: false
+        diagnostics: false
+        maxWaitMs: 60000
   ```
 - **Chromium family only** — Firefox/WebKit channels are not probed; providers are swappable if another engine is needed.
 - **Extract needs a dedicated model route** — it does not reuse the main request's route; misconfiguration fails loudly at call time.

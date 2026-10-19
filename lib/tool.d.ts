@@ -31,6 +31,12 @@ export interface ToolConfig {
      * its schema would sit in the system prompt on every turn for nothing.
      */
     registerDisabledTools: boolean;
+    /**
+     * Register the two diagnostics tools (console messages, network requests).
+     * Defaults to false: they exist to debug a failed run, and their schemas
+     * would otherwise sit in the system prompt on every turn.
+     */
+    diagnostics: boolean;
     /** Upper bound for browser_wait in milliseconds. */
     maxWaitMs: number;
     /** Default value of the snapshot tool's interactiveOnly flag. */

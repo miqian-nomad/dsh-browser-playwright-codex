@@ -103,6 +103,7 @@ const toolConfig: ToolConfig = {
   toolPrefix: 'browser_',
   allowEvaluate: true,
   allowCdp: true,
+  diagnostics: true,
   registerDisabledTools: false,
   maxWaitMs: 60000,
   interactiveOnlyDefault: false,

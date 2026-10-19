@@ -2,12 +2,14 @@
 
 > [![dsh.so 安装验证 · harness 0.2.0-rc.1](https://www.dsh.so/badge/install/dsh-browser-playwright-codex@0.2.0-rc.1.svg)](https://www.dsh.so/zh/artifact/dsh-browser-playwright-codex/) [![dsh.so 风险](https://www.dsh.so/badge/dsh-browser-playwright-codex.svg)](https://www.dsh.so/zh/artifact/dsh-browser-playwright-codex/)
 
-**一句话**：让 AI 用你**已经登录的账号**在真实网页上干活 —— 填表、抓取列表、多标签查后台；浏览器窗口就在你桌面上、你随时看得见。原生弹框会被挂起、**绝不替你点「确定」**；验证码/登录页会被识别出来并把情况报给你、请你本人接手（识别不出来时也会停下来问人，而不是硬闯）。
+**一句话**：让 AI 用你**已经登录的账号**在真实网页上干活 —— 填表、抓取列表、多标签查后台；浏览器窗口就在你桌面上、你随时看得见。原生弹框会被挂起、**绝不替你点「确定」**（机制级）；验证码/挑战页会被识别出来，并以提示要求模型停下交给你（**提示不是阻断**）。登录/二次验证**没有探测器**，靠模型从快照看出来并停下；密码、一次性验证码、卡号字段 `browser_fill` **直接拒绝**——这类字由你本人在窗口里输。
 
 **In one line**: the agent drives a **visible, profile-backed browser window** with the logins you
 already have — filling in forms, scraping lists and working across tabs in real pages — through
 accessibility snapshots with stable element refs. Native dialogs are parked and reported instead of
-auto-accepted; a login, 2FA or challenge page is handed back to you rather than guessed at. No
+auto-accepted. Challenge pages are detected and reported as a note that tells the agent to stop and hand
+the page back — a note, not a block. There is **no sign-in detector**, and `browser_fill` refuses
+password / one-time-code / card fields outright — you type those in the visible window. No
 CSS-selector guessing, no full-DOM dumps.
 
 ```sh
@@ -42,8 +44,8 @@ dsh plugin --profile <name> add github:miqian-nomad/dsh-browser-playwright-codex
 implementation of `browser_evaluate` (its dynamic evaluation), which this package ships switched off.
 [SECURITY.md](https://github.com/miqian-nomad/dsh-browser-playwright-codex/blob/main/SECURITY.md) says what each
 finding actually is, whether a capability gate makes it reachable (two of the warnings are not gate-controlled:
-the login-state write and the local test server in the acceptance script), and explains what the plugin can and
-cannot do with your logins (URL policy, CDP allow-list, dialog policy, no telemetry, and it never types
+cannot do with your logins (URL policy, CDP allow-list, dialog policy, no telemetry, and `browser_fill`
+refuses password / one-time-code / card fields). Counts move as the scanner and the code change — their own report is the
 passwords or 2FA codes). Counts move as the scanner and the code change — their own report is the
 live number.
 
@@ -88,8 +90,9 @@ Install it and ask for something that leaves a visible result — there is nothi
 > Go to my orders page on `<site>` and tell me the delivery address on the most recent order.
 
 > Fill in this contact form, but stop and show me the filled form before you submit it.
-
-What you should see: a real browser window on your desktop doing the clicking, and the page coming back to
+the model as a `ref`-numbered list. The first time it meets a verification page it **reports the page back
+to you** — take the window over by hand and it continues from where it left off (sign-ins have no detector:
+the agent is told to stop when it sees one).
 the model as a `ref`-numbered list. The first time it meets a sign-in, a 2FA prompt or a verification page
 it **reports the page back to you** — take the window over by hand and it continues from where it left off.
 Native dialogs are the one case that is enforced at the interface: they are parked and never auto-accepted.
@@ -116,7 +119,7 @@ Or pin a binary: `launch.executablePath` / `launch.channel` in the plugin config
 
 ## Tools
 
-The default `toolPrefix` is `browser_`. Every action returns a fresh snapshot, so refs always come from the latest result. The registered set is capability-gated: `browser_evaluate`, `browser_cdp` and `browser_extract` appear only when their capability is switched on (their schemas are resident in the system prompt on every turn, so a tool that could only answer "disabled" would be pure prompt cost). Count the live surface with `npm run cost` — the shipped `cordis.patch.yml` keeps **both power gates off** (since 0.4.7), so a profile mounting this bundle sees **18 tools**; 19 or 20 once your deployment opts into `evaluate` / `cdp`, 21 once `extract` is configured. How to opt in: paste the snippet under Known Limitations below, or use the settings card in `dsh-browser-toggle`.
+The default `toolPrefix` is `browser_`. Every action returns a fresh snapshot, so refs always come from the latest result. The registered set is capability-gated: `browser_evaluate`, `browser_cdp` and `browser_extract` appear only when their capability is switched on (their schemas are resident in the system prompt on every turn, so a tool that could only answer "disabled" would be pure prompt cost). Count the live surface with `npm run cost` — the shipped `cordis.patch.yml` keeps **both power gates off** (since 0.4.7), so a profile mounting this bundle sees **16 tools**; 17 or 18 once your deployment opts into `evaluate` / `cdp`, 19 with `diagnostics: true`, 21 once `extract` is configured. How to opt in: paste the snippet under Known Limitations below, or use the built-in Settings card.
 
 | Tool | Purpose |
 |---|---|
@@ -135,8 +138,8 @@ The default `toolPrefix` is `browser_`. Every action returns a fresh snapshot, s
 | `browser_dialog` | Answer the native dialog blocking the page: `{ accept: true }` confirms, `false` cancels; errors with `NO_DIALOG` when nothing is pending |
 | `browser_cdp` | Send one raw CDP command (DOM inspection / Input simulation allow-list only; disabled by default); **only registered when its capability is enabled** |
 | `browser_close` | Close the session's browser window; the profile keeps login state, so the next call reopens signed in |
-| `browser_console_messages` | Read the page console messages captured for the current page (levels, text, source) |
-| `browser_network_requests` | Read the network requests captured for the current page (method, URL, status, resource type) |
+| `browser_console_messages` | Read the page console messages captured for the current page (levels, text, source); **only registered when `diagnostics: true`** |
+| `browser_network_requests` | Read the network requests captured for the current page (method, URL, status, resource type); **only registered when `diagnostics: true`** |
 
 ### Parameter signatures
 
@@ -211,49 +214,51 @@ An actionable element with no text of its own is named from its descendants — 
 All tunables are patchable through the profile's `cordis.patch.yml` (later layers win per row).
 
 ```yaml
+# ONE row for the whole capability (2026-10-19). A package with a client module (the
+# Settings card lives here) may only be mounted once, so the three concerns are nested.
 - id: browser
+  name: 'dsh-browser-playwright-codex'
   config:
-    provider: playwright                # explicit provider selection
-
-- id: browser-playwright
-  config:
-    launch:
-      channel: chrome                   # or chromium / msedge / edge
-      headless: false                   # visible window you can watch and rescue
-      persistent: true                  # profile-backed window, login survives close
-      # profileDir: ~/.dsh/browser-profiles/playwright by default
-      viewport: { width: 1280, height: 800 }
-      navigationTimeoutMs: 30000
-      ignoreHTTPSErrors: false
-    allowedDomains: []                  # e.g. ['github.com'] restricts navigation
-    idleTimeoutMs: 0                    # shipped value: never auto-close (schema default 600000 = 10 min)
-    maxSessions: 8                      # LRU eviction (persistent mode: one window)
-    snapshot:
-      engine: legacy                    # 'legacy' (default) or 'aria' (Playwright ariaSnapshot, refs aligned back)
-      maxNodes: 500                     # token budget per snapshot tree
-      maxNameLength: 120
-      maxTextLength: 300
-      diff: false                       # true = return "+/-/~" ref diffs instead of the full tree
-
-- id: browser-tool
-  config:
-    toolPrefix: browser_                # model-facing tool name prefix
-    allowEvaluate: false                # browser_evaluate gate
-    allowCdp: false                     # browser_cdp gate (DOM inspection / Input simulation allow-list)
-    registerDisabledTools: false        # register evaluate/cdp/extract even while off (discoverability vs resident prompt cost)
-    interactiveOnlyDefault: false       # true = browser_snapshot returns actionable elements only
-    maxWaitMs: 60000                    # browser_wait bound
-    extract:
-      provider: deepseek-official       # optional: enables browser_extract
-      model: deepseek-v4-flash
-      maxInputChars: 20000             # caps the page text handed to that model
-      maxOutputTokens: 2000
+    service:
+      provider: playwright                # explicit provider selection
+    playwright:
+      launch:
+        channel: chrome                   # or chromium / msedge / edge
+        headless: false                   # visible window you can watch and rescue
+        persistent: true                  # profile-backed window, login survives close
+        # profileDir: ~/.dsh/browser-profiles/playwright by default
+        viewport: { width: 1280, height: 800 }
+        navigationTimeoutMs: 30000
+        ignoreHTTPSErrors: false
+      allowedDomains: []                  # e.g. ['github.com'] restricts navigation
+      idleTimeoutMs: 0                    # shipped value: never auto-close (schema default 600000 = 10 min)
+      maxSessions: 8                      # LRU eviction (persistent mode: one window)
+      snapshot:
+        engine: legacy                    # 'legacy' (default) or 'aria' (Playwright ariaSnapshot, refs aligned back)
+        maxNodes: 500                     # token budget per snapshot tree
+        maxNameLength: 120
+        maxTextLength: 300
+        diff: false                       # true = return "+/-/~" ref diffs instead of the full tree
+    tool:
+      toolPrefix: browser_                # model-facing tool name prefix
+      allowEvaluate: false                # browser_evaluate gate
+      allowCdp: false                     # browser_cdp gate (DOM inspection / Input simulation allow-list)
+      registerDisabledTools: false        # register gated tools even while off (discoverability vs resident prompt cost)
+      diagnostics: false                  # true = register browser_console_messages / browser_network_requests
+      interactiveOnlyDefault: false       # true = browser_snapshot returns actionable elements only
+      maxWaitMs: 60000                    # browser_wait bound
+      extract:
+        provider: deepseek-official       # optional: enables browser_extract
+        model: deepseek-v4-flash
+        maxInputChars: 20000              # caps the page text handed to that model
+        maxOutputTokens: 2000
+```
 ```
 
 `snapshot.engine` picks the page-reading engine: `'legacy'` (the default) walks the injected DOM,
 `'aria'` uses Playwright's official `ariaSnapshot({ mode: 'ai' })` and aligns the result back onto the
 same `ref` ids; an aria tree that cannot be parsed falls back to legacy rather than handing the model an
-empty tree. It is a `snapshot` key, next to `maxNodes` / `maxNameLength` / `maxTextLength` / `diff`.
+empty tree. It lives under `playwright.snapshot`, next to `maxNodes` / `maxNameLength` / `maxTextLength` / `diff`.
 
 `browser_extract` needs an auxiliary LLM route (`extract.provider` + `extract.model`); without one it fails with an actionable error. With a route configured, `extract.maxInputChars` bounds the page text in that prompt, and the prompt names the cap when it truncates. A gated tool is **not registered at all** while its capability is off, so its schema never reaches the system prompt; set `registerDisabledTools: true` to keep the whole surface discoverable (the tool then answers with the error naming the switch). The shipped layer in [`cordis.patch.yml`](https://github.com/miqian-nomad/dsh-browser-playwright-codex/blob/main/cordis.patch.yml) keeps `allowEvaluate` and `allowCdp` **off**, matching the schema defaults and this sample: that file travels inside the package, so anything it enabled would be enabled for everyone who installs it. Opt in per deployment, in that deployment's own patch layer. `browser_evaluate` executes arbitrary page JavaScript; `browser_cdp` stays off until `allowCdp: true`, and even then only the allow-list in `lib/cdp-policy.js` passes — network, storage, cookie, security and arbitrary-JS (`Runtime.evaluate`) commands are rejected with `CDP_DENIED`.
 
@@ -278,8 +283,8 @@ turning them on in a deployment that shares prompts across many users.
 
 ### Prefer a switch to editing config?
 
-The companion package [`dsh-browser-toggle`](https://github.com/miqian-nomad/dsh-browser-toggle) puts
-this on a Settings card: enable/disable the browser, pick the page-reading mode, and turn the two
+The Settings card ships **inside this package** (it moved out of the companion package `dsh-browser-toggle`, which is retired) and puts
+this on one card: enable/disable the browser, pick the page-reading mode, and turn the two
 power tools on or off — no restart, no YAML. The card also lists **which sites this browser looks
 signed in to**. Two things make that list trustworthy: cookies are attributed **first-party** — only
 domains this browser actually visited are candidates, because a tracker's cookie belongs to the site
@@ -363,9 +368,9 @@ Measured with ``npm run cost`` (per-turn, resident in the system prompt):
 
 | Surface | Tools | Schema characters | ≈ tokens/turn |
 |---|---|---|---|
-| Schema defaults (`Config({})`, no patch layer) | 18 | 12,755 | ≈ 3,543 |
-| Shipped bundle layer (this package's `cordis.patch.yml`: both power gates off) | 18 | 12,755 | ≈ 3,543 |
-| Everything registered (`registerDisabledTools: true`, plus `extract`) | 21 | 15,608 | ≈ 4,336 |
+| Schema defaults (`Config({})`, no patch layer) | 16 | 11,179 | ≈ 3,105 |
+| Shipped bundle layer (this package's `cordis.patch.yml`: both power gates off) | 16 | 11,179 | ≈ 3,105 |
+| Everything registered (`registerDisabledTools: true`, plus `extract`) | 21 | 15,782 | ≈ 4,384 |
 
 This paragraph describes the 0.6.0 change; the table above is today's measurement. Three things changed
 there, and only one of them was about size. (1) The click family was rewritten so each rule is stated once
@@ -415,13 +420,16 @@ links below go to GitHub rather than to files inside the package:
 - **The package ships both power gates OFF, and that is deliberate** — `cordis.patch.yml` is part of the package, so anything it enables is enabled for *everyone who installs this*. It therefore sets `allowEvaluate: false` and `allowCdp: false` (the code defaults), and each deployment opts in through its **own profile patch** (`~/.dsh/profiles/<name>/cordis.patch.yml`). A package that shipped them on would be handing every installer a backdoor they never asked for. Snippet:
   ```yaml
   # dsh replaces an entry's config object wholesale — list every key you rely on.
-  - id: browser-tool
+  - id: browser
     config:
-      toolPrefix: 'browser_'
-      allowEvaluate: true    # registers browser_evaluate
-      allowCdp: true         # registers browser_cdp (needs a full DSH restart)
-      registerDisabledTools: false
-      maxWaitMs: 60000
+      service: { provider: playwright }
+      playwright: { launch: { headless: false, persistent: true }, idleTimeoutMs: 0, maxSessions: 8, snapshot: { diff: false } }
+      tool:
+        toolPrefix: 'browser_'
+        allowEvaluate: true    # registers browser_evaluate
+        allowCdp: true         # registers browser_cdp (needs a full DSH restart)
+        registerDisabledTools: false
+        maxWaitMs: 60000
   ```
 - **Chromium family only** — Firefox/WebKit channels are not probed; providers are swappable if another engine is needed.
 - **Extract needs a dedicated model route** — it does not reuse the main request's route; misconfiguration fails loudly at call time.
@@ -449,9 +457,13 @@ MIT
 
 （此列表只记 **minor 里程碑**；每个补丁版本见 [CHANGELOG.md](https://github.com/miqian-nomad/dsh-browser-playwright-codex/blob/main/CHANGELOG.md)。）
 
+### 0.7.0（2026-10-19）
+
+- **两个插件合成一个（破坏性）**：设置卡片并入本包（`dsh.client` + `./client`），`dsh-browser-toggle` 退役；`cordis.patch.yml` 从三行 loader 收成**一行** —— `- id: browser` 加嵌套的 `service` / `playwright` / `tool`。这是硬约束：`dsh-client-modules` 拒绝一个包被多个 loader 行挂载，所以带 client 的包只能有一个入口。
+
 ### 0.6.0（2026-10-16）
 
-- **工具面三合一（破坏性）**：`browser_click` / `browser_hover` / `browser_click_at` 合并成一个 `browser_click` —— `mode: "hover"` 是原来的悬停、`precise: true` 是原来的几何中点兜底、`x`+`y` 是裸坐标。常驻 prompt **净减 16.5%（约六分之一）**：现在是 **18 个工具 12,755 字符 ≈ 3,543 token/轮**，全量注册（含三个闸门工具）21 个；规则一条没丢，守卫改成"合并后的工具必须保住原来三个的全部规则"。
+- **工具面三合一（破坏性）**：`browser_click` / `browser_hover` / `browser_click_at` 合并成一个 `browser_click` —— `mode: "hover"` 是原来的悬停、`precise: true` 是原来的几何中点兜底、`x`+`y` 是裸坐标。常驻 prompt **净减 16.5%（约六分之一）**（当时的值；当前成本见上面的成本表），全量注册（含三个闸门工具）21 个；规则一条没丢，守卫改成"合并后的工具必须保住原来三个的全部规则"。
 - **`browser_fill` 接受 `value` 作 `text` 的别名**：模型按语义猜参数名不再第一次就撞墙；缺值时给的是指路错误（同时点出两种写法，并说明要点可见标签该用 `browser_click`）。
 - **设置页多了一节「已登录的站点」（只读）**：按域名列出"像登录态"的 cookie —— 只列你在浏览器里**真的访问过**的域（第三方统计/广告域排除），判据用 OWASP 的会话特征（httpOnly 且会话级/值像令牌），**名字与条数不再作为依据**。不显示 cookie 的名字和值、不写磁盘、**模型看不到**；同一家公司的域折叠成一行（如 `京东系（18 个域）`），每行写明"这个域名是什么"（离线对照表 → 网页自己的标题 → 域名，认不出不编）。
 - **`GET /state` 补上防伪头**：四个路由里唯一一个没校验 `x-dsh-plugin` 的；新增的 `GET /logins` 同样强制该头（这份名单是用户的登录站点）。
