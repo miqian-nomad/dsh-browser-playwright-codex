@@ -58,6 +58,7 @@
           #       tool:
           #         toolPrefix: 'browser_'
           #         allowEvaluate: true    # registers browser_evaluate
+          #         diagnostics: true      # registers browser_console_messages / browser_network_requests
           #         allowCdp: true         # registers browser_cdp
           #         registerDisabledTools: false
           #         interactiveOnlyDefault: false   # true = snapshot returns actionable elements only
@@ -73,3 +74,7 @@
           # Neither tool is registered at all while its gate is false.
           allowEvaluate: false
           allowCdp: false
+          # Diagnostics tools (console messages, network requests) are OFF here:
+          # they debug a failed run; their schemas would otherwise sit in the
+          # system prompt every turn. Turn them on per deployment.
+          diagnostics: false

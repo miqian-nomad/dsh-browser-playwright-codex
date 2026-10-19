@@ -1,7 +1,7 @@
 # 合并进度（merge-toggle-into-codex 分支）
 
-分支：`merge-toggle-into-codex`，工作树：`D:\dsh-plugins\_worktrees\browser-merged`
-基线：`465e6fb`（0.6.6）。主仓库与线上插件**未改动**（DSH 仍加载 `D:\dsh-plugins\dsh-browser-playwright-codex` 的 main）。
+分支：`merge-toggle-into-codex`，工作树：``<worktree>``
+基线：`465e6fb`（0.6.6）。主仓库与线上插件**未改动**（DSH 仍加载 ``<repo>`` 的 main）。
 
 ## 为什么必须"一个包一行 loader"
 

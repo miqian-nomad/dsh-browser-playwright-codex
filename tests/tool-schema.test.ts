@@ -36,6 +36,7 @@ const defaultSurface: ToolSurfaceConfig = {
   allowEvaluate: false,
   allowCdp: false,
   extractConfigured: false,
+  diagnostics: false,
   registerDisabledTools: false,
 }
 
@@ -43,6 +44,7 @@ const toolConfig: ToolConfig = {
   toolPrefix: 'browser_',
   allowEvaluate: false,
   allowCdp: false,
+  diagnostics: false,
   registerDisabledTools: false,
   maxWaitMs: 60000,
   interactiveOnlyDefault: false,

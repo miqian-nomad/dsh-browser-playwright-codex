@@ -50,7 +50,7 @@ Or pin a binary: `launch.executablePath` / `launch.channel` in the plugin config
 
 ## Tools
 
-The default `toolPrefix` is `browser_`. Every action returns a fresh snapshot, so refs always come from the latest result. The registered set is capability-gated: `browser_evaluate`, `browser_cdp` and `browser_extract` appear only when their capability is switched on (their schemas are resident in the system prompt on every turn, so a tool that could only answer "disabled" would be pure prompt cost). Count the live surface with `npm run cost` — the shipped `cordis.patch.yml` keeps **both power gates off** (since 0.4.7), so a profile mounting this bundle sees **18 tools**; 19 or 20 once your deployment opts into `evaluate` / `cdp`, 21 once `extract` is configured. How to opt in: the snippet under “Known Limitations and Deferred Work” below, or the Settings card in [`dsh-browser-toggle`](https://github.com/miqian-nomad/dsh-browser-toggle).
+The default `toolPrefix` is `browser_`. Every action returns a fresh snapshot, so refs always come from the latest result. The registered set is capability-gated: `browser_evaluate`, `browser_cdp` and `browser_extract` appear only when their capability is switched on (their schemas are resident in the system prompt on every turn, so a tool that could only answer "disabled" would be pure prompt cost). Count the live surface with `npm run cost` — the shipped `cordis.patch.yml` keeps **both power gates off** (since 0.4.7), so a profile mounting this bundle sees **16 tools**; 17 or 18 once your deployment opts into `evaluate` / `cdp`, 19 with `diagnostics: true`, 21 once `extract` is configured. How to opt in: the snippet under “Known Limitations and Deferred Work” below, or the Settings card in [`dsh-browser-toggle`](https://github.com/miqian-nomad/dsh-browser-toggle).
 
 | Tool | Purpose |
 |---|---|
@@ -236,8 +236,8 @@ Measured with ``npm run cost`` (per-turn, resident in the system prompt):
 
 | Surface | Tools | Schema characters | ≈ tokens/turn |
 |---|---|---|---|
-| Schema defaults (`Config({})`, no patch layer) | 18 | 12,755 | ≈ 3,543 |
-| Shipped bundle layer (this package's `cordis.patch.yml`: both power gates off) | 18 | 12,755 | ≈ 3,543 |
+| Schema defaults (`Config({})`, no patch layer) | 16 | 11,005 | ≈ 3,057 |
+| Shipped bundle layer (this package's `cordis.patch.yml`: both power gates off) | 16 | 11,005 | ≈ 3,057 |
 | Everything registered (`registerDisabledTools: true`, plus `extract`) | 21 | 15,608 | ≈ 4,336 |
 
 This paragraph describes the 0.6.0 change; the table above is today's measurement. Three things changed

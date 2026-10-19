@@ -36,6 +36,7 @@ export const CONFIG_DEFAULTS = {
   allowEvaluate: false,
   allowCdp: false,
   registerDisabledTools: false,
+  diagnostics: false,
   maxWaitMs: 60000,
   interactiveOnlyDefault: false,
 }

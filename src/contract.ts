@@ -57,8 +57,6 @@ export const ALWAYS_ON_SUFFIXES = [
   'open_tab',
   'close_tab',
   'screenshot',
-  'console_messages',
-  'network_requests',
   'close',
 ] as const satisfies readonly ToolSuffix[]
 
@@ -67,7 +65,7 @@ export const ALWAYS_ON_SUFFIXES = [
  * a tool the deployment disabled can only error, so shipping its schema would
  * spend prompt tokens on a capability that cannot run.
  */
-export const GATED_SUFFIXES = ['extract', 'evaluate', 'cdp'] as const satisfies readonly ToolSuffix[]
+export const GATED_SUFFIXES = ['extract', 'evaluate', 'cdp', 'console_messages', 'network_requests'] as const satisfies readonly ToolSuffix[]
 
 /** Which gated capabilities are live for one configuration. */
 export interface ToolSurfaceConfig {
@@ -77,6 +75,8 @@ export interface ToolSurfaceConfig {
   allowCdp: boolean
   /** extract.provider and extract.model both set: registers browser_extract. */
   extractConfigured: boolean
+  /** Diagnostics switch: registers browser_console_messages and browser_network_requests. */
+  diagnostics: boolean
   /** Force every gated tool to register even when its capability is off. */
   registerDisabledTools: boolean
 }
@@ -92,6 +92,10 @@ export function registeredSuffixes(config: ToolSurfaceConfig): ToolSuffix[] {
   if (config.allowEvaluate || config.registerDisabledTools) live.add('evaluate')
   if (config.allowCdp || config.registerDisabledTools) live.add('cdp')
   if (config.extractConfigured || config.registerDisabledTools) live.add('extract')
+  if (config.diagnostics || config.registerDisabledTools) {
+    live.add('console_messages')
+    live.add('network_requests')
+  }
   return TOOL_SUFFIXES.filter((suffix) => live.has(suffix))
 }
 

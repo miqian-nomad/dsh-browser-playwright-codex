@@ -51,6 +51,12 @@ export interface ToolConfig {
    * its schema would sit in the system prompt on every turn for nothing.
    */
   registerDisabledTools: boolean
+  /**
+   * Register the two diagnostics tools (console messages, network requests).
+   * Defaults to false: they exist to debug a failed run, and their schemas
+   * would otherwise sit in the system prompt on every turn.
+   */
+  diagnostics: boolean
   /** Upper bound for browser_wait in milliseconds. */
   maxWaitMs: number
   /** Default value of the snapshot tool's interactiveOnly flag. */
@@ -70,6 +76,7 @@ export const Config: z<ToolConfig> = z.object({
   allowEvaluate: z.boolean().default(false),
   allowCdp: z.boolean().default(false),
   registerDisabledTools: z.boolean().default(false),
+  diagnostics: z.boolean().default(false),
   maxWaitMs: z.number().default(60000),
   interactiveOnlyDefault: z.boolean().default(false),
   extract: z.object({
@@ -99,6 +106,7 @@ export function apply(ctx: Context, config: ToolConfig): void {
     allowEvaluate: config.allowEvaluate,
     allowCdp: config.allowCdp,
     extractConfigured: config.extract?.provider !== undefined && config.extract?.model !== undefined,
+    diagnostics: config.diagnostics,
     registerDisabledTools: config.registerDisabledTools,
   }
   const registered = new Set<ToolSuffix>(registeredSuffixes(surface))
@@ -713,6 +721,7 @@ export function apply(ctx: Context, config: ToolConfig): void {
       },
     }),
   )
+  if (config.diagnostics || config.registerDisabledTools) {
   ctx.tools.register(
     defineTool({
       name: p('console_messages'),
@@ -743,6 +752,8 @@ export function apply(ctx: Context, config: ToolConfig): void {
       },
     }),
   )
+  }
+  if (config.diagnostics || config.registerDisabledTools) {
   ctx.tools.register(
     defineTool({
       name: p('network_requests'),
@@ -772,6 +783,7 @@ export function apply(ctx: Context, config: ToolConfig): void {
       },
     }),
   )
+  }
   ctx.tools.register(
     defineTool({
       name: p('close'),

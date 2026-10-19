@@ -16,13 +16,13 @@ export type ToolSuffix = (typeof TOOL_SUFFIXES)[number];
  * Suffixes registered unconditionally. They are always in the system prompt,
  * so this list is also the resident schema cost of the plugin.
  */
-export declare const ALWAYS_ON_SUFFIXES: readonly ["navigate", "snapshot", "click", "dialog", "fill", "press", "scroll", "back", "forward", "wait", "tabs", "switch_tab", "open_tab", "close_tab", "screenshot", "console_messages", "network_requests", "close"];
+export declare const ALWAYS_ON_SUFFIXES: readonly ["navigate", "snapshot", "click", "dialog", "fill", "press", "scroll", "back", "forward", "wait", "tabs", "switch_tab", "open_tab", "close_tab", "screenshot", "close"];
 /**
  * Suffixes registered only when their capability is enabled (or configured):
  * a tool the deployment disabled can only error, so shipping its schema would
  * spend prompt tokens on a capability that cannot run.
  */
-export declare const GATED_SUFFIXES: readonly ["extract", "evaluate", "cdp"];
+export declare const GATED_SUFFIXES: readonly ["extract", "evaluate", "cdp", "console_messages", "network_requests"];
 /** Which gated capabilities are live for one configuration. */
 export interface ToolSurfaceConfig {
     /** allowEvaluate: registers browser_evaluate when true. */
@@ -31,6 +31,8 @@ export interface ToolSurfaceConfig {
     allowCdp: boolean;
     /** extract.provider and extract.model both set: registers browser_extract. */
     extractConfigured: boolean;
+    /** Diagnostics switch: registers browser_console_messages and browser_network_requests. */
+    diagnostics: boolean;
     /** Force every gated tool to register even when its capability is off. */
     registerDisabledTools: boolean;
 }

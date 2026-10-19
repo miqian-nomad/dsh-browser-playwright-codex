@@ -40,6 +40,7 @@ const SURFACE_OFF: ToolSurfaceConfig = {
   allowEvaluate: false,
   allowCdp: false,
   extractConfigured: false,
+  diagnostics: false,
   registerDisabledTools: false,
 }
 const SURFACE_BOTH_GATES: ToolSurfaceConfig = { ...SURFACE_OFF, allowEvaluate: true, allowCdp: true }
@@ -47,6 +48,7 @@ const SURFACE_ALL: ToolSurfaceConfig = {
   allowEvaluate: true,
   allowCdp: true,
   extractConfigured: true,
+  diagnostics: true,
   registerDisabledTools: true,
 }
 

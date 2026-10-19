@@ -77,6 +77,7 @@ export function renderBrowserBlock(allowEvaluate: boolean, allowCdp: boolean): s
     '      allowEvaluate: ' + (allowEvaluate ? 'true' : 'false'),
     '      allowCdp: ' + (allowCdp ? 'true' : 'false'),
     '      registerDisabledTools: false',
+    '      diagnostics: false',
     '      maxWaitMs: 60000',
     END,
     '',
