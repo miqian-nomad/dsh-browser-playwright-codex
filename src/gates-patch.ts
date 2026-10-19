@@ -45,9 +45,10 @@ export function homePatchPath(env: NodeJS.ProcessEnv = process.env): string {
  *
  * @param allowEvaluate - register browser_evaluate
  * @param allowCdp - register browser_cdp
+ * @param diagnostics - register the two diagnostics tools
  * @returns the YAML block, markers included
  */
-export function renderBrowserBlock(allowEvaluate: boolean, allowCdp: boolean): string {
+export function renderBrowserBlock(allowEvaluate: boolean, allowCdp: boolean, diagnostics: boolean): string {
   return [
     BEGIN,
     '# allowEvaluate: 注册 browser_evaluate（页面任意 JS，能用你的登录态操作网站）',
@@ -76,6 +77,7 @@ export function renderBrowserBlock(allowEvaluate: boolean, allowCdp: boolean): s
     '      toolPrefix: "browser_"',
     '      allowEvaluate: ' + (allowEvaluate ? 'true' : 'false'),
     '      allowCdp: ' + (allowCdp ? 'true' : 'false'),
+    '      diagnostics: ' + (diagnostics ? 'true' : 'false'),
     '      registerDisabledTools: false',
     '      diagnostics: false',
     '      maxWaitMs: 60000',
@@ -103,22 +105,34 @@ function findBlock(original: string): { start: number; after: number } | undefin
 }
 
 /** Merge the managed block into `original`, replacing an existing one in place. */
-export function mergeBrowserBlock(original: string, allowEvaluate: boolean, allowCdp: boolean): string {
-  const block = renderBrowserBlock(allowEvaluate, allowCdp)
+export function mergeBrowserBlock(
+  original: string,
+  allowEvaluate: boolean,
+  allowCdp: boolean,
+  diagnostics: boolean,
+): string {
+  const block = renderBrowserBlock(allowEvaluate, allowCdp, diagnostics)
   const found = findBlock(original)
   if (found !== undefined) return original.slice(0, found.start) + block + original.slice(found.after)
   return (original === '' || original.endsWith('\n') ? original : original + '\n') + '\n' + block
 }
 
 /** Read the current managed block, or undefined when there is none. */
-export function parseBrowserBlock(text: string): { allowEvaluate: boolean; allowCdp: boolean } | undefined {
+export function parseBrowserBlock(
+  text: string,
+): { allowEvaluate: boolean; allowCdp: boolean; diagnostics: boolean } | undefined {
   const found = findBlock(text)
   if (found === undefined) return undefined
   const body = text.slice(found.start, found.after)
   const evaluate = /allowEvaluate:\s*(true|false)/.exec(body)
   const cdp = /allowCdp:\s*(true|false)/.exec(body)
   if (evaluate === null || cdp === null) return undefined
-  return { allowEvaluate: evaluate[1] === 'true', allowCdp: cdp[1] === 'true' }
+  const diag = /diagnostics:\s*(true|false)/.exec(body)
+  return {
+    allowEvaluate: evaluate[1] === 'true',
+    allowCdp: cdp[1] === 'true',
+    diagnostics: diag === null ? false : diag[1] === 'true',
+  }
 }
 
 /** Back-compat aliases used by the absorbed settings-card host half. */
@@ -138,8 +152,9 @@ export const mergeGatesBlock = mergeBrowserBlock
 export async function writeGates(
   allowEvaluate: boolean,
   allowCdp: boolean,
+  diagnostics: boolean,
   env: NodeJS.ProcessEnv = process.env,
-): Promise<{ patch: string; allowEvaluate: boolean; allowCdp: boolean }> {
+): Promise<{ patch: string; allowEvaluate: boolean; allowCdp: boolean; diagnostics: boolean }> {
   const file = homePatchPath(env)
   let original = ''
   try {
@@ -147,19 +162,24 @@ export async function writeGates(
   } catch {
     original = ''
   }
-  const next = mergeBrowserBlock(original, allowEvaluate, allowCdp)
+  const next = mergeBrowserBlock(original, allowEvaluate, allowCdp, diagnostics)
   if (original !== '') await copyFile(file, file + '.bak-browser-toggle').catch(() => {})
   const tmp = file + '.tmp-browser-toggle'
   await writeFile(tmp, next, 'utf8')
   await rename(tmp, file)
   const check = await readFile(file, 'utf8')
   const parsed = parseBrowserBlock(check)
-  if (parsed === undefined || parsed.allowEvaluate !== allowEvaluate || parsed.allowCdp !== allowCdp) {
+  if (
+    parsed === undefined ||
+    parsed.allowEvaluate !== allowEvaluate ||
+    parsed.allowCdp !== allowCdp ||
+    parsed.diagnostics !== diagnostics
+  ) {
     if (original !== '') {
       await writeFile(file, original, 'utf8')
       throw new Error('patch self-check failed after write; previous content restored')
     }
     throw new Error('patch self-check failed after write')
   }
-  return { patch: file, allowEvaluate, allowCdp }
+  return { patch: file, allowEvaluate, allowCdp, diagnostics }
 }

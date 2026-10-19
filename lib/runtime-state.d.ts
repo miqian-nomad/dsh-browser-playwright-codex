@@ -64,11 +64,13 @@ export declare function isEngineUserChosen(): boolean;
 export declare function publishGates(gates: {
     allowEvaluate: boolean;
     allowCdp: boolean;
+    diagnostics: boolean;
 }): void;
 /** The published gates, or undefined while the tool family has not been applied. */
 export declare function getGates(): {
     allowEvaluate: boolean;
     allowCdp: boolean;
+    diagnostics: boolean;
 } | undefined;
 /**
  * The last computed "which sites look logged in" summary, or undefined before anything

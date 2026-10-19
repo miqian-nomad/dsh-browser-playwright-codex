@@ -48,7 +48,7 @@ let _engine: SnapshotEngine | undefined = undefined
 /** Default pushed in by the provider that is actually loaded (display only). */
 let _configuredEngine: SnapshotEngine | undefined = undefined
 /** Effective tool gates, pushed in by the tool family when it is applied (display only). */
-let _gates: { allowEvaluate: boolean; allowCdp: boolean } | undefined = undefined
+let _gates: { allowEvaluate: boolean; allowCdp: boolean; diagnostics: boolean } | undefined = undefined
 const _subscribers = new Set<(enabled: boolean) => void>()
 /** Display-only login inference; see publishLoginSites. */
 let _loginSites: LoginSites | undefined = undefined
@@ -182,12 +182,20 @@ export function isEngineUserChosen(): boolean {
  * Not persisted: it is derived from config every time the plugin is applied.
  * @param gates - whether browser_evaluate / browser_cdp are registered.
  */
-export function publishGates(gates: { allowEvaluate: boolean; allowCdp: boolean }): void {
-  _gates = { allowEvaluate: gates.allowEvaluate === true, allowCdp: gates.allowCdp === true }
+export function publishGates(gates: {
+  allowEvaluate: boolean
+  allowCdp: boolean
+  diagnostics: boolean
+}): void {
+  _gates = {
+    allowEvaluate: gates.allowEvaluate === true,
+    allowCdp: gates.allowCdp === true,
+    diagnostics: gates.diagnostics === true,
+  }
 }
 
 /** The published gates, or undefined while the tool family has not been applied. */
-export function getGates(): { allowEvaluate: boolean; allowCdp: boolean } | undefined {
+export function getGates(): { allowEvaluate: boolean; allowCdp: boolean; diagnostics: boolean } | undefined {
   return _gates === undefined ? undefined : { ..._gates }
 }
 

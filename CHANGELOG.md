@@ -7,6 +7,11 @@ languages, the individual entries follow the language the surrounding code and d
 
 一句话摘要：**只修文档与一处口径** —— 外部评分（8.9/10）点名的问题：CHANGELOG 的数字手写写错、对比表把五个闸门写成三个、有头模式的 viewport 仍然不生效却没标注。行为零变化。
 
+### Added
+
+- **设置卡新增第三个工具开关：诊断工具**（`browser_console_messages` / `browser_network_requests`）。与 `evaluate` / `cdp` 同一套机制：`POST /api/browser-playwright/gates` 现在接受 `diagnostics`，home 补丁块的整行 config 一并写入，`tool.ts` 把**实际生效值**（而不是猜的）发布给卡片；卡片上显示"当前：N 个开着"也把这一项算进去。
+- **「已登录的站点」默认折叠**：标题行直接给出「N 个域 · M 个 cookie · 点击展开」，点开才渲染说明与名单（分组仍各自折叠）。设置页不再被这份名单占掉大半屏。
+
 ### Fixed
 
 - **CHANGELOG 0.7.0 的数字按实测改正**：常驻是 **16 工具 / 11,179 字符**（此前手写成 11,005 字符，token 数也跟着漂），对比基线 18 工具 / 12,755 字符保持不变，字符降幅 **−1,576（−12.4%）**。这是连续第三个版本出现"主文档被守卫钉住、CHANGELOG 叙事手写漂移"——本轮起新增加一条守卫：**最新一节 CHANGELOG 不许出现手写的 `≈ N token/轮` 数字**，要写就写实测命令与结果表。

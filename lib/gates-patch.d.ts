@@ -16,15 +16,17 @@ export declare function homePatchPath(env?: NodeJS.ProcessEnv): string;
  *
  * @param allowEvaluate - register browser_evaluate
  * @param allowCdp - register browser_cdp
+ * @param diagnostics - register the two diagnostics tools
  * @returns the YAML block, markers included
  */
-export declare function renderBrowserBlock(allowEvaluate: boolean, allowCdp: boolean): string;
+export declare function renderBrowserBlock(allowEvaluate: boolean, allowCdp: boolean, diagnostics: boolean): string;
 /** Merge the managed block into `original`, replacing an existing one in place. */
-export declare function mergeBrowserBlock(original: string, allowEvaluate: boolean, allowCdp: boolean): string;
+export declare function mergeBrowserBlock(original: string, allowEvaluate: boolean, allowCdp: boolean, diagnostics: boolean): string;
 /** Read the current managed block, or undefined when there is none. */
 export declare function parseBrowserBlock(text: string): {
     allowEvaluate: boolean;
     allowCdp: boolean;
+    diagnostics: boolean;
 } | undefined;
 /** Back-compat aliases used by the absorbed settings-card host half. */
 export declare const parseGatesBlock: typeof parseBrowserBlock;
@@ -39,8 +41,9 @@ export declare const mergeGatesBlock: typeof mergeBrowserBlock;
  * @param env - environment (DSH_HOME override for tests)
  * @returns the file written and the values it now carries
  */
-export declare function writeGates(allowEvaluate: boolean, allowCdp: boolean, env?: NodeJS.ProcessEnv): Promise<{
+export declare function writeGates(allowEvaluate: boolean, allowCdp: boolean, diagnostics: boolean, env?: NodeJS.ProcessEnv): Promise<{
     patch: string;
     allowEvaluate: boolean;
     allowCdp: boolean;
+    diagnostics: boolean;
 }>;

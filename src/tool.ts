@@ -115,7 +115,11 @@ export function apply(ctx: Context, config: ToolConfig): void {
   // home-level patch), so the tool family publishes it at registration and the
   // switch shows the truth instead of a guess. Driven by the same values that
   // decided which tools register, so the two can never disagree.
-  publishGates({ allowEvaluate: registered.has('evaluate'), allowCdp: registered.has('cdp') })
+  publishGates({
+    allowEvaluate: registered.has('evaluate'),
+    allowCdp: registered.has('cdp'),
+    diagnostics: registered.has('console_messages'),
+  })
   /** Register one gated tool only when this configuration keeps it live. */
   const registerMaybe = (suffix: ToolSuffix, definition: ToolDefinition): void => {
     if (registered.has(suffix)) ctx.tools.register(definition)
