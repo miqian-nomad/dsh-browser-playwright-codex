@@ -2,12 +2,14 @@
 
 > [![dsh.so 安装验证 · harness 0.2.0-rc.1](https://www.dsh.so/badge/install/dsh-browser-playwright-codex@0.2.0-rc.1.svg)](https://www.dsh.so/zh/artifact/dsh-browser-playwright-codex/) [![dsh.so 风险](https://www.dsh.so/badge/dsh-browser-playwright-codex.svg)](https://www.dsh.so/zh/artifact/dsh-browser-playwright-codex/)
 
-**一句话**：让 AI 用你**已经登录的账号**在真实网页上干活 —— 填表、抓取列表、多标签查后台；浏览器窗口就在你桌面上、你随时看得见。原生弹框会被挂起、**绝不替你点「确定」**；验证码/登录页会被识别出来并把情况报给你、请你本人接手（识别不出来时也会停下来问人，而不是硬闯）。
+**一句话**：让 AI 用你**已经登录的账号**在真实网页上干活 —— 填表、抓取列表、多标签查后台；浏览器窗口就在你桌面上、你随时看得见。原生弹框会被挂起、**绝不替你点「确定」**（机制级）；验证码/挑战页会被识别出来，并以提示要求模型停下交给你（**提示不是阻断**）。登录/二次验证**没有探测器**，靠模型从快照看出来并停下；密码、一次性验证码、卡号字段 `browser_fill` **直接拒绝**——这类字由你本人在窗口里输。
 
 **In one line**: the agent drives a **visible, profile-backed browser window** with the logins you
 already have — filling in forms, scraping lists and working across tabs in real pages — through
 accessibility snapshots with stable element refs. Native dialogs are parked and reported instead of
-auto-accepted; a login, 2FA or challenge page is handed back to you rather than guessed at. No
+auto-accepted. Challenge pages are detected and reported as a note that tells the agent to stop and hand
+the page back — a note, not a block. There is **no sign-in detector**, and `browser_fill` refuses
+password / one-time-code / card fields outright — you type those in the visible window. No
 CSS-selector guessing, no full-DOM dumps.
 
 ```sh
@@ -42,8 +44,8 @@ dsh plugin --profile <name> add github:miqian-nomad/dsh-browser-playwright-codex
 implementation of `browser_evaluate` (its dynamic evaluation), which this package ships switched off.
 [SECURITY.md](https://github.com/miqian-nomad/dsh-browser-playwright-codex/blob/main/SECURITY.md) says what each
 finding actually is, whether a capability gate makes it reachable (two of the warnings are not gate-controlled:
-the login-state write and the local test server in the acceptance script), and explains what the plugin can and
-cannot do with your logins (URL policy, CDP allow-list, dialog policy, no telemetry, and it never types
+cannot do with your logins (URL policy, CDP allow-list, dialog policy, no telemetry, and `browser_fill`
+refuses password / one-time-code / card fields). Counts move as the scanner and the code change — their own report is the
 passwords or 2FA codes). Counts move as the scanner and the code change — their own report is the
 live number.
 
@@ -88,8 +90,9 @@ Install it and ask for something that leaves a visible result — there is nothi
 > Go to my orders page on `<site>` and tell me the delivery address on the most recent order.
 
 > Fill in this contact form, but stop and show me the filled form before you submit it.
-
-What you should see: a real browser window on your desktop doing the clicking, and the page coming back to
+the model as a `ref`-numbered list. The first time it meets a verification page it **reports the page back
+to you** — take the window over by hand and it continues from where it left off (sign-ins have no detector:
+the agent is told to stop when it sees one).
 the model as a `ref`-numbered list. The first time it meets a sign-in, a 2FA prompt or a verification page
 it **reports the page back to you** — take the window over by hand and it continues from where it left off.
 Native dialogs are the one case that is enforced at the interface: they are parked and never auto-accepted.
@@ -363,9 +366,9 @@ Measured with ``npm run cost`` (per-turn, resident in the system prompt):
 
 | Surface | Tools | Schema characters | ≈ tokens/turn |
 |---|---|---|---|
-| Schema defaults (`Config({})`, no patch layer) | 16 | 11,005 | ≈ 3,057 |
-| Shipped bundle layer (this package's `cordis.patch.yml`: both power gates off) | 16 | 11,005 | ≈ 3,057 |
-| Everything registered (`registerDisabledTools: true`, plus `extract`) | 21 | 15,608 | ≈ 4,336 |
+| Schema defaults (`Config({})`, no patch layer) | 16 | 11,179 | ≈ 3,105 |
+| Shipped bundle layer (this package's `cordis.patch.yml`: both power gates off) | 16 | 11,179 | ≈ 3,105 |
+| Everything registered (`registerDisabledTools: true`, plus `extract`) | 21 | 15,782 | ≈ 4,384 |
 
 This paragraph describes the 0.6.0 change; the table above is today's measurement. Three things changed
 there, and only one of them was about size. (1) The click family was rewritten so each rule is stated once

@@ -343,6 +343,8 @@ export function apply(ctx: Context, config: ToolConfig): void {
         'Replace the value of the input or select referenced by the latest snapshot. ' +
         '`value` is accepted as an alias of `text`. ' +
         'For <select> elements the text selects the matching option label. ' +
+        'Credential fields (password, one-time code, card number) are refused with CREDENTIAL_FIELD: ' +
+        'a human types secrets in the visible window, so ask them and re-snapshot instead. ' +
         'IRON RULE: after filling, verify in the returned snapshot that the field actually holds the value. ' +
         'Frameworks can silently reject or transform input (controlled components, contenteditable editors, ' +
         'input-mask/currency fields). If the value is wrong or missing, do NOT blindly re-fill or append — ' +

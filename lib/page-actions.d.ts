@@ -68,6 +68,22 @@ export declare function clickTargetHref(locator: Locator): Promise<string | null
 export declare function clickLocator(session: PlaywrightSession, locator: Locator, signal: AbortSignal | undefined, label: string, shared: number): Promise<import("./types.ts").BrowserSnapshot>;
 export declare function clickAt(session: PlaywrightSession, x: number, y: number, signal: AbortSignal | undefined): Promise<import("./types.ts").BrowserSnapshot>;
 export declare function clickAtRef(session: PlaywrightSession, ref: string, signal: AbortSignal | undefined): Promise<import("./types.ts").BrowserSnapshot>;
+/**
+ * Does this field hold a secret (password, one-time code, card number)?
+ *
+ * Mechanism-level counterpart to the old promise "it never types your
+ * passwords": `browser_fill` refuses these fields so the promise is true by
+ * construction, not by the model remembering to behave. The visible window is
+ * where the human types them.
+ *
+ * @param spec - tag / type / autocomplete read from the live element
+ * @returns true when the field must be filled by the human
+ */
+export declare function isCredentialField(spec: {
+    tag: string;
+    type?: string;
+    autocomplete?: string;
+}): boolean;
 export declare function fill(session: PlaywrightSession, ref: string, text: string, signal: AbortSignal | undefined): Promise<import("./types.ts").BrowserSnapshot>;
 /**
  * Normalize a field value before comparing. Two levels of forgiveness, both of them

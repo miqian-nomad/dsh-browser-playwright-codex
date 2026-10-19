@@ -15,9 +15,12 @@ this package ships switched off** — it is not registered at all until a deploy
 
 **It drives your browser, as you.** The provider opens a visible, profile-backed Chromium-family
 window (`~/.dsh/browser-profiles/playwright` by default) and reuses the logins already in it. It does
-not have your passwords, and it never types them: when a login, a 2FA prompt or a captcha appears,
-the agent is supposed to stop and hand the page back to you.
-
+window (`~/.dsh/browser-profiles/playwright` by default) and reuses the logins already in it. It does
+not have your passwords, and `browser_fill` **refuses** credential fields (`type=password`,
+`autocomplete=current-password` / `new-password` / `one-time-code` / `cc-*`) — typing one is a
+mechanism-level no, not a promise. Challenge pages are detected and reported as a note; there is
+**no sign-in detector**, so a sign-in page is handled by the agent's discipline and you complete it in
+the visible window.
 **It is visible and interruptible.** The window lives on your desktop. You can watch every action,
 minimise it (the provider detects a minimised window and keeps working without raising it — see
 [FOCUS-STEALING.md](https://github.com/miqian-nomad/dsh-browser-playwright-codex/blob/main/FOCUS-STEALING.md)), or close it: login state is exported first and restored on

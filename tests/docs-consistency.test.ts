@@ -83,6 +83,32 @@ test('shipped gates: the parser reads the file, not the example inside a comment
   )
 })
 
+test('docs: sign-in / CAPTCHA wording stays at the level the code implements', () => {
+  // The old first screen claimed a login detector that does not exist, and a CAPTCHA
+  // "stop" that is only a note. Those sentences are now banned from every promise-bearing
+  // file, and the honest limitation has to be stated where the promise used to be.
+  const promiseFiles = ['README.md', 'PLUGIN-README.md', '中文说明.md', 'SECURITY.md', 'registry/awesome-dsh-plugin.yml']
+  const banned = [
+    /登录页会被识别/,
+    /stops? for sign-?ins/i,
+    /a login, 2FA or challenge page is handed back/i,
+    /遇到登录、验证码和原生弹窗会停下来/,
+  ]
+  for (const file of promiseFiles) {
+    const text = read(file)
+    for (const pattern of banned) {
+      assert.doesNotMatch(text, pattern, file + ' still claims a capability the code does not have: ' + String(pattern))
+    }
+  }
+  for (const file of ['README.md', '中文说明.md', 'SECURITY.md']) {
+    assert.match(
+      read(file),
+      /没有(专门的)?登录.?二次验证.?探测器|没有探测器|no (sign-in|login) detector/i,
+      file + ' must state that sign-ins have no detector',
+    )
+  }
+})
+
 test('docs: nothing claims the package ships a gate on while it ships it off', () => {
   const on = (v: boolean) => (v ? 'true' : 'false')
   // Both rules are anchored on a *shipping* word, so ordinary advice stays out of scope
