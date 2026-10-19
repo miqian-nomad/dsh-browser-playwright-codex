@@ -87,7 +87,13 @@ test('docs: sign-in / CAPTCHA wording stays at the level the code implements', (
   // The old first screen claimed a login detector that does not exist, and a CAPTCHA
   // "stop" that is only a note. Those sentences are now banned from every promise-bearing
   // file, and the honest limitation has to be stated where the promise used to be.
-  const promiseFiles = ['README.md', 'PLUGIN-README.md', '中文说明.md', 'SECURITY.md', 'registry/awesome-dsh-plugin.yml']
+  const promiseFiles = [
+    'README.md',
+    'PLUGIN-README.md',
+    '中文说明.md',
+    'SECURITY.md',
+    'registry/awesome-dsh-plugin.yml',
+  ]
   const banned = [
     /登录页会被识别/,
     /stops? for sign-?ins/i,

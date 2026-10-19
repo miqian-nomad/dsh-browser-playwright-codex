@@ -724,67 +724,67 @@ export function apply(ctx: Context, config: ToolConfig): void {
     }),
   )
   if (config.diagnostics || config.registerDisabledTools) {
-  ctx.tools.register(
-    defineTool({
-      name: p('console_messages'),
-      description:
-        'Return recent console messages and uncaught page errors from the tab this session is driving, newest last. ' +
-        'Use it right after an action that reported success but produced no visible change: a thrown page error or a failed ' +
-        'subresource is the usual reason a click or fill did not take effect. Read-only observation, it never acts on the page. ' +
-        'Capture starts when this session first drives a tab, so an empty list on a fresh tab is normal. ' +
-        'In persistent mode all sessions share one window, so entries describe that shared page.',
-      parameters: {
-        level: {
-          type: 'string',
-          description:
-            "Filter by level: 'all' (default), 'error' (errors + uncaught page errors), 'warning', 'info', 'log', 'debug'.",
+    ctx.tools.register(
+      defineTool({
+        name: p('console_messages'),
+        description:
+          'Return recent console messages and uncaught page errors from the tab this session is driving, newest last. ' +
+          'Use it right after an action that reported success but produced no visible change: a thrown page error or a failed ' +
+          'subresource is the usual reason a click or fill did not take effect. Read-only observation, it never acts on the page. ' +
+          'Capture starts when this session first drives a tab, so an empty list on a fresh tab is normal. ' +
+          'In persistent mode all sessions share one window, so entries describe that shared page.',
+        parameters: {
+          level: {
+            type: 'string',
+            description:
+              "Filter by level: 'all' (default), 'error' (errors + uncaught page errors), 'warning', 'info', 'log', 'debug'.",
+          },
+          limit: { type: 'number', description: 'Max entries to return, newest last. Default 50, cap 200.' },
         },
-        limit: { type: 'number', description: 'Max entries to return, newest last. Default 50, cap 200.' },
-      },
-      output: {
-        schema: { type: 'json' },
-        render: (_args: unknown, value: unknown) => [
-          { type: 'text', text: renderDiagnostics('console', value as DiagnosticsValue) },
-        ],
-      },
-      async execute(args, exec) {
-        const session = await acquire(exec)
-        // The canonical value is a wire value; the framework types tool outputs as JSON.
-        return session.consoleMessages(args ?? {}) as unknown as JsonValue
-      },
-    }),
-  )
+        output: {
+          schema: { type: 'json' },
+          render: (_args: unknown, value: unknown) => [
+            { type: 'text', text: renderDiagnostics('console', value as DiagnosticsValue) },
+          ],
+        },
+        async execute(args, exec) {
+          const session = await acquire(exec)
+          // The canonical value is a wire value; the framework types tool outputs as JSON.
+          return session.consoleMessages(args ?? {}) as unknown as JsonValue
+        },
+      }),
+    )
   }
   if (config.diagnostics || config.registerDisabledTools) {
-  ctx.tools.register(
-    defineTool({
-      name: p('network_requests'),
-      description:
-        'Return recent network requests from the tab this session is driving, newest last: method, URL, status, ' +
-        'resource type, duration, and the failure text for requests that never completed. Use it to tell "the page did not ' +
-        'react" apart from "the request behind it failed", and to find the API call an action triggered. ' +
-        'Read-only; response bodies are not captured. In persistent mode all sessions share one window, so entries describe that shared page.',
-      parameters: {
-        urlContains: {
-          type: 'string',
-          description: 'Only return requests whose URL contains this substring (case-insensitive).',
+    ctx.tools.register(
+      defineTool({
+        name: p('network_requests'),
+        description:
+          'Return recent network requests from the tab this session is driving, newest last: method, URL, status, ' +
+          'resource type, duration, and the failure text for requests that never completed. Use it to tell "the page did not ' +
+          'react" apart from "the request behind it failed", and to find the API call an action triggered. ' +
+          'Read-only; response bodies are not captured. In persistent mode all sessions share one window, so entries describe that shared page.',
+        parameters: {
+          urlContains: {
+            type: 'string',
+            description: 'Only return requests whose URL contains this substring (case-insensitive).',
+          },
+          failedOnly: { type: 'boolean', description: 'Only return requests that failed or returned status >= 400.' },
+          limit: { type: 'number', description: 'Max entries to return, newest last. Default 50, cap 200.' },
         },
-        failedOnly: { type: 'boolean', description: 'Only return requests that failed or returned status >= 400.' },
-        limit: { type: 'number', description: 'Max entries to return, newest last. Default 50, cap 200.' },
-      },
-      output: {
-        schema: { type: 'json' },
-        render: (_args: unknown, value: unknown) => [
-          { type: 'text', text: renderDiagnostics('network', value as DiagnosticsValue) },
-        ],
-      },
-      async execute(args, exec) {
-        const session = await acquire(exec)
-        // The canonical value is a wire value; the framework types tool outputs as JSON.
-        return session.networkRequests(args ?? {}) as unknown as JsonValue
-      },
-    }),
-  )
+        output: {
+          schema: { type: 'json' },
+          render: (_args: unknown, value: unknown) => [
+            { type: 'text', text: renderDiagnostics('network', value as DiagnosticsValue) },
+          ],
+        },
+        async execute(args, exec) {
+          const session = await acquire(exec)
+          // The canonical value is a wire value; the framework types tool outputs as JSON.
+          return session.networkRequests(args ?? {}) as unknown as JsonValue
+        },
+      }),
+    )
   }
   ctx.tools.register(
     defineTool({

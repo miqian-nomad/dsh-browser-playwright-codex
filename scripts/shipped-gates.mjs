@@ -22,8 +22,7 @@ import { readFileSync } from 'node:fs'
 export function bundleConfig(patchUrl = new URL('../cordis.patch.yml', import.meta.url)) {
   const yml = readFileSync(patchUrl, 'utf8')
   const code = stripComments(yml)
-  const row =
-    code.split(/\n(?=\s*- id: )/).find((block) => block.includes("'dsh-browser-playwright-codex'")) ?? ''
+  const row = code.split(/\n(?=\s*- id: )/).find((block) => block.includes("'dsh-browser-playwright-codex'")) ?? ''
   if (row === '') throw new Error('cordis.patch.yml: no dsh-browser-playwright-codex row found')
   const flag = (name) => new RegExp(name + ':\\s*(true|false)').exec(row)?.[1] === 'true'
   return { allowEvaluate: flag('allowEvaluate'), allowCdp: flag('allowCdp') }

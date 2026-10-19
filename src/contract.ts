@@ -65,7 +65,13 @@ export const ALWAYS_ON_SUFFIXES = [
  * a tool the deployment disabled can only error, so shipping its schema would
  * spend prompt tokens on a capability that cannot run.
  */
-export const GATED_SUFFIXES = ['extract', 'evaluate', 'cdp', 'console_messages', 'network_requests'] as const satisfies readonly ToolSuffix[]
+export const GATED_SUFFIXES = [
+  'extract',
+  'evaluate',
+  'cdp',
+  'console_messages',
+  'network_requests',
+] as const satisfies readonly ToolSuffix[]
 
 /** Which gated capabilities are live for one configuration. */
 export interface ToolSurfaceConfig {

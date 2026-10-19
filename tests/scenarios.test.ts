@@ -247,7 +247,6 @@ test('an element that is never on screen is reported as off-screen', async () =>
 // Scenario: guest checkout journey
 // ---------------------------------------------------------------------------
 
-
 /**
  * The human types a secret in the visible window.
  *
@@ -284,10 +283,14 @@ async function humanTypesInsteadOfFill(
   label: string,
   value: string,
 ) {
-  await assert.rejects(session.fill(ref, value), (error: unknown) => {
-    assert.equal((error as { code?: string }).code, 'CREDENTIAL_FIELD')
-    return true
-  }, 'browser_fill must refuse credential fields')
+  await assert.rejects(
+    session.fill(ref, value),
+    (error: unknown) => {
+      assert.equal((error as { code?: string }).code, 'CREDENTIAL_FIELD')
+      return true
+    },
+    'browser_fill must refuse credential fields',
+  )
   await humanTypes(session, label, value)
 }
 
