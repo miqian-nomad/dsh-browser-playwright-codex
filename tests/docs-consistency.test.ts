@@ -72,7 +72,7 @@ test('shipped gates: the parser reads the file, not the example inside a comment
     .map((line) => (line.includes('#') ? line.slice(0, line.indexOf('#')) : line))
     .join('\n')
   const row =
-    independent.split(/\n(?=\s*- id: )/).find((block) => block.includes('dsh-browser-playwright-codex/tool')) ?? ''
+    independent.split(/\n(?=\s*- id: )/).find((block) => block.includes("'dsh-browser-playwright-codex'")) ?? ''
   const flag = (name: string) => new RegExp(name + ':\\s*(true|false)').exec(row)?.[1] === 'true'
   assert.deepEqual(
     { allowEvaluate: flag('allowEvaluate'), allowCdp: flag('allowCdp') },

@@ -37,3 +37,12 @@ export type {
   TabInfo,
 } from './types.ts'
 export type { ToolConfig } from './tool.ts'
+
+// Single loader row (2026-10-19): the package root is the plugin. The three
+// sub-entries below stay importable, but the loader mounts this one.
+export { Config as BrowserPluginConfigSchema, apply, name } from './plugin.ts'
+export type { BrowserPluginConfig } from './plugin.ts'
+export { apply as applyPlaywright, name as playwrightEntry, Config as PlaywrightEntryConfig } from './playwright.ts'
+export { apply as applyTools, name as toolEntry, Config as ToolEntryConfig } from './tool.ts'
+
+export { Config } from './plugin.ts'

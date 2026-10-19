@@ -20,3 +20,8 @@ export { Config as PlaywrightConfigSchema } from './config.ts';
 export type { PlaywrightConfig, PageData } from './config.ts';
 export type { BrowserNode, BrowserProvider, BrowserSession, BrowserSnapshot, LoadState, ScreenshotCapture, TabInfo, } from './types.ts';
 export type { ToolConfig } from './tool.ts';
+export { Config as BrowserPluginConfigSchema, apply, name } from './plugin.ts';
+export type { BrowserPluginConfig } from './plugin.ts';
+export { apply as applyPlaywright, name as playwrightEntry, Config as PlaywrightEntryConfig } from './playwright.ts';
+export { apply as applyTools, name as toolEntry, Config as ToolEntryConfig } from './tool.ts';
+export { Config } from './plugin.ts';

@@ -3,6 +3,25 @@
 Bilingual by intent: the version headings and the summary of each release are given in both
 languages, the individual entries follow the language the surrounding code and docs use.
 
+## 0.7.0 — 2026-10-19
+
+一句话摘要：**两个插件合成一个** —— 设置卡片并入本包；加载行从三行收成一行（这是 `dsh-client-modules` 允许本包带 client 模块的前提），独立的 `dsh-browser-toggle` 退役。
+
+### Breaking
+
+- **一个包一行 loader**：`cordis.patch.yml` 现在只插 `- id: browser` / `name: 'dsh-browser-playwright-codex'`，三块配置收进嵌套的 `service` / `playwright` / `tool`。旧的 `browser-playwright`、`browser-tool` 行不再被读取；loader 整体替换 config，迁移时三节都要写全（设置卡会自动重写 home 补丁层里的那一块）。
+- 版本跳到 0.7.0，因为配置形状变了。
+
+### Added
+
+- **设置卡随本包发布**：`dsh.client` + `./client` 导出，卡片仍在 `/api/browser-playwright/*` 上提供总开关、页面识别方式、两个强力工具闸门与已登录站点名单。
+- **单 loader 行守卫**（tests/plugin-entry.test.ts）：`cordis.patch.yml` 不得再出现本包的子路径行，否则卡片会重新变成非法。
+
+### Changed
+
+- 闸门写入块改为**整行 config**（新标记 `# >>> dsh-browser:`），并兼容旧的 `dsh-browser-toggle` 标记就地替换 —— 避免同一个 id 被两段 patch 争抢。
+- `scripts/shipped-gates.mjs` 按新行名读取出厂闸门；`scripts/build-client.mjs` 把 `client/client.js` 复制进 `lib/`。
+
 ## 0.6.6 — 2026-10-17
 
 一句话摘要：**四份独立审查（文档漂移 / 代码对抗 / 发行打包 / 中性冷读）查出的问题集中修掉**——两条安全缺陷、几处"假成功/假失败"、随包自检的假承诺、发布门禁漏洞与一批文档漂移。

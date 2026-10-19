@@ -1,72 +1,75 @@
-# dsh-browser-playwright-codex bundle layer: the browser seam, the Playwright
-# provider, and the model-facing tool family. Applied as one insert over the
-# profile's entry list; rows are patchable by id like every other plugin.
+# dsh-browser-playwright-codex bundle layer — ONE row for the whole capability.
 #
-# The `name:` values are package specifiers resolved from the profile, so they
-# must track package.json#name — a rename that misses this file fails at load
-# with MODULE_NOT_FOUND (2026-09-30: the 0.4.0 rename to *-codex did exactly
-# that; verified `require.resolve('dsh-browser-playwright/service')` fails in
-# both profiles while the *-codex specifier resolves).
+# History worth keeping: this file used to insert three rows (`browser` service,
+# `browser-playwright` provider, `browser-tool` tools) because the capability has
+# three configurable concerns. `dsh-client-modules` rejects distinct active Loader
+# sources that resolve to one package name, so a Settings card (which needs a
+# client module) could not live in such a package — it shipped as a second plugin,
+# dsh-browser-toggle. 2026-10-19: one row, three nested config sections, one plugin.
+#
+# The `name:` value is a package specifier resolved from the profile, so it must
+# track package.json#name — a rename that misses this file fails at load with
+# MODULE_NOT_FOUND (the 0.4.0 rename to *-codex did exactly that).
 - insert:
     - id: browser
-      name: 'dsh-browser-playwright-codex/service'
+      name: 'dsh-browser-playwright-codex'
       config:
-        provider: playwright
-    - id: browser-playwright
-      name: 'dsh-browser-playwright-codex/playwright'
-      config:
-        launch:
-          # Visible profile-backed window (persistent mode): the agent drives a
-          # browser the user can watch and rescue. Set true for headless
-          # servers. profileDir defaults to ~/.dsh/browser-profiles/playwright.
-          headless: false
-          persistent: true
-          viewport:
-            width: 1280
-            height: 800
-          navigationTimeoutMs: 30000
-          ignoreHTTPSErrors: false
-        # Idle auto-close: ms of no agent activity before the window closes
-        # itself (login state is saved first, so it reopens logged-in). 0 =
-        # never auto-close; the window stays until the user closes it or DSH
-        # exits. User choice: never auto-close (2026-09-04).
-        idleTimeoutMs: 0
-        maxSessions: 8
-        # Response-size lever (off by default): return "+/-/~" ref diffs between
-        # snapshots instead of the whole tree. Smaller returns on pages that
-        # re-render often; the model then has to hold the previous tree itself.
-        snapshot:
-          diff: false
-    - id: browser-tool
-      name: 'dsh-browser-playwright-codex/tool'
-      config:
-        # This file ships INSIDE the package, so it must not turn anything on for
-        # the people who install it. It used to: an earlier revision carried the
-        # author's own `allowEvaluate: true` / `allowCdp: true` (2026-09-04) into
-        # every download, which is how a package ends up handing each installer a
-        # backdoor they never asked for — and it is what a third-party scanner
-        # reads as "dynamic code execution, critical".
-        #
-        # Both are OFF here (matching the code defaults in src/tool.ts, and the
-        # README's own configuration example). Opt in per deployment, in YOUR
-        # profile patch — never in the package:
-        #
-        #   # ~/.dsh/profiles/<name>/cordis.patch.yml
-        #   # NOTE: dsh replaces an entry's config object wholesale, so list every
-        #   # key you rely on, not just the one you are changing.
-        #   - id: browser-tool
-        #     config:
-        #       toolPrefix: 'browser_'
-        #       allowEvaluate: true    # registers browser_evaluate
-        #       allowCdp: true         # registers browser_cdp (needs a DSH restart)
-        #       registerDisabledTools: false
-        #       interactiveOnlyDefault: false   # true = snapshot returns actionable elements only
-        #       maxWaitMs: 60000
-        #
-        # browser_evaluate runs arbitrary page JavaScript: it can read anything in
-        # the page and act on the user's logged-in sites. browser_cdp is CDP with
-        # an allow-list — only inspection and input simulation pass
-        # (lib/cdp-policy.js); network/storage/cookie/security commands never do.
-        # Neither tool is registered at all while its gate is false.
-        allowEvaluate: false
-        allowCdp: false
+        # Browser seam: which registered provider to drive.
+        service:
+          provider: playwright
+        # Provider: window, launch, snapshot and session settings.
+        playwright:
+          launch:
+            # Visible profile-backed window (persistent mode): the agent drives a
+            # browser the user can watch and rescue. Set true for headless servers.
+            # profileDir defaults to ~/.dsh/browser-profiles/playwright.
+            headless: false
+            persistent: true
+            viewport:
+              width: 1280
+              height: 800
+            navigationTimeoutMs: 30000
+            ignoreHTTPSErrors: false
+          # Idle auto-close: ms of no agent activity before the window closes
+          # itself (login state is saved first, so it reopens logged-in). 0 =
+          # never auto-close. User choice: never auto-close (2026-09-04).
+          idleTimeoutMs: 0
+          maxSessions: 8
+          # Response-size lever (off by default): return "+/-/~" ref diffs between
+          # snapshots instead of the whole tree.
+          snapshot:
+            diff: false
+        # Model-facing tools: prefix, capability gates and wait caps.
+        tool:
+          # This file ships INSIDE the package, so it must not turn anything on for
+          # the people who install it. It used to: an earlier revision carried the
+          # author's own allowEvaluate/allowCdp true (2026-09-04) into every
+          # download — a backdoor each installer never asked for, and what a
+          # third-party scanner reads as "dynamic code execution, critical".
+          #
+          # Both are OFF here (matching the code defaults in src/tool.ts). Opt in
+          # per deployment, in YOUR profile or home patch — never in the package:
+          #
+          #   - id: browser
+          #     name: 'dsh-browser-playwright-codex'
+          #     config:
+          #       service: { provider: playwright }
+          #       playwright: { launch: { headless: false, persistent: true }, idleTimeoutMs: 0, maxSessions: 8, snapshot: { diff: false } }
+          #       tool:
+          #         toolPrefix: 'browser_'
+          #         allowEvaluate: true    # registers browser_evaluate
+          #         allowCdp: true         # registers browser_cdp
+          #         registerDisabledTools: false
+          #         interactiveOnlyDefault: false   # true = snapshot returns actionable elements only
+          #         maxWaitMs: 60000
+          #
+          # The loader replaces an entry's config object WHOLESALE, so a partial
+          # block resets every key you leave out. List all three sections.
+          #
+          # browser_evaluate runs arbitrary page JavaScript: it can read anything
+          # in the page and act on the user's logged-in sites. browser_cdp is CDP
+          # with an allow-list — only inspection and input simulation pass
+          # (lib/cdp-policy.js); network/storage/cookie/security commands never do.
+          # Neither tool is registered at all while its gate is false.
+          allowEvaluate: false
+          allowCdp: false

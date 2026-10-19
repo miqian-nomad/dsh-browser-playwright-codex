@@ -278,8 +278,8 @@ turning them on in a deployment that shares prompts across many users.
 
 ### Prefer a switch to editing config?
 
-The companion package [`dsh-browser-toggle`](https://github.com/miqian-nomad/dsh-browser-toggle) puts
-this on a Settings card: enable/disable the browser, pick the page-reading mode, and turn the two
+The Settings card ships **inside this package** (it moved out of the companion package `dsh-browser-toggle`, which is retired) and puts
+this on one card: enable/disable the browser, pick the page-reading mode, and turn the two
 power tools on or off — no restart, no YAML. The card also lists **which sites this browser looks
 signed in to**. Two things make that list trustworthy: cookies are attributed **first-party** — only
 domains this browser actually visited are candidates, because a tracker's cookie belongs to the site
@@ -415,13 +415,16 @@ links below go to GitHub rather than to files inside the package:
 - **The package ships both power gates OFF, and that is deliberate** — `cordis.patch.yml` is part of the package, so anything it enables is enabled for *everyone who installs this*. It therefore sets `allowEvaluate: false` and `allowCdp: false` (the code defaults), and each deployment opts in through its **own profile patch** (`~/.dsh/profiles/<name>/cordis.patch.yml`). A package that shipped them on would be handing every installer a backdoor they never asked for. Snippet:
   ```yaml
   # dsh replaces an entry's config object wholesale — list every key you rely on.
-  - id: browser-tool
+  - id: browser
     config:
-      toolPrefix: 'browser_'
-      allowEvaluate: true    # registers browser_evaluate
-      allowCdp: true         # registers browser_cdp (needs a full DSH restart)
-      registerDisabledTools: false
-      maxWaitMs: 60000
+      service: { provider: playwright }
+      playwright: { launch: { headless: false, persistent: true }, idleTimeoutMs: 0, maxSessions: 8, snapshot: { diff: false } }
+      tool:
+        toolPrefix: 'browser_'
+        allowEvaluate: true    # registers browser_evaluate
+        allowCdp: true         # registers browser_cdp (needs a full DSH restart)
+        registerDisabledTools: false
+        maxWaitMs: 60000
   ```
 - **Chromium family only** — Firefox/WebKit channels are not probed; providers are swappable if another engine is needed.
 - **Extract needs a dedicated model route** — it does not reuse the main request's route; misconfiguration fails loudly at call time.
@@ -448,6 +451,10 @@ MIT
 ## 更新记录
 
 （此列表只记 **minor 里程碑**；每个补丁版本见 [CHANGELOG.md](https://github.com/miqian-nomad/dsh-browser-playwright-codex/blob/main/CHANGELOG.md)。）
+
+### 0.7.0（2026-10-19）
+
+- **两个插件合成一个（破坏性）**：设置卡片并入本包（`dsh.client` + `./client`），`dsh-browser-toggle` 退役；`cordis.patch.yml` 从三行 loader 收成**一行** —— `- id: browser` 加嵌套的 `service` / `playwright` / `tool`。这是硬约束：`dsh-client-modules` 拒绝一个包被多个 loader 行挂载，所以带 client 的包只能有一个入口。
 
 ### 0.6.0（2026-10-16）
 
