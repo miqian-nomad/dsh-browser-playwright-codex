@@ -227,7 +227,7 @@ All tunables are patchable through the profile's `cordis.patch.yml` (later layer
         headless: false                   # visible window you can watch and rescue
         persistent: true                  # profile-backed window, login survives close
         # profileDir: ~/.dsh/browser-profiles/playwright by default
-        viewport: { width: 1280, height: 800 }
+        viewport: { width: 1280, height: 800 }   # headful: IGNORED (the window tracks the desktop; only headless: true pins it)
         navigationTimeoutMs: 30000
         ignoreHTTPSErrors: false
       allowedDomains: []                  # e.g. ['github.com'] restricts navigation
@@ -431,6 +431,7 @@ links below go to GitHub rather than to files inside the package:
         registerDisabledTools: false
         maxWaitMs: 60000
   ```
+- **`launch.viewport` only applies headless** — the visible window is a real window: it tracks the desktop size (`browser-lifecycle.ts` passes `viewport: null` in headful), so setting 1280×800 there changes nothing. Pin the size by running `headless: true`, or resize the window itself.
 - **Chromium family only** — Firefox/WebKit channels are not probed; providers are swappable if another engine is needed.
 - **Extract needs a dedicated model route** — it does not reuse the main request's route; misconfiguration fails loudly at call time.
 - **JS-driven navigations are not statically checkable** — `allowedDomains` covers `browser_navigate`, `browser_open_tab`, every navigating click (`browser_click`: `ref`, `text`, `precise` and raw-coordinate modes) and `browser_switch_tab`; `mode: "hover"` reveals content without activating anything, so it is not checked against the URL policy. A button whose handler runs `location.href = …` can still leave the allowed hosts, and so can a `<form>` whose `action` points at another host (pressing its submit button is a navigation this check does not statically see), and a tab that is already sitting on a disallowed host stays open (the agent simply refuses to drive it); deploy an external network guard for hard isolation.

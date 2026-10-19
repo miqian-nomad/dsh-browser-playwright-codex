@@ -3,6 +3,19 @@
 Bilingual by intent: the version headings and the summary of each release are given in both
 languages, the individual entries follow the language the surrounding code and docs use.
 
+## 0.7.1 — 2026-10-19
+
+一句话摘要：**只修文档与一处口径** —— 外部评分（8.9/10）点名的问题：CHANGELOG 的数字手写写错、对比表把五个闸门写成三个、有头模式的 viewport 仍然不生效却没标注。行为零变化。
+
+### Fixed
+
+- **CHANGELOG 0.7.0 的数字按实测改正**：常驻是 **16 工具 / 11,179 字符**（此前手写成 11,005 字符，token 数也跟着漂），对比基线 18 工具 / 12,755 字符保持不变，字符降幅 **−1,576（−12.4%）**。这是连续第三个版本出现"主文档被守卫钉住、CHANGELOG 叙事手写漂移"——本轮起新增加一条守卫：**最新一节 CHANGELOG 不许出现手写的 `≈ N token/轮` 数字**，要写就写实测命令与结果表。
+- **对比与优势.md 的闸门清单**："五个闸门"此前只列了 `evaluate` / `cdp` / `extract` 三个名字，补上 `console_messages` / `network_requests`，并把它与全量注册的字符差从旧的 2,853 更正为实测 4,603 字符（token 换算见 README 成本表）。
+
+### Changed
+
+- **有头模式的 `viewport` 标注**：`browser-lifecycle.ts:44` 用 `viewport: null` 跟随真实窗口，所以 `launch.viewport` 只在 `headless: true` 时生效；README 配置示例与 Known Limitations 现在明写这一点（此前"配了也不生效"没有任何提示，被外部评分连续四次点出）。
+
 ## 0.7.0 — 2026-10-19
 
 一句话摘要：**两个插件合成一个** —— 设置卡片并入本包；加载行从三行收成一行（这是 `dsh-client-modules` 允许本包带 client 模块的前提），独立的 `dsh-browser-toggle` 退役。
@@ -19,7 +32,7 @@ languages, the individual entries follow the language the surrounding code and d
 
 ### Changed
 
-- **两个诊断工具改为门控**：`browser_console_messages` / `browser_network_requests` 不再常驻 —— 新增 `tool.diagnostics: false`（默认关），开启后才注册。常驻成本 **18 工具 12,755 字符 ≈ 3,543 token/轮 → 16 工具 11,005 字符 ≈ 3,057 token/轮（−486，−13.7%）**；全量注册仍是 21 工具 ≈ 4,384。
+- **两个诊断工具改为门控**：`browser_console_messages` / `browser_network_requests` 不再常驻 —— 新增 `tool.diagnostics: false`（默认关），开启后才注册。常驻成本 **18 工具 12,755 字符 ≈ 3,543 token/轮 → 16 工具 11,179 字符 ≈ 3,105 token/轮（−438，−12.4%）**；全量注册仍是 21 工具 15,782 字符 ≈ 4,384。
 - **快照瘦身（运行时大头）**：无名无状态的 `generic` 包装层不再逐层输出（真实页面常把一个链接包在 7~8 层 div 里），显示用 `href` 去掉追踪参数（`utm_*` / `gclid` / `rsv_*` / `sa` 等）并截到 160 字符。百度结果页形状的样本：**6,169 → 2,557 字符（−58.6%）**，行数 108 → 24。refs 与点击行为不变 —— 省的是模型读到的东西。
 - 闸门写入块改为**整行 config**（新标记 `# >>> dsh-browser:`），并兼容旧的 `dsh-browser-toggle` 标记就地替换 —— 避免同一个 id 被两段 patch 争抢。
 - `scripts/shipped-gates.mjs` 按新行名读取出厂闸门；`scripts/build-client.mjs` 把 `client/client.js` 复制进 `lib/`。

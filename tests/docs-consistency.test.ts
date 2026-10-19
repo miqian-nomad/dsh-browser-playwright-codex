@@ -443,6 +443,21 @@ test("docs: the registry entry matches the code and opens with the user's words"
   }
 })
 
+test('the newest CHANGELOG section carries no hand-written token numbers', () => {
+  // Three releases in a row shipped a CHANGELOG whose prose numbers drifted from the measured
+  // surface (0.7.0 wrote 11,005 / 3,057 while the code produced 11,179 / 3,105). The main docs
+  // are pinned cell-by-cell by the guards above; the CHANGELOG was not, so prose could rot.
+  // Rule: the newest section may quote tools/characters from a measured table, but any "≈ N token"
+  // claim has to come from a command output, not from memory.
+  const changelog = read('CHANGELOG.md')
+  const newest = changelog.split(/^## /m)[1] ?? ''
+  assert.doesNotMatch(
+    newest,
+    /≈\s*\d[\d,]*\s*token/,
+    'the newest CHANGELOG section must quote measured numbers, not hand-written token counts (put them in README cost tables instead)',
+  )
+})
+
 test('the changelog heading and package.json version agree', () => {
   // A version bump that forgets the CHANGELOG (or the reverse) is exactly the kind of drift the other
   // guards here exist to catch, and it stays invisible until someone reads both files side by side.
