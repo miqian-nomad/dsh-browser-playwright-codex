@@ -372,18 +372,26 @@ window.__ModuleLoader__.load({
             const statusLabel = enabled === null ? '读取中…' : (enabled ? '已启用' : '已禁用');
             const current = ENGINE_OPTIONS.find((o) => o.id === engine) || null;
 
+            const GATE_SHORT = {
+                allowEvaluate: '页面里的任意 JavaScript',
+                allowCdp: '原始 CDP 调试协议',
+                diagnostics: '控制台消息 / 网络请求',
+            };
+            const ENGINE_SHORT = { legacy: '最稳，奇怪网站也不容易出错', aria: '更准，复杂页面优先' };
+
             return h('div', { style: S.page }, [
                 h('h2', { key: 'title', style: S.title }, '浏览器'),
                 h('p', { key: 'intro', style: S.intro },
-                    '让 AI 用你的登录状态替你上网办事（查后台、填表、抓列表）。这里的改动立刻生效，不需要重启。'),
+                    '让 AI 用你的登录状态替你上网办事。这里的改动立刻生效，不需要重启。'),
+
+                // ---- 主开关 ----
                 h('div', { key: 'row', style: S.row }, [
                     h(Dot, { key: 'dot', state }),
                     h('div', { key: 'text', style: { flex: 1, minWidth: 0 } }, [
                         h('div', { key: 'label', style: S.rowTitle }, '允许 AI 操作网页'),
-                        h('div', { key: 'desc', style: S.rowDesc }, [
+                        h('div', { key: 'desc', style: S.rowDesc },
                             h(Tag, { key: 'status' }, statusLabel),
-                            '　关闭后已打开的窗口会自动关闭，登录状态会保留。',
-                        ]),
+                            '关闭后窗口会关掉，登录状态保留。'),
                     ]),
                     h(Toggle, {
                         key: 'toggle',
@@ -393,37 +401,40 @@ window.__ModuleLoader__.load({
                         label: '允许 AI 操作网页',
                     }),
                 ]),
-                h('div', { key: 'group', style: S.group }, '页面识别方式'),
-                h(Notes, { key: 'groupNotes', title: '说明' },
-                    h('p', { style: S.note },
-                        '决定它怎么"看"一个网页：页面上有哪些能点的、能填的。两种都能正常用，选哪个看你常去的网站。')),
-                h('div', { key: 'engines', style: { ...S.list, marginTop: 8 } }, ENGINE_OPTIONS.map((o) =>
-                    h(RadioRow, {
+
+                // ---- 页面读取方式 ----
+                h('div', { key: 'engineGroup', style: S.group }, [
+                    '页面读取方式',
+                    h('span', { key: 'cur', style: S.groupCount },
+                        current ? '　当前：' + current.label : '　读取中…'),
+                ]),
+                h('div', { key: 'engines', style: { ...S.list, marginTop: 8 } },
+                    ENGINE_OPTIONS.map((o) => h(RadioRow, {
                         key: o.id,
-                        p: o,
+                        p: { id: o.id, label: o.label, hint: ENGINE_SHORT[o.id] || '' },
                         selected: engine === o.id,
                         disabled: engine === null || busy,
                         onPick: chooseEngine,
                     }))),
-                h('div', { key: 'footer', style: S.footer }, [
-                    h(Btn, { key: 'refresh', onClick: refresh, disabled: busy }, '刷新状态'),
-                    current
-                        ? h('span', { key: 'cur', style: S.tip },
-                            '当前：' + current.label + (engineUserChosen ? '（你选的）' : '（默认）'))
-                        : null,
+                h(Notes, {
+                    key: 'engineNotes',
+                    title: '两种模式到底差在哪',
+                    children: h('div', null, ENGINE_OPTIONS.map((o) => h('p', { key: o.id, style: S.note },
+                        o.label + '：' + o.hint))),
+                }),
+
+                // ---- 工具权限 ----
+                h('div', { key: 'gateGroup', style: S.group }, [
+                    '工具权限',
+                    h('span', { key: 'sum', style: S.groupCount },
+                        gatesOn === 0 ? '　全部关闭' : '　' + gatesOn + ' / ' + GATE_ROWS.length + ' 已开启'),
                 ]),
-                h('div', { key: 'gatesGroup', style: S.group }, '强力工具（默认关闭）'),
-                h(Notes, { key: 'gatesNotes', title: '说明' },
-                    h('p', { style: S.note },
-                        '这两个开关控制的是"能力"，不是效果微调：打开"任意 JavaScript"就等于把页面里的东西都交给 AI。'
-                        + '插件包里默认关闭 —— 因为包是发给每个安装者的，默认打开等于替所有人做了这个决定；'
-                        + '这里打开的是你自己机器上的选择，记在你自己机器的配置层里。')),
-                h('div', { key: 'gates', style: { ...S.list, marginTop: 8 } }, GATE_ROWS.map((row) =>
-                    h('div', { key: row.key, style: S.row }, [
+                h('div', { key: 'gates', style: { ...S.list, marginTop: 8 } },
+                    GATE_ROWS.map((row) => h('div', { key: row.key, style: S.row }, [
                         h(Dot, { key: 'dot', state: gateState(row.key) }),
                         h('div', { key: 'text', style: { flex: 1, minWidth: 0 } }, [
                             h('div', { key: 'label', style: S.rowTitle }, row.label),
-                            h('div', { key: 'desc', style: S.rowDesc }, row.hint),
+                            h('div', { key: 'desc', style: S.rowDesc }, GATE_SHORT[row.key] || row.hint),
                         ]),
                         h(Toggle, {
                             key: 'toggle',
@@ -433,26 +444,40 @@ window.__ModuleLoader__.load({
                             label: row.label,
                         }),
                     ]))),
-                h('div', { key: 'gatesFooter', style: S.footer },
-                    gates.allowEvaluate === null && gates.allowCdp === null
-                        ? h('span', { key: 'unknown', style: S.tip }, '当前：读取不到（这个 profile 里的插件版本还没上报闸门状态）')
-                        : h('span', { key: 'sum', style: S.tip }, '当前：' + (gatesOn === 0 ? '都关着' : gatesOn + ' 个开着'))),
+                h(Notes, {
+                    key: 'gateNotes',
+                    title: '这些开关具体放行什么',
+                    children: h('div', null, [
+                        h('p', { key: 'evaluate', style: S.note },
+                            '页面里执行任意 JavaScript：能读走页面内容，也能用你的登录状态去点、去填、去提交。真正需要时才打开。'),
+                        h('p', { key: 'cdp', style: S.note },
+                            '原始 CDP 协议：只放行查看类和模拟输入类命令；读 Cookie/存储、改网络、动安全设置一律被拦。排查疑难页面用。'),
+                        h('p', { key: 'diagnostics', style: S.note },
+                            '控制台消息 + 网络请求：能读出页面报错和最近的请求（URL、状态、失败原因）。平时用不到，遇到"点了没反应"再打开。'),
+                        h('p', { key: 'effect', style: S.note },
+                            '工具在热重载后出现或消失（约 1-2 秒）；若一直没变，重启一次 DSH。'),
+                    ]),
+                }),
+
+                // ---- 已登录站点（默认收起） ----
                 h('div', {
                     key: 'loginsGroup',
                     style: { ...S.group, cursor: 'pointer', userSelect: 'none' },
                     onClick: () => setLoginsOpen((open) => !open),
-                }, '已登录的站点（只给你自己看）'
-                    + (logins === null || logins.sites === undefined
-                        ? ''
-                        : '　· ' + logins.sites.length + ' 个域 · ' + logins.sites.reduce((acc, site) => acc + site.cookies, 0) + ' 个 cookie')
-                    + (loginsOpen ? '　▾ 点击收起' : '　▸ 点击展开')),
-                loginsOpen ? h(Notes, { key: 'loginsNotes', title: '说明' },
+                }, [
+                    '已登录的站点',
+                    h('span', { key: 'count', style: S.groupCount },
+                        logins === null || logins.sites === undefined
+                            ? '　读取中…'
+                            : '　' + logins.sites.length + ' 个域 · '
+                              + logins.sites.reduce((acc, site) => acc + site.cookies, 0) + ' 个 cookie'),
+                    h('span', { key: 'hint', style: { ...S.groupCount, marginLeft: 8 } },
+                        loginsOpen ? '点击收起' : '点击展开'),
+                ]),
+                loginsOpen ? h(Notes, { key: 'loginsNotes', title: '这份名单怎么来的' },
                     h('p', { style: S.note },
-                        '只列**这台浏览器真的访问过**的域（你在 DSH 里打开过的页面），第三方统计/广告域已排除 ——'
-                        + '别人的 cookie 属于你当时浏览的那个站，不代表你登录了它。判据是 OWASP 的会话特征：'
-                        + 'httpOnly 且（会话级 或 值像令牌），名字不作为依据。'
-                        + '每一行的说明来自网页自己的标题，或一份离线对照表（认不出的就直接显示域名，不编）。'
-                        + '这里不显示 cookie 的名字和值；名单只存在于本机内存、不写磁盘；也没有任何工具能让 AI 看到它。')) : null,
+                        '只列这台浏览器真的访问过的域；第三方统计/广告域已排除。判据是 OWASP 的会话特征，'
+                        + '名字不作为依据；不显示 cookie 的名字和值，名单只在本机内存，AI 看不到。')) : null,
                 loginsOpen === false
                     ? null
                     : logins === null
@@ -462,15 +487,11 @@ window.__ModuleLoader__.load({
                         const pool = showAll ? logins.sites : logins.sites.filter((s) => s.likely);
                         const visible = pool.filter((s) => hiddenDomains.indexOf(s.domain) < 0);
                         const hiddenCount = pool.length - visible.length;
-                        // 同一家公司的域折叠成一行：真实名单里京东系二十来个域各自占一行，小半屏都是它。
                         const byGroup = new Map();
                         const items = [];
                         for (const site of visible) {
                             const key = site.group ? site.group.key : null;
-                            if (key === null) {
-                                items.push({ kind: 'single', site });
-                                continue;
-                            }
+                            if (key === null) { items.push({ kind: 'single', site }); continue; }
                             let group = byGroup.get(key);
                             if (group === undefined) {
                                 group = { kind: 'group', key, label: site.group.label, sites: [] };
@@ -479,7 +500,6 @@ window.__ModuleLoader__.load({
                             }
                             group.sites.push(site);
                         }
-                        // 组里只剩一个域就没有折叠的意义，退回单行。
                         for (let i = items.length - 1; i >= 0; i -= 1) {
                             if (items[i].kind === 'group' && items[i].sites.length === 1)
                                 items[i] = { kind: 'single', site: items[i].sites[0] };
@@ -492,16 +512,12 @@ window.__ModuleLoader__.load({
                             h('div', { key: 'text', style: { flex: 1, minWidth: 0 } }, [
                                 h('div', { key: 'label', style: S.rowTitle }, [
                                     site.likely ? h(Tag, { key: 'tag' }, '推测登录') : null,
-                                    // 说明优先：光看域名认不出来是这个功能最初的痛点。
                                     site.alias || site.title || site.domain,
                                 ]),
                                 h('div', { key: 'desc', style: S.rowDesc },
                                     (site.alias ? site.domain + '　' : '')
                                     + (site.title && site.title !== site.alias ? '「' + site.title + '」　' : '')
-                                    + site.cookies + ' 个 cookie（httpOnly ' + site.httpOnly
-                                    + ' / 会话 ' + site.sessionLike
-                                    + ' / 值像令牌 ' + site.tokenLike + '）'
-                                    + (site.signals.length > 0 ? '　' + site.signals.join(' · ') : '')),
+                                    + site.cookies + ' 个 cookie'),
                             ]),
                             h(Btn, {
                                 key: 'hide',
@@ -515,74 +531,52 @@ window.__ModuleLoader__.load({
                         const renderItem = (item) => {
                             if (item.kind === 'single') return rowFor(item.site, false);
                             const open = openGroups.indexOf(item.key) >= 0;
-                            const anyLikely = item.sites.some((s) => s.likely);
                             return h('div', { key: 'group-' + item.key }, [
                                 h('div', { key: 'head', style: S.row }, [
                                     h('div', { key: 'text', style: { flex: 1, minWidth: 0 } }, [
-                                        h('div', { key: 'label', style: S.rowTitle }, [
-                                            anyLikely ? h(Tag, { key: 'tag' }, '推测登录') : null,
-                                            item.label + '（' + item.sites.length + ' 个域）',
-                                        ]),
+                                        h('div', { key: 'label', style: S.rowTitle },
+                                            item.label + '（' + item.sites.length + ' 个域）'),
                                         h('div', { key: 'desc', style: S.rowDesc },
-                                            sum(item.sites, (s) => s.cookies) + ' 个 cookie　httpOnly '
-                                            + sum(item.sites, (s) => s.httpOnly) + '　会话 '
-                                            + sum(item.sites, (s) => s.sessionLike) + '　值像令牌 '
-                                            + sum(item.sites, (s) => s.tokenLike)),
+                                            sum(item.sites, (s) => s.cookies) + ' 个 cookie'),
                                     ]),
                                     h(Btn, {
                                         key: 'toggle',
-                                        onClick: () => {
-                                            setOpenGroups(open
-                                                ? openGroups.filter((k) => k !== item.key)
-                                                : openGroups.concat([item.key]));
-                                        },
+                                        onClick: () => setOpenGroups(open
+                                            ? openGroups.filter((k) => k !== item.key)
+                                            : openGroups.concat([item.key])),
                                     }, open ? '收起' : '展开'),
                                 ]),
-                                open
-                                    ? h('div', { key: 'members' }, item.sites.map((s) => rowFor(s, true)))
-                                    : null,
+                                open ? h('div', { key: 'members' }, item.sites.map((s) => rowFor(s, true))) : null,
                             ]);
                         };
                         return h('div', { key: 'loginsBody' }, [
                             h('div', { key: 'list', style: { ...S.list, marginTop: 8 } },
                                 visible.length === 0
                                     ? h('div', { key: 'none', style: S.tip },
-                                        hiddenCount > 0
-                                            ? '这一页都被你隐藏了。'
-                                            : '还没发现登录过的站点（用这个浏览器登录过网站后，这里会出现）。')
+                                        hiddenCount > 0 ? '这一页都被你隐藏了。' : '还没发现登录过的站点。')
                                     : items.map(renderItem)),
                             h('div', { key: 'loginsFooter', style: S.footer }, [
                                 h('span', { key: 'src', style: S.tip },
-                                    (logins.source === 'live' ? '实时（浏览器开着）' : '上次快照（浏览器当前没开）')
-                                    + '　' + new Date(logins.capturedAt).toLocaleTimeString()
-                                    + '　你在 DSH 里访问过 ' + logins.total + ' 个域，其中 '
-                                    + logins.likelyTotal + ' 个像登录态'
-                                    + (logins.thirdPartyTotal > 0
-                                        ? '；另有 ' + logins.thirdPartyTotal + ' 个第三方域（统计/广告）已排除'
-                                        : '')
-                                    + (logins.attribution === 'unfiltered'
-                                        ? '（这次没拿到浏览器打开的页面列表，未做第一方过滤：下面可能有第三方域）'
-                                        : '')),
+                                    (logins.source === 'live' ? '实时' : '上次快照')
+                                    + (logins.attribution === 'unfiltered' ? '（未做第一方过滤）' : '')),
                                 h(Btn, {
                                     key: 'all',
                                     onClick: () => setShowAll(!showAll),
-                                }, showAll
-                                    ? '只看像登录态的 ' + logins.likelyTotal + ' 个'
-                                    : '显示其余 ' + (logins.total - logins.likelyTotal) + ' 个'),
-
+                                }, showAll ? '只看像登录态的' : '显示其余 ' + (logins.total - logins.likelyTotal) + ' 个'),
                                 hiddenCount > 0
                                     ? h(Btn, {
                                         key: 'reset',
-                                        onClick: () => {
-                                            setHiddenDomains([]);
-                                            writeHiddenDomains([]);
-                                        },
-                                    }, '恢复显示 ' + hiddenCount + ' 个被隐藏的')
+                                        onClick: () => { setHiddenDomains([]); writeHiddenDomains([]); },
+                                    }, '恢复 ' + hiddenCount + ' 个被隐藏的')
                                     : null,
                             ]),
                         ]);
                     })(),
+
                 msg ? h('div', { key: 'msg', style: S.msg }, msg) : null,
+                h('div', { key: 'foot', style: S.footer }, [
+                    h(Btn, { key: 'refresh', onClick: refresh, disabled: busy }, '刷新状态'),
+                ]),
             ]);
         }
 

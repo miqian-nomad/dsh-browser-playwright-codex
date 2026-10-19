@@ -182,11 +182,7 @@ export function isEngineUserChosen(): boolean {
  * Not persisted: it is derived from config every time the plugin is applied.
  * @param gates - whether browser_evaluate / browser_cdp are registered.
  */
-export function publishGates(gates: {
-  allowEvaluate: boolean
-  allowCdp: boolean
-  diagnostics: boolean
-}): void {
+export function publishGates(gates: { allowEvaluate: boolean; allowCdp: boolean; diagnostics: boolean }): void {
   _gates = {
     allowEvaluate: gates.allowEvaluate === true,
     allowCdp: gates.allowCdp === true,

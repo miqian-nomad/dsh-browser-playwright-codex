@@ -1,3 +1,12 @@
+## 0.7.2 — 2026-10-19
+
+一句话摘要：**设置卡推倒重做** —— 用户要求按 DSH 设置页规范重新设计：首屏只留「主开关 + 三个分区摘要」，所有长说明收进折叠。0.7.1 因卡在 npm staged 状态作废（版本号让给这一版）。
+
+### Changed
+
+- **设置卡重做**：主开关一行；「页面读取方式」两个紧凑单选项 + 一个「两种模式到底差在哪」折叠；「工具权限」三个开关（任意 JS / 原始 CDP / 诊断工具）+ 一个「这些开关具体放行什么」折叠，标题行直接显示「N / 3 已开启」；「已登录的站点」默认收起，标题行只给「N 个域 · M 个 cookie」，展开后仍按公司分组折叠。名单每行只保留域名 + 说明 + cookie 数，逐个站点的四个 OWASP 信号不再塞在主视图里。
+- 卡片文案统一为"人话"，不再出现 evaluate / cdp / 引擎 / legacy / aria 这些词。
+
 # Changelog
 
 Bilingual by intent: the version headings and the summary of each release are given in both
