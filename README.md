@@ -138,8 +138,8 @@ The default `toolPrefix` is `browser_`. Every action returns a fresh snapshot, s
 | `browser_dialog` | Answer the native dialog blocking the page: `{ accept: true }` confirms, `false` cancels; errors with `NO_DIALOG` when nothing is pending |
 | `browser_cdp` | Send one raw CDP command (DOM inspection / Input simulation allow-list only; disabled by default); **only registered when its capability is enabled** |
 | `browser_close` | Close the session's browser window; the profile keeps login state, so the next call reopens signed in |
-| `browser_console_messages` | Read the page console messages captured for the current page (levels, text, source) |
-| `browser_network_requests` | Read the network requests captured for the current page (method, URL, status, resource type) |
+| `browser_console_messages` | Read the page console messages captured for the current page (levels, text, source); **only registered when `diagnostics: true`** |
+| `browser_network_requests` | Read the network requests captured for the current page (method, URL, status, resource type); **only registered when `diagnostics: true`** |
 
 ### Parameter signatures
 
@@ -214,49 +214,51 @@ An actionable element with no text of its own is named from its descendants — 
 All tunables are patchable through the profile's `cordis.patch.yml` (later layers win per row).
 
 ```yaml
+# ONE row for the whole capability (2026-10-19). A package with a client module (the
+# Settings card lives here) may only be mounted once, so the three concerns are nested.
 - id: browser
+  name: 'dsh-browser-playwright-codex'
   config:
-    provider: playwright                # explicit provider selection
-
-- id: browser-playwright
-  config:
-    launch:
-      channel: chrome                   # or chromium / msedge / edge
-      headless: false                   # visible window you can watch and rescue
-      persistent: true                  # profile-backed window, login survives close
-      # profileDir: ~/.dsh/browser-profiles/playwright by default
-      viewport: { width: 1280, height: 800 }
-      navigationTimeoutMs: 30000
-      ignoreHTTPSErrors: false
-    allowedDomains: []                  # e.g. ['github.com'] restricts navigation
-    idleTimeoutMs: 0                    # shipped value: never auto-close (schema default 600000 = 10 min)
-    maxSessions: 8                      # LRU eviction (persistent mode: one window)
-    snapshot:
-      engine: legacy                    # 'legacy' (default) or 'aria' (Playwright ariaSnapshot, refs aligned back)
-      maxNodes: 500                     # token budget per snapshot tree
-      maxNameLength: 120
-      maxTextLength: 300
-      diff: false                       # true = return "+/-/~" ref diffs instead of the full tree
-
-- id: browser-tool
-  config:
-    toolPrefix: browser_                # model-facing tool name prefix
-    allowEvaluate: false                # browser_evaluate gate
-    allowCdp: false                     # browser_cdp gate (DOM inspection / Input simulation allow-list)
-    registerDisabledTools: false        # register evaluate/cdp/extract even while off (discoverability vs resident prompt cost)
-    interactiveOnlyDefault: false       # true = browser_snapshot returns actionable elements only
-    maxWaitMs: 60000                    # browser_wait bound
-    extract:
-      provider: deepseek-official       # optional: enables browser_extract
-      model: deepseek-v4-flash
-      maxInputChars: 20000             # caps the page text handed to that model
-      maxOutputTokens: 2000
+    service:
+      provider: playwright                # explicit provider selection
+    playwright:
+      launch:
+        channel: chrome                   # or chromium / msedge / edge
+        headless: false                   # visible window you can watch and rescue
+        persistent: true                  # profile-backed window, login survives close
+        # profileDir: ~/.dsh/browser-profiles/playwright by default
+        viewport: { width: 1280, height: 800 }
+        navigationTimeoutMs: 30000
+        ignoreHTTPSErrors: false
+      allowedDomains: []                  # e.g. ['github.com'] restricts navigation
+      idleTimeoutMs: 0                    # shipped value: never auto-close (schema default 600000 = 10 min)
+      maxSessions: 8                      # LRU eviction (persistent mode: one window)
+      snapshot:
+        engine: legacy                    # 'legacy' (default) or 'aria' (Playwright ariaSnapshot, refs aligned back)
+        maxNodes: 500                     # token budget per snapshot tree
+        maxNameLength: 120
+        maxTextLength: 300
+        diff: false                       # true = return "+/-/~" ref diffs instead of the full tree
+    tool:
+      toolPrefix: browser_                # model-facing tool name prefix
+      allowEvaluate: false                # browser_evaluate gate
+      allowCdp: false                     # browser_cdp gate (DOM inspection / Input simulation allow-list)
+      registerDisabledTools: false        # register gated tools even while off (discoverability vs resident prompt cost)
+      diagnostics: false                  # true = register browser_console_messages / browser_network_requests
+      interactiveOnlyDefault: false       # true = browser_snapshot returns actionable elements only
+      maxWaitMs: 60000                    # browser_wait bound
+      extract:
+        provider: deepseek-official       # optional: enables browser_extract
+        model: deepseek-v4-flash
+        maxInputChars: 20000              # caps the page text handed to that model
+        maxOutputTokens: 2000
+```
 ```
 
 `snapshot.engine` picks the page-reading engine: `'legacy'` (the default) walks the injected DOM,
 `'aria'` uses Playwright's official `ariaSnapshot({ mode: 'ai' })` and aligns the result back onto the
 same `ref` ids; an aria tree that cannot be parsed falls back to legacy rather than handing the model an
-empty tree. It is a `snapshot` key, next to `maxNodes` / `maxNameLength` / `maxTextLength` / `diff`.
+empty tree. It lives under `playwright.snapshot`, next to `maxNodes` / `maxNameLength` / `maxTextLength` / `diff`.
 
 `browser_extract` needs an auxiliary LLM route (`extract.provider` + `extract.model`); without one it fails with an actionable error. With a route configured, `extract.maxInputChars` bounds the page text in that prompt, and the prompt names the cap when it truncates. A gated tool is **not registered at all** while its capability is off, so its schema never reaches the system prompt; set `registerDisabledTools: true` to keep the whole surface discoverable (the tool then answers with the error naming the switch). The shipped layer in [`cordis.patch.yml`](https://github.com/miqian-nomad/dsh-browser-playwright-codex/blob/main/cordis.patch.yml) keeps `allowEvaluate` and `allowCdp` **off**, matching the schema defaults and this sample: that file travels inside the package, so anything it enabled would be enabled for everyone who installs it. Opt in per deployment, in that deployment's own patch layer. `browser_evaluate` executes arbitrary page JavaScript; `browser_cdp` stays off until `allowCdp: true`, and even then only the allow-list in `lib/cdp-policy.js` passes — network, storage, cookie, security and arbitrary-JS (`Runtime.evaluate`) commands are rejected with `CDP_DENIED`.
 
