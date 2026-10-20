@@ -281,6 +281,10 @@ Both are honest trades, not free wins: a diff is smaller but requires the model 
 tree, and an interactive-only snapshot hides the prose the model may want to read. Measure before
 turning them on in a deployment that shares prompts across many users.
 
+### Cache and disk
+
+The Settings card also carries a **缓存与磁盘** section: Chromium's pure caches inside the plugin's profile, `dsh-*` residue in `%TEMP%`, updater installers of the installed version, and the request-image cache are listed with their sizes; you preview first (“先预演”) and only then confirm. Cookies, Local Storage, Service Worker, IndexedDB, Network, Preferences and `~/.dsh/attachments` are never in scope — the target list is a closed enum in `src/cache-clean.ts`, and no path is ever taken from the request.
+
 ### Prefer a switch to editing config?
 
 The Settings card ships **inside this package** (it moved out of the companion package `dsh-browser-toggle`, which is retired) and puts

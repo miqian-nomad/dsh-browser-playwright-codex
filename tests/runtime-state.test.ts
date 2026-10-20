@@ -1,4 +1,4 @@
-import { test } from 'node:test'
+import { after, test } from 'node:test'
 import assert from 'node:assert/strict'
 import fs from 'node:fs'
 import os from 'node:os'
@@ -11,8 +11,15 @@ import { resolveSnapshotEngine } from '../src/page-snapshot.ts'
  * DSH_BROWSER_STATE_FILE — they must never touch the real
  * ~/.dsh/dsh-browser-playwright.state.json.
  */
+/** Temp dirs this file created; removed when the suite ends (they used to leak). */
+const createdTempDirs: string[] = []
+after(() => {
+  for (const dir of createdTempDirs) fs.rmSync(dir, { recursive: true, force: true })
+})
+
 function freshStateFile(): string {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'dsh-browser-state-'))
+  createdTempDirs.push(dir)
   return path.join(dir, 'state.json')
 }
 

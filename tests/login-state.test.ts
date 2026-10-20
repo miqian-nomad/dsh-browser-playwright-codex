@@ -16,7 +16,7 @@
  * @module dsh-browser-playwright-codex/tests/login-state
  */
 
-import { test } from 'node:test'
+import { after, test } from 'node:test'
 import assert from 'node:assert/strict'
 import fs from 'node:fs'
 import os from 'node:os'
@@ -30,8 +30,15 @@ process.env.DSH_BROWSER_STATE_FILE = path.join(os.tmpdir(), 'dsh-browser-tests-s
 type PersistArg = Parameters<PlaywrightProvider['persistState']>[0]
 
 /** A provider in a throwaway persistent profile, so `stateFile` is a real temp path. */
+/** Temp profile dirs created by this file; removed when the suite ends (they used to leak). */
+const createdTempDirs: string[] = []
+after(() => {
+  for (const dir of createdTempDirs) fs.rmSync(dir, { recursive: true, force: true })
+})
+
 function providerInTempProfile(): { provider: PlaywrightProvider; dir: string } {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'dsh-login-state-'))
+  createdTempDirs.push(dir)
   const config: PlaywrightConfig = {
     launch: {
       channel: 'chrome',

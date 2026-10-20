@@ -257,7 +257,14 @@ test('快照路径也要认出"值像令牌"的 cookie（否则快照视图会�
   // 2026-10-16 用真实导出文件核对时发现：provider 的快照路径直接把导出文件的行丢给
   // summarizeLoginSites，而导出文件里只有原始 value、没有 tokenLike —— 于是"值像令牌"这条信号
   // 永远为假，同一个文件在快照路径下报 12 个登录、在线路径报 86 个。
+/** Temp dirs created by tests in this file (they used to leak into %TEMP%). */
+const createdTempDirs: string[] = []
+after(() => {
+  for (const dir of createdTempDirs) fs.rmSync(dir, { recursive: true, force: true })
+})
+
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'dsh-provider-state-'))
+  createdTempDirs.push(dir)
   const stateFile = path.join(dir, 'dsh-storage-state.json')
   fs.writeFileSync(
     stateFile,

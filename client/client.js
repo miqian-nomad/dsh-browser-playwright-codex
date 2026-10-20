@@ -237,6 +237,10 @@ window.__ModuleLoader__.load({
             const [openGroups, setOpenGroups] = useState([]);
             const [hiddenDomains, setHiddenDomains] = useState(readHiddenDomains());
             const [loginsOpen, setLoginsOpen] = useState(false);
+            const [disk, setDisk] = useState(null);
+            const [diskPicked, setDiskPicked] = useState({ 'browser-cache': true, 'temp-residue': true, 'updater-residue': true, 'attachment-cache': false });
+            const [diskPreview, setDiskPreview] = useState(null);
+            const [diskResult, setDiskResult] = useState(null);
             const mountedRef = useRef(true);
 
             const refresh = async () => {
@@ -276,6 +280,7 @@ window.__ModuleLoader__.load({
                 mountedRef.current = true;
                 refresh();
                 refreshLogins();
+                refreshDisk();
                 const timer = setInterval(refresh, 5000);
                 // Cookies change far more slowly than switches; polling this less often keeps the
                 // settings page from doing pointless work.
@@ -364,6 +369,58 @@ window.__ModuleLoader__.load({
                 finally {
                     setBusy(false);
                 }
+            };
+
+            const fmt = (bytes) => {
+                if (typeof bytes !== 'number') return '—';
+                if (bytes < 1024) return bytes + ' B';
+                const units = ['KB', 'MB', 'GB'];
+                let value = bytes / 1024;
+                let unit = 0;
+                while (value >= 1024 && unit < units.length - 1) { value /= 1024; unit += 1; }
+                return value.toFixed(value >= 100 ? 0 : 1) + ' ' + units[unit];
+            };
+
+            const refreshDisk = async () => {
+                try {
+                    const d = await api('/disk/stat', 'GET');
+                    if (mountedRef.current && d && !d.error) setDisk(d);
+                } catch (error) {
+                    if (mountedRef.current) setMsg('磁盘统计失败：' + (error?.message ?? String(error)));
+                }
+            };
+
+            const runDisk = async (dryRun) => {
+                if (busy) return;
+                const targets = Object.keys(diskPicked).filter((id) => diskPicked[id]);
+                if (targets.length === 0) { setMsg('先勾选要清理的项目'); return; }
+                setBusy(true);
+                setMsg('');
+                try {
+                    const r = await api('/disk/clean', 'POST', { targets, dryRun });
+                    if (r && r.error) throw new Error(r.error.message || r.error.code || 'unknown');
+                    if (dryRun) {
+                        setDiskPreview(r);
+                        setDiskResult(null);
+                    } else {
+                        setDiskPreview(null);
+                        setDiskResult(r);
+                        setMsg('已释放 ' + fmt(r.freedBytes) + '（跳过 ' + (r.perTarget || []).reduce((n, t) => n + ((t.skipped && t.skipped.length) || 0), 0) + ' 项）');
+                        refreshDisk();
+                    }
+                } catch (error) {
+                    setMsg('清理失败：' + (error?.message ?? String(error)));
+                } finally {
+                    setBusy(false);
+                }
+            };
+
+            const skipSummary = (report) => {
+                if (!report || !Array.isArray(report.perTarget)) return '';
+                const reasons = {};
+                for (const t of report.perTarget) for (const s of (t.skipped || [])) reasons[s.reason] = (reasons[s.reason] || 0) + 1;
+                const parts = Object.keys(reasons).map((k) => k + ' ' + reasons[k]);
+                return parts.length > 0 ? '　跳过：' + parts.join('、') : '';
             };
 
             const state = enabled === null ? 'ongoing' : (enabled ? 'done' : 'idle');
@@ -458,6 +515,55 @@ window.__ModuleLoader__.load({
                             '工具在热重载后出现或消失（约 1-2 秒）；若一直没变，重启一次 DSH。'),
                     ]),
                 }),
+
+                h('div', { key: 'diskGroup', style: S.group }, [
+                    '缓存与磁盘',
+                    h('span', { key: 'sum', style: S.groupCount },
+                        disk === null ? '　统计中…' : '　可清理 ' + fmt(disk.totalBytes)),
+                ]),
+                h('div', { key: 'diskList', style: { ...S.list, marginTop: 8 } },
+                    (disk === null ? [] : disk.items).map((item) => h('div', { key: item.id, style: S.row }, [
+                        h('div', {
+                            key: 'check',
+                            role: 'checkbox',
+                            'aria-checked': diskPicked[item.id] === true,
+                            'aria-label': item.label,
+                            tabIndex: 0,
+                            onClick: () => setDiskPicked({ ...diskPicked, [item.id]: !diskPicked[item.id] }),
+                            onKeyDown: (e) => {
+                                if (e.key === 'Enter' || e.key === ' ') {
+                                    e.preventDefault();
+                                    setDiskPicked({ ...diskPicked, [item.id]: !diskPicked[item.id] });
+                                }
+                            },
+                            style: {
+                                width: 16, height: 16, flex: 'none', borderRadius: 4, cursor: 'pointer',
+                                border: '1.5px solid ' + (diskPicked[item.id] ? T.primary : T.borderL3),
+                                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                            },
+                        }, diskPicked[item.id] ? h('span', { style: { width: 8, height: 8, borderRadius: 2, background: T.primary } }) : null),
+                        h('div', { key: 'text', style: { flex: 1, minWidth: 0 } }, [
+                            h('div', { key: 'label', style: S.rowTitle }, item.label),
+                            h('div', { key: 'desc', style: S.rowDesc },
+                                fmt(item.bytes) + '　' + item.files + ' 个文件'
+                                + (item.note ? '　' + item.note : '')),
+                        ]),
+                    ]))),
+                h('div', { key: 'diskActions', style: S.footer }, [
+                    h(Btn, { key: 'rescan', onClick: refreshDisk, disabled: busy }, '重新统计'),
+                    h(Btn, { key: 'preview', onClick: () => runDisk(true), disabled: busy || disk === null }, '先预演'),
+                    diskPreview
+                        ? h(Btn, { key: 'clean', onClick: () => runDisk(false), disabled: busy }, '确认清理 ' + fmt(diskPreview.freedBytes))
+                        : null,
+                ]),
+                diskPreview
+                    ? h('div', { key: 'diskPreview', style: S.tip },
+                        '预演：将释放 ' + fmt(diskPreview.freedBytes) + skipSummary(diskPreview) + '（点了确认才会真删）')
+                    : null,
+                diskResult
+                    ? h('div', { key: 'diskResult', style: S.tip },
+                        '已释放 ' + fmt(diskResult.freedBytes) + skipSummary(diskResult))
+                    : null,
 
                 // ---- 已登录站点（默认收起） ----
                 h('div', {
