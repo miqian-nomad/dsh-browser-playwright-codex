@@ -4,7 +4,7 @@
 
 ### Added
 
-- **设置卡「缓存与磁盘」区块**：四类目标（浏览器缓存 / 临时残留 / 更新器残留 / 附件缓存）显示各自字节数与文件数，勾选后先「预演」看能释放多少，再「确认清理」；结果逐项报告释放量与跳过原因（占用中 / 权限 / 其它版本）。
+- **设置卡「缓存与磁盘」区块**：四类目标（浏览器缓存 / 临时残留 / 更新器残留 / 图片变体缓存）显示各自字节数与文件数，勾选后先「预演」看能释放多少，再「确认清理」；结果逐项报告释放量与跳过原因（占用中 / 权限 / 其它版本）。
 - **`src/cache-clean.ts`**：纯 `node:fs` 模块，两个入口 `scan()` / `clean()`。安全边界写在代码里而不是提示词里：目标是**枚举 id**（`browser-cache` / `temp-residue` / `updater-residue` / `attachment-cache`），路径一律由 DSH_HOME 与已知系统位置推导，请求体里的字符串永远不拼进路径；浏览器 profile 只删 Chromium 的纯缓存目录（Cache / Code Cache / GPUCache / ShaderCache / GrShaderCache / DawnCache / DawnGraphiteCache / ScriptCache / `*_crx_cache`），Cookies、Local Storage、Service Worker、IndexedDB、Network、Preferences 一律不碰。
 - **`GET /api/browser-playwright/disk/stat`** 与 **`POST /api/browser-playwright/disk/clean`**：沿用已有的 `x-dsh-plugin: browser-toggle` 防伪头（GET 与 POST 都验）、JSON 校验、枚举校验；失败逐条返回 `{ path, reason }`，不折成一个笼统错误。`~/.dsh/cache/attachments` 可清，`~/.dsh/attachments/v1/objects`（会话引用的原图）永不在清理范围内，只在统计里报大小。
 - **`tests/cache-clean.test.ts`**：9 条 fixture 用例——白名单内删干净、Cookies 与 Local Storage 一个不动、`dryRun` 不落盘、新临时目录预演时标 `in-use`、只清当前版本的更新器文件、附件缓存清空而会话原图保留、目标 id 拒绝任意路径、路径推导、字节格式化。

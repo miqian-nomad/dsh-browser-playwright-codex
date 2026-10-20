@@ -30,7 +30,7 @@ export const TARGETS: readonly { id: TargetId; label: string }[] = [
   { id: 'browser-cache', label: '浏览器缓存' },
   { id: 'temp-residue', label: '临时残留' },
   { id: 'updater-residue', label: '更新器残留' },
-  { id: 'attachment-cache', label: '附件缓存' },
+  { id: 'attachment-cache', label: '图片变体缓存' },
 ]
 
 /** Is this value one of the enum ids? Unknown strings are rejected, never joined into a path. */
@@ -335,7 +335,12 @@ export async function scan(paths: CachePaths): Promise<ScanReport> {
   })
 
   const attachments = await measure(join(paths.dshHome, 'cache', 'attachments'))
-  items.push({ id: 'attachment-cache', label: '附件缓存', ...attachments })
+  items.push({
+    id: 'attachment-cache',
+    label: '图片变体缓存',
+    ...attachments,
+    note: '发给模型前的缩放副本，可重建',
+  })
 
   const objects = await measure(join(paths.dshHome, 'attachments', 'v1', 'objects'))
   const requestImages = attachments
