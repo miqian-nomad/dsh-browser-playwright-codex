@@ -233,6 +233,8 @@ window.__ModuleLoader__.load({
             const [busy, setBusy] = useState(false);
             const [msg, setMsg] = useState('');
             const [logins, setLogins] = useState(null);
+            const [headless, setHeadless] = useState(null);
+            const [headlessUserChosen, setHeadlessUserChosen] = useState(false);
             const [showAll, setShowAll] = useState(false);
             const [openGroups, setOpenGroups] = useState([]);
             const [hiddenDomains, setHiddenDomains] = useState(readHiddenDomains());
@@ -252,6 +254,8 @@ window.__ModuleLoader__.load({
                     if (typeof s.engine === 'string')
                         setEngine(s.engine);
                     setEngineUserChosen(s.engineUserChosen === true);
+                    if (typeof s.headless === 'boolean') setHeadless(s.headless);
+                    setHeadlessUserChosen(s.headlessUserChosen === true);
                     setGates({
                         allowEvaluate: typeof s.allowEvaluate === 'boolean' ? s.allowEvaluate : null,
                         allowCdp: typeof s.allowCdp === 'boolean' ? s.allowCdp : null,
@@ -332,6 +336,27 @@ window.__ModuleLoader__.load({
                     setMsg('切换失败：' + (error?.message ?? String(error)));
                 }
                 finally {
+                    setBusy(false);
+                }
+            };
+
+            const chooseWindow = async (nextHeadless) => {
+                if (headless === null || busy || nextHeadless === headless) return;
+                setBusy(true);
+                setMsg('');
+                try {
+                    const r = await api('/window', 'POST', { headless: nextHeadless });
+                    if (r && r.error) throw new Error(r.error.message || r.error.code || 'unknown');
+                    if (typeof r.headless === 'boolean') setHeadless(r.headless);
+                    setHeadlessUserChosen(true);
+                    setMsg(r.changed
+                        ? (nextHeadless
+                            ? '已切到后台运行（无头）。下次操作时重开浏览器；标签页会关闭，登录状态保留。'
+                            : '已切到显示窗口。下次操作时重开浏览器；标签页会关闭，登录状态保留。')
+                        : '状态未变化');
+                } catch (error) {
+                    setMsg('切换失败：' + (error?.message ?? String(error)));
+                } finally {
                     setBusy(false);
                 }
             };
@@ -478,6 +503,40 @@ window.__ModuleLoader__.load({
                     title: '两种模式到底差在哪',
                     children: h('div', null, ENGINE_OPTIONS.map((o) => h('p', { key: o.id, style: S.note },
                         o.label + '：' + o.hint))),
+                }),
+
+                // ---- 浏览器窗口（有头 / 无头） ----
+                h('div', { key: 'windowGroup', style: S.group }, [
+                    '浏览器窗口',
+                    h('span', { key: 'cur', style: S.groupCount },
+                        headless === null ? '　读取中…' : (headless ? '　当前：后台运行（无头）' : '　当前：显示窗口（有头）')
+                        + (headlessUserChosen ? '（你选的）' : '')),
+                ]),
+                h('div', { key: 'windows', style: { ...S.list, marginTop: 8 } }, [
+                    h(RadioRow, {
+                        key: 'headful',
+                        p: { id: 'headful', label: '显示浏览器窗口', hint: '能看见、能随时接手；登录和验证码可以自己处理' },
+                        selected: headless === false,
+                        disabled: headless === null || busy,
+                        onPick: () => chooseWindow(false),
+                    }),
+                    h(RadioRow, {
+                        key: 'headless',
+                        p: { id: 'headless', label: '后台运行（无头）', hint: '更快、不弹窗；但你看不见它，登录/验证码只能远程处理' },
+                        selected: headless === true,
+                        disabled: headless === null || busy,
+                        onPick: () => chooseWindow(true),
+                    }),
+                ]),
+                h(Notes, {
+                    key: 'windowNotes',
+                    title: '切换窗口模式会发生什么',
+                    children: h('div', null, [
+                        h('p', { key: 'reopen', style: S.note },
+                            '有头/无头是启动参数，不能原地切换：下次操作时会关掉旧窗口、按新模式重开。标签页和未提交的表单会丢，登录状态会先导出、不会丢。'),
+                        h('p', { key: 'risk', style: S.note },
+                            '无头模式下插件"看得见、能接管"的前提不成立——验证码/二次验证只有提示，没人能在窗口里替你点。只在无人值守、且你接受这个代价时用。'),
+                    ]),
                 }),
 
                 // ---- 工具权限 ----

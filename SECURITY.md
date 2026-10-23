@@ -11,6 +11,10 @@ this package ships switched off** — it is not registered at all until a deploy
 
 ---
 
+## 0. Window mode
+
+Headful is the default and the safety story depends on it: the window is visible, you can watch it and take over for sign-ins and CAPTCHAs. **Headless removes that**: the agent still parks native dialogs and reports challenge pages as notes, but nobody can act in a window that does not exist. Treat headless as an unattended mode, not as a quieter headful one.
+
 ## 1. What it can and cannot do
 
 **It drives your browser, as you.** The provider opens a visible, profile-backed Chromium-family

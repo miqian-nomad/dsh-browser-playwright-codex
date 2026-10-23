@@ -3,7 +3,18 @@ import assert from 'node:assert/strict'
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
-import { getEnabled, setEnabled, getSnapshotEngine, setSnapshotEngine } from '../src/runtime-state.ts'
+import {
+  getConfiguredHeadless,
+  getEffectiveHeadless,
+  getEnabled,
+  getHeadless,
+  getSnapshotEngine,
+  isHeadlessUserChosen,
+  publishConfiguredHeadless,
+  setEnabled,
+  setHeadless,
+  setSnapshotEngine,
+} from '../src/runtime-state.ts'
 import { resolveSnapshotEngine } from '../src/page-snapshot.ts'
 
 /**
@@ -31,6 +42,47 @@ function withStateFile<T>(file: string, body: () => T): T {
     delete process.env.DSH_BROWSER_STATE_FILE
   }
 }
+
+test('the window mode is persisted; the configured default is only a fallback', () => {
+  const file = freshStateFile()
+  process.env.DSH_BROWSER_STATE_FILE = file
+  try {
+    // An existing file without `headless` resets the in-memory choice (this is
+    // how a stale module-level value from an earlier case is cleared).
+    fs.writeFileSync(file, JSON.stringify({ enabled: true }))
+    // No user choice, no published default: the shipped default is headful.
+    assert.equal(getEffectiveHeadless(false), false)
+    assert.equal(isHeadlessUserChosen(), false)
+
+    assert.equal(setHeadless(true), true)
+    assert.equal(setHeadless(true), false, 'setting the same value again is a no-op')
+    assert.equal(getHeadless(), true)
+    assert.equal(getEffectiveHeadless(), true)
+    assert.equal(isHeadlessUserChosen(), true)
+
+    const saved = JSON.parse(fs.readFileSync(file, 'utf8')) as { enabled?: boolean; headless?: boolean }
+    assert.equal(saved.headless, true)
+    assert.equal(saved.enabled, true, 'other keys survive a window-mode write')
+  } finally {
+    delete process.env.DSH_BROWSER_STATE_FILE
+  }
+})
+
+test('without a user choice the configured default wins', () => {
+  const file = freshStateFile()
+  process.env.DSH_BROWSER_STATE_FILE = file
+  try {
+    fs.writeFileSync(file, JSON.stringify({ enabled: true }))
+    publishConfiguredHeadless(true)
+    assert.equal(getConfiguredHeadless(), true)
+    assert.equal(getEffectiveHeadless(false), true)
+    publishConfiguredHeadless(false)
+    assert.equal(getEffectiveHeadless(true), false)
+  } finally {
+    publishConfiguredHeadless(false)
+    delete process.env.DSH_BROWSER_STATE_FILE
+  }
+})
 
 test('a state file written before the page-reading setting existed still works', () => {
   const file = freshStateFile()

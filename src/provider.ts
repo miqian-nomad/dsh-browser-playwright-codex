@@ -11,7 +11,12 @@ import os from 'node:os'
 import path from 'node:path'
 import { PlaywrightSession } from './session.ts'
 import type { PlaywrightConfig } from './config.ts'
-import { getEnabled, publishConfiguredEngine, publishLoginSites } from './runtime-state.ts'
+import {
+  getEffectiveHeadless,
+  getEnabled,
+  publishConfiguredEngine,
+  publishLoginSites,
+} from './runtime-state.ts'
 import { BrowserError } from './errors.ts'
 import { SNAPSHOT_SCRIPT } from './injected.ts'
 import { isWindowMinimized } from './window-focus.ts'
@@ -50,6 +55,8 @@ export class PlaywrightProvider {
   id = 'playwright'
   /** Legacy (persistent:false) shared browser instance. */
   browser: Browser | undefined
+  /** Window mode the live process was launched with (undefined = nothing running). */
+  launchedHeadless: boolean | undefined = undefined
   /** Persistent-mode shared profile-backed context (the personal window). */
   context: BrowserContext | undefined
   entries = new Map<string, OwnerEntry>()
@@ -199,6 +206,26 @@ export class PlaywrightProvider {
       ' otherwise dismiss; no other tool can act until it is answered.'
     )
   }
+  /**
+   * Window mode to launch with: the user's switch wins over the configured
+   * default. Read on every launch, so a change lands on the next operation
+   * without touching a patch file.
+   */
+  desiredHeadless(): boolean {
+    return getEffectiveHeadless(this.config.launch.headless === true)
+  }
+
+  /**
+   * Close a running process whose mode no longer matches. The next acquire
+   * relaunches with the new mode; login state is exported first, so only the
+   * tabs and unsaved page state are lost — never the login.
+   */
+  private async relaunchIfModeChanged(): Promise<void> {
+    const desired = this.desiredHeadless()
+    if (this.launchedHeadless === undefined || this.launchedHeadless === desired) return
+    await this.dispose()
+  }
+
   async acquire(owner: string) {
     if (!getEnabled()) {
       throw new BrowserError(
@@ -208,11 +235,19 @@ export class PlaywrightProvider {
     }
     const existing = this.entries.get(owner)
     if (existing) {
-      existing.lastUsed = Date.now()
-      this.armIdle(existing)
-      return existing.session
+      // A window-mode switch made while this owner is active must not hand back
+      // a session in the old mode: closing and relaunching here keeps the change
+      // one call away instead of "next restart".
+      if (this.launchedHeadless !== undefined && this.launchedHeadless !== this.desiredHeadless()) {
+        await this.dispose()
+      } else {
+        existing.lastUsed = Date.now()
+        this.armIdle(existing)
+        return existing.session
+      }
     }
     if (this.config.launch.persistent) {
+      await this.relaunchIfModeChanged()
       // Personal-browser mode: all owners drive one shared profile-backed
       // window (Codex-style). Entries are lightweight session handles on
       // the shared context; the last owner to leave closes the window.
@@ -223,6 +258,7 @@ export class PlaywrightProvider {
       this.armIdle(entry)
       return session
     }
+    await this.relaunchIfModeChanged()
     const browser = await this.ensureBrowser()
     while (this.entries.size >= this.config.maxSessions) {
       const oldest = [...this.entries.entries()].sort((a, b) => a[1].lastUsed - b[1].lastUsed)[0]
@@ -234,7 +270,7 @@ export class PlaywrightProvider {
       // (system DPI respected) exactly like a hand-opened Chrome, instead
       // of Playwright forcing a fixed CSS viewport that overflows the
       // window on scaled displays. Headless keeps the fixed viewport.
-      ...(this.config.launch.headless ? { viewport: this.config.launch.viewport } : { viewport: null }),
+      ...(this.desiredHeadless() ? { viewport: this.config.launch.viewport } : { viewport: null }),
       ignoreHTTPSErrors: this.config.launch.ignoreHTTPSErrors,
     })
     context.on('page', (page) => this.armDialogGuard(page))
@@ -262,6 +298,7 @@ export class PlaywrightProvider {
       if (this.entries.size === 0 && this.context !== undefined) {
         const ctx = this.context
         this.context = undefined
+        this.launchedHeadless = undefined
         await this.persistState(ctx)
         await ctx.close().catch(() => {})
       }
@@ -270,6 +307,7 @@ export class PlaywrightProvider {
     await entry.context.close().catch(() => {})
   }
   async dispose() {
+    this.launchedHeadless = undefined
     const owners = [...this.entries.keys()]
     for (const owner of owners) await this.disposeOwner(owner)
     if (this.config.launch.persistent) {

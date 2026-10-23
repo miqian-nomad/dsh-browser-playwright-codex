@@ -253,6 +253,25 @@ test('click by visible label reaches the element through the page-side probe', a
   assert.match(JSON.stringify(snap), /clicks: 1/)
 })
 
+test('window mode: the user switch wins over the configured default', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'dsh-window-mode-'))
+  const file = path.join(dir, 'state.json')
+  const previous = process.env.DSH_BROWSER_STATE_FILE
+  process.env.DSH_BROWSER_STATE_FILE = file
+  try {
+    fs.writeFileSync(file, JSON.stringify({ enabled: true, headless: false }))
+    const headfulConfig = new PlaywrightProvider({ ...config, launch: { ...config.launch, headless: true } })
+    assert.equal(headfulConfig.desiredHeadless(), false, 'the switch overrides launch.headless: true')
+
+    fs.writeFileSync(file, JSON.stringify({ enabled: true }))
+    assert.equal(headfulConfig.desiredHeadless(), true, 'no user choice: the configured default applies')
+  } finally {
+    if (previous === undefined) delete process.env.DSH_BROWSER_STATE_FILE
+    else process.env.DSH_BROWSER_STATE_FILE = previous
+    fs.rmSync(dir, { recursive: true, force: true })
+  }
+})
+
 test('快照路径也要认出"值像令牌"的 cookie（否则快照视图会少报登录）', async () => {
   // 2026-10-16 用真实导出文件核对时发现：provider 的快照路径直接把导出文件的行丢给
   // summarizeLoginSites，而导出文件里只有原始 value、没有 tokenLike —— 于是"值像令牌"这条信号

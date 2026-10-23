@@ -45,6 +45,10 @@ function stateFile(): string {
 
 let _enabled = true
 let _engine: SnapshotEngine | undefined = undefined
+/** User's window-mode choice: true = headless, undefined = follow the config. */
+let _headless: boolean | undefined = undefined
+/** Config default pushed in by the provider (display only). */
+let _configuredHeadless: boolean | undefined = undefined
 /** Default pushed in by the provider that is actually loaded (display only). */
 let _configuredEngine: SnapshotEngine | undefined = undefined
 /** Effective tool gates, pushed in by the tool family when it is applied (display only). */
@@ -59,13 +63,16 @@ function load() {
   const previous = _enabled
   try {
     const txt = fs.readFileSync(stateFile(), 'utf8')
-    const obj = JSON.parse(txt) as { enabled?: unknown; engine?: unknown } | null
+    const obj = JSON.parse(txt) as { enabled?: unknown; engine?: unknown; headless?: unknown } | null
     if (obj !== null && typeof obj === 'object') {
       if (typeof obj.enabled === 'boolean') _enabled = obj.enabled
       // The file is authoritative for the page-reading mode: an absent or
       // unknown value means "follow the configured default" (undefined here).
       // Files written before this setting existed therefore stay valid.
       _engine = obj.engine === 'legacy' || obj.engine === 'aria' ? obj.engine : undefined
+      // Same contract as engine: absent/unknown means "follow the configured
+      // default", so files written before this setting existed stay valid.
+      _headless = typeof obj.headless === 'boolean' ? obj.headless : undefined
     }
   } catch {
     // Missing file / parse error / unreadable: keep the current values.
@@ -91,7 +98,9 @@ function persist() {
     const tmp = target + '.tmp'
     // Keep the historical shape until the user actually picks a page-reading
     // mode: an absent `engine` means "use the configured default".
-    const payload = _engine === undefined ? { enabled: _enabled } : { enabled: _enabled, engine: _engine }
+    const payload: { enabled: boolean; engine?: SnapshotEngine; headless?: boolean } =
+      _engine === undefined ? { enabled: _enabled } : { enabled: _enabled, engine: _engine }
+    if (_headless !== undefined) payload.headless = _headless
     fs.writeFileSync(tmp, JSON.stringify(payload, null, 2))
     fs.renameSync(tmp, target)
   } catch {
@@ -129,6 +138,54 @@ export function subscribe(fn: (enabled: boolean) => void) {
   return () => {
     _subscribers.delete(fn)
   }
+}
+
+
+/**
+ * The window mode the user picked (true = headless), or undefined when they
+ * never picked one — the configured default then applies.
+ */
+export function getHeadless(): boolean | undefined {
+  load()
+  return _headless
+}
+
+/** Persist the window-mode choice. Returns true when the value changed. */
+export function setHeadless(next: boolean): boolean {
+  load()
+  if (typeof next !== 'boolean') return false
+  if (_headless === next) return false
+  _headless = next
+  persist()
+  return true
+}
+
+/** Publish the configured default (launch.headless) for display. */
+export function publishConfiguredHeadless(value: boolean): void {
+  _configuredHeadless = value === true
+}
+
+/** The configured default, when the provider has published it. */
+export function getConfiguredHeadless(): boolean | undefined {
+  return _configuredHeadless
+}
+
+/**
+ * Effective window mode: the user's choice, else the configured default, else
+ * the shipped default (headful).
+ *
+ * @param configuredFallback - config default when the provider has not published one
+ */
+export function getEffectiveHeadless(configuredFallback: boolean = false): boolean {
+  load()
+  if (_headless !== undefined) return _headless
+  return _configuredHeadless !== undefined ? _configuredHeadless : configuredFallback === true
+}
+
+/** Did the user pick the window mode themselves? (The card shows "你选的".) */
+export function isHeadlessUserChosen(): boolean {
+  load()
+  return _headless !== undefined
 }
 
 /**

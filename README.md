@@ -281,6 +281,12 @@ Both are honest trades, not free wins: a diff is smaller but requires the model 
 tree, and an interactive-only snapshot hides the prose the model may want to read. Measure before
 turning them on in a deployment that shares prompts across many users.
 
+### Window mode (headful / headless)
+
+The Settings card has a **浏览器窗口** choice: show the window (headful, the default) or run it in the background (headless). The pick is stored in `~/.dsh/dsh-browser-playwright.state.json` and survives restarts; `launch.headless` stays the configured default for anyone who never picks.
+
+Switching takes effect on the **next browser operation**: the provider compares the mode it launched with against the desired one and relaunches (login state is exported first, so the login survives; tabs and unsaved page state do not). Headless is honest about its cost — with no visible window, the “watch it and take over” guarantee for sign-ins and CAPTCHAs no longer holds, so use it only for unattended work where you accept that.
+
 ### Cache and disk
 
 The Settings card also carries a **缓存与磁盘** section: Chromium's pure caches inside the plugin's profile, `dsh-*` residue in `%TEMP%`, updater installers of the installed version, and the request-image cache are listed with their sizes; you preview first (“先预演”) and only then confirm. Cookies, Local Storage, Service Worker, IndexedDB, Network, Preferences and `~/.dsh/attachments` are never in scope — the target list is a closed enum in `src/cache-clean.ts`, and no path is ever taken from the request.
@@ -500,3 +506,5 @@ MIT
 - **新增两只诊断工具**：`browser_console_messages`（控制台报错）与 `browser_network_requests`（网络请求），用于"点了没反应"时快速定位原因。
 - **接口与实现同步**：`BrowserSession` 补齐 9 个实现里已有的方法；`errors.ts` 补齐 12 个实际在用的错误码；`BrowserSnapshot` 补 `dialogNote` / `landingNote`；`TabInfo` 补 `active`；`runtime-state` / `cdp-policy` 新增类型声明。
 - **依赖范围修正**：`devDependencies` 与 `peerDependencies` 对齐，可在当前 DSH 版本下安装。
+
+**有问题直接去[讨论区](https://github.com/miqian-nomad/dsh-browser-playwright-codex/discussions)开个帖说，用得顺手也可以来吭一声——就我一个人维护，回得慢，但每条都看。**

@@ -34,6 +34,26 @@ export declare function setEnabled(next: boolean): boolean;
 /** Subscribe to enable-state transitions. Returns an unsubscribe function. */
 export declare function subscribe(fn: (enabled: boolean) => void): () => void;
 /**
+ * The window mode the user picked (true = headless), or undefined when they
+ * never picked one — the configured default then applies.
+ */
+export declare function getHeadless(): boolean | undefined;
+/** Persist the window-mode choice. Returns true when the value changed. */
+export declare function setHeadless(next: boolean): boolean;
+/** Publish the configured default (launch.headless) for display. */
+export declare function publishConfiguredHeadless(value: boolean): void;
+/** The configured default, when the provider has published it. */
+export declare function getConfiguredHeadless(): boolean | undefined;
+/**
+ * Effective window mode: the user's choice, else the configured default, else
+ * the shipped default (headful).
+ *
+ * @param configuredFallback - config default when the provider has not published one
+ */
+export declare function getEffectiveHeadless(configuredFallback?: boolean): boolean;
+/** Did the user pick the window mode themselves? (The card shows "你选的".) */
+export declare function isHeadlessUserChosen(): boolean;
+/**
  * The page-reading mode the user picked, or undefined when they never picked
  * one — the configured default then applies.
  */

@@ -32,6 +32,8 @@ export declare class PlaywrightProvider {
     id: string;
     /** Legacy (persistent:false) shared browser instance. */
     browser: Browser | undefined;
+    /** Window mode the live process was launched with (undefined = nothing running). */
+    launchedHeadless: boolean | undefined;
     /** Persistent-mode shared profile-backed context (the personal window). */
     context: BrowserContext | undefined;
     entries: Map<string, OwnerEntry>;
@@ -83,6 +85,18 @@ export declare class PlaywrightProvider {
     };
     /** One line describing a parked dialog for the tool result. */
     dialogNoteFor(pending: PendingDialogRecord): string;
+    /**
+     * Window mode to launch with: the user's switch wins over the configured
+     * default. Read on every launch, so a change lands on the next operation
+     * without touching a patch file.
+     */
+    desiredHeadless(): boolean;
+    /**
+     * Close a running process whose mode no longer matches. The next acquire
+     * relaunches with the new mode; login state is exported first, so only the
+     * tabs and unsaved page state are lost — never the login.
+     */
+    private relaunchIfModeChanged;
     acquire(owner: string): Promise<PlaywrightSession>;
     disposeOwner(owner: string): Promise<void>;
     dispose(): Promise<void>;

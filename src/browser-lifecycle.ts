@@ -28,7 +28,8 @@ export async function ensureContext(provider: PlaywrightProvider) {
     provider.context = undefined
   }
   fs.mkdirSync(provider.profileDir, { recursive: true })
-  const { executablePath, channel, headless } = provider.config.launch
+  const { executablePath, channel } = provider.config.launch
+  const headless = provider.desiredHeadless()
   const headful = !headless
   const attempts = []
   const baseOptions = {
@@ -56,6 +57,7 @@ export async function ensureContext(provider: PlaywrightProvider) {
   const start = async (extra: Record<string, unknown>) => {
     try {
       provider.context = await chromium.launchPersistentContext(provider.profileDir, { ...baseOptions, ...extra })
+      provider.launchedHeadless = headless
     } catch (error) {
       // A stale Chrome singleton lock from a dirty shutdown breaks a
       // relaunch into the same profile; clear the lock files and
@@ -63,6 +65,8 @@ export async function ensureContext(provider: PlaywrightProvider) {
       if (error instanceof Error && /user data directory|SingletonLock|ProcessSingleton/i.test(error.message)) {
         await provider.clearChromeLocks()
         provider.context = await chromium.launchPersistentContext(provider.profileDir, { ...baseOptions, ...extra })
+        provider.launchedHeadless = headless
+      provider.launchedHeadless = headless
       } else {
         throw error
       }
@@ -141,11 +145,13 @@ export async function clearChromeLocks(provider: PlaywrightProvider) {
 /** Launch the browser once, probing the configured or auto-detected channel. */
 export async function ensureBrowser(provider: PlaywrightProvider) {
   if (provider.browser !== undefined) return provider.browser
-  const { executablePath, channel, headless } = provider.config.launch
+  const { executablePath, channel } = provider.config.launch
+  const headless = provider.desiredHeadless()
   const attempts = []
   if (executablePath !== undefined) {
     try {
       provider.browser = await chromium.launch({ executablePath, headless, ...HUMANIZED_LAUNCH })
+      provider.launchedHeadless = headless
       return provider.browser
     } catch (error) {
       provider.launchError = error
@@ -156,6 +162,7 @@ export async function ensureBrowser(provider: PlaywrightProvider) {
     for (const candidate of channels) {
       try {
         provider.browser = await chromium.launch({ channel: candidate, headless, ...HUMANIZED_LAUNCH })
+        provider.launchedHeadless = headless
         return provider.browser
       } catch (error) {
         provider.launchError = error

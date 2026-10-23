@@ -19,7 +19,7 @@ import { type PlaywrightConfig } from './config.ts'
 
 import type { Context } from '@deepseek-ai/cordis'
 
-import { subscribe as subscribeEnabled } from './runtime-state.ts'
+import { publishConfiguredHeadless, subscribe as subscribeEnabled } from './runtime-state.ts'
 // Type-only: makes the ctx.browser declaration merge visible to this module.
 import type {} from './service.ts'
 /** Cordis plugin name used by loader diagnostics. */
@@ -44,6 +44,7 @@ export { resolveSnapshotEngine } from './page-snapshot.ts'
 
 export function apply(ctx: Context, config: PlaywrightConfig) {
   const provider = new PlaywrightProvider(config)
+  publishConfiguredHeadless(config.launch.headless === true)
   ctx.browser.registerProvider(provider)
   // Runtime on/off switch: when disabled the UI (or a future hot reload)
   // flips the flag and the provider tears down every active window so the

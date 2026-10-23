@@ -1,6 +1,6 @@
 {
   "name": "dsh-browser-playwright-codex",
-  "version": "0.7.3",
+  "version": "0.7.4",
   "description": "Browser automation for DeepSeek Harness, one plugin: fill in forms, scrape lists and work across tabs in real pages, using the logins you already have. Runs in a visible window that stays quiet when minimised; native dialogs are parked instead of confirmed, CAPTCHA pages are flagged with a note that says stop and hand the page back, password / one-time-code / card fields are refused by browser_fill, and the Settings card (enable/disable, page-reading mode, capability gates) now lives inside this package.",
   "license": "MIT",
   "type": "module",
