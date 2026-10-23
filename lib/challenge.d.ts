@@ -21,6 +21,14 @@ export declare function detectChallenge(snapshot: ChallengeSnapshot): ChallengeM
  * challenge. The browser window is visible on the user's desktop: the agent
  * should pause and ask the user to complete it by hand, then re-snapshot.
  */
+/**
+ * The hint appended when a challenge page is recognised. It has to know the
+ * window mode: headless has no window to complete a slider in, so telling the
+ * user to "finish it in the open window" would be false.
+ *
+ * @param headless - the mode the provider is running in
+ */
+export declare function challengeNote(headless: boolean): string;
 export declare const CHALLENGE_NOTE = "[human verification] The page triggered an anti-bot challenge; it is NOT solvable by automation and must NOT be retried blindly. The browser window is open on the user's desktop \u2014 tell the user a verification appeared, wait for them to finish it (a few seconds), then call browser_snapshot again. The clearance cookie is saved to the profile automatically and keeps working for the session.";
 /**
  * Appended after an action that left the page byte-for-byte unchanged on a page

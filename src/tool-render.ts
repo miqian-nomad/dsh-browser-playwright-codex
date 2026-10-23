@@ -5,8 +5,9 @@
 import type { ContentBlock } from '@deepseek-ai/dsh-llm'
 import type { BrowserSnapshot, DiagnosticsValue } from './types.ts'
 import type { SnapshotValue, ScreenshotValue, TabsValue } from './tool-types.ts'
-import { CHALLENGE_NOTE, detectChallenge, detectSilentPage } from './challenge.ts'
+import { challengeNote, detectChallenge, detectSilentPage } from './challenge.ts'
 import { renderSnapshot, renderSnapshotDiff } from './snapshot-render.ts'
+import * as runtimeState from './runtime-state.ts'
 
 /**
  * Render one diagnostics payload as one line per entry. Diagnostics are read when
@@ -145,7 +146,7 @@ export function snapshotValue(snapshot: BrowserSnapshot): SnapshotValue {
           ']: ' +
           challenge.hint +
           '.\n' +
-          CHALLENGE_NOTE +
+          challengeNote(runtimeState.getEffectiveHeadless(true)) +
           '\n\n' +
           tree) +
       diffBlock,

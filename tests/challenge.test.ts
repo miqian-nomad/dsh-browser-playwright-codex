@@ -12,6 +12,7 @@ import assert from 'node:assert/strict'
 import {
   CHALLENGE_NOTE,
   NO_PROGRESS_MAX_REFS,
+  challengeNote,
   NO_PROGRESS_NOTE,
   detectChallenge,
   detectNoProgress,
@@ -469,4 +470,16 @@ test('the fingerprint changes when the title, the refs or a label change', () =>
   assert.notEqual(snapshotFingerprint({ ...base, refs: 3 }), hash)
   assert.notEqual(snapshotFingerprint({ ...base, nodes: [node('button', '取消')] }), hash)
   assert.notEqual(snapshotFingerprint({ ...base, url: 'https://example.test/next' }), hash)
+})
+
+
+test('the challenge hint tells the truth about the window mode', () => {
+  const headful = challengeNote(false)
+  assert.match(headful, /browser window is open on the user's desktop/i)
+
+  const headless = challengeNote(true)
+  assert.match(headless, /HEADLESS/, 'the headless hint must name the mode')
+  assert.match(headless, /no window to finish it in/i, 'it must not promise a window that does not exist')
+  assert.doesNotMatch(headless, /browser window is open on the user's desktop/i)
+  assert.match(headless, /显示浏览器窗口/, 'it must name the switch that fixes it')
 })
