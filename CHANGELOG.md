@@ -1,3 +1,36 @@
+## 0.7.5 — 2026-10-26
+
+一句话摘要：**两条安全洞补上，同时唤醒不再多开浏览器** —— 白名单从"门口打一次勾"变成"装在浏览器的请求上"，`allowEvaluate` / `allowCdp` 从工具层下沉到会话层（绕过工具直接拿服务也拒），两个任务同时要浏览器时共用一次启动，默认持久化模式下「最多几个会话」也真的算数了。
+
+### Fixed
+
+- **白名单可被绕过（安全）**：入口检查只覆盖 `navigate` / 带 `href` 的点击 / 切标签 / 开标签，页面自己 `location.href='外站'`、meta refresh、`<form action="外站">` 提交、网页自开的弹窗全都绕得过去。实测把名单设成 `127.0.0.1` 后，页面脚本一跳就落在了 `localhost` 上。现在新增 `src/navigation-guard.ts`，把名单**装在这个浏览器 context 的请求上**：发往名单外主机的**导航**当场掐断并报 `URL_NOT_ALLOWED`，**数据请求**（`fetch` / `xhr` / `EventSource`）同样掐断；`script` / 图片 / CSS / 字体 / 媒体这类渲染资源放行，否则页面只会看起来是坏的。空名单（默认）完全不接管路由，所以默认行为一个字没变。
+- **302 跳转是请求拦截看不见的那一跳**：Chromium 在它自己的网络栈里跟随重定向，`context.route()` 根本不会为那一跳触发（实测）。所以每个动作收尾时还会核对页面**最终落在哪个主机**——落在名单外就报 `URL_NOT_ALLOWED`，并把标签页重置成 `about:blank`，绝不留一个可以继续驱动的越界页面。
+- **evaluate / CDP 的开关只在工具层挡（安全）**：此前只有 `tool.ts` 检查 `allowEvaluate` / `allowCdp`，任何拿到浏览器服务的代码（兄弟插件、脚本）都能直接调 `session.evaluate` 跑任意页面 JS，或用 `session.cdp` 发白名单外的 `Runtime.evaluate`（两条都实测跑通）。现在 `session.evaluate` / `session.cdp` 自己就拒（`EVALUATE_DISABLED` / `CDP_DISABLED`），CDP 还要再过一道白名单（`CDP_DENIED`）。**没发布过的门禁算关闭**——部署没说「可以」就是「不可以」。
+- **两个任务同时唤醒会多开浏览器**：`ensureContext` / `ensureBrowser` 没有在途合并，两个会话同时醒来都看到"还没有 context"，于是各自 `launchPersistentContext` 同一个 profile。实测后果比"多开"更难看：第二个死在 Chrome 的单例锁上，恢复流程**把正在运行的那个浏览器的锁文件删了**，而调用方收到的错误是「你没装浏览器」——锁被删正是之后关不干净、残留进程的来路。现在并发调用共享同一次启动，并且在途启动结束就清空；恢复路径也不再动活浏览器的锁文件。
+- **`maxSessions` 在默认（持久化）模式不生效**：这个上限只写在非持久化分支里，而默认就是持久化模式，所以形同虚设。现在它按**会话句柄**生效：最久没用、且当前没有操作在跑的句柄会被回收，共用窗口一动不动，那个 owner 下次拿到一个新句柄（同一批标签页，索引回到 0）。顺便修掉 `browser-lifecycle.ts` 一处复制粘贴多出来的重复赋值。
+- **设置卡可能把关闭的门禁显示成开着**：`publishGates` 原来上报的是「工具是否注册」，而 `registerDisabledTools: true` 会故意把关着的工具也注册（好让模型能发现它并读到说明），于是卡片把关闭的能力显示为开启。现在上报的是能力值本身。
+
+### Added
+
+- **`src/navigation-guard.ts`**：名单的请求层实现，含"文档请求 / 数据请求 / 渲染资源"三分类与拒绝记录。
+- **公开导出（只增不减）**：`isHostAllowed`、`installHostGuard`、`BlockedRequest`、`evaluateDisabled`、`cdpDisabled`。
+- **`tests/host-guard.test.ts`（4 条，真浏览器）**：空名单不插手（默认行为不变）、302 越界被拒并报出主机名、页面自己跳转永远到不了名单外、`fetch` 到名单外**服务器一个请求都没收到**。
+- **`tests/gates-enforcement.test.ts`（5 条，不需要浏览器）**：没发布门禁时 `evaluate` / `cdp` 都拒、开了 CDP 门禁 `Runtime.evaluate` 仍被白名单拒、门禁开关对会话层依旧权威、`getGates()` 报的是能力值。
+- **`tests/concurrency.test.ts`（3 条，真浏览器）**：三个会话同时唤醒共用一个窗口、两个会话同时唤醒共用一个浏览器、持久化模式下 `maxSessions` 按 LRU 回收句柄且窗口不动。
+- **随包验收新增 `[0]` 段（3 条）**：不经工具层直接调 `session.evaluate` / `session.cdp` 必须被拒；开了门禁后 `Runtime.evaluate` 仍报 `CDP_DENIED`。
+
+### Changed
+
+- **行为变化**：代码层调用 `evaluate` / `cdp` 现在也要过门禁，且未发布门禁 = 关闭。走工具层的老路径行为不变（工具层先给出同样口径的错误）。
+- **`allowedDomains` 的语义收紧**：填了名单，就不再只是"插件不去"，而是"这个浏览器不去"。
+- 三个测试文件（`provider` / `regressions` / `scenarios`，另加 `live-smoke`）显式发布门禁——它们本来就直接调 `session.evaluate`，等于把自己声明成"开了开关的部署"。
+
+### Tests
+
+- 全套 243 → **255 条**（+12）：通过 252、跳过 3、失败 0。
+- `npm run verify` 57 → **60 项**：`[0]` 段三条是新增的门禁回归闸。
+
 ## 0.7.4 — 2026-10-23
 
 一句话摘要：**设置卡可以切换有头 / 无头** —— 运行时开关，不用改 YAML、不用重启 DSH；切换在**下一次操作**时生效（先导出登录态，再按新模式重开窗口）。默认仍是有头。

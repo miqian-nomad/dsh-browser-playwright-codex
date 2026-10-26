@@ -9,7 +9,7 @@ import { PlaywrightProvider } from '../src/provider.ts'
 import type { PlaywrightConfig } from '../src/config.ts'
 import { BrowserError } from '../src/errors.ts'
 import type { BrowserNode } from '../src/types.ts'
-import { getLoginSites } from '../src/runtime-state.ts'
+import { getLoginSites, publishGates } from '../src/runtime-state.ts'
 
 // 期望值按 legacy（兼容模式）的树写；隔离掉设置页的真实用户状态，避免假失败。
 process.env.DSH_BROWSER_STATE_FILE = path.join(os.tmpdir(), 'dsh-browser-tests-state-provider.json')
@@ -38,6 +38,11 @@ let base: string
 let provider: PlaywrightProvider
 
 before(async () => {
+  // This file drives session.evaluate directly, which the session itself now
+  // refuses unless a deployment turned the switch on (see
+  // tests/gates-enforcement.test.ts for the other side of that). Publishing the
+  // gates here is the same thing cordis.patch.yml does with allowEvaluate: true.
+  publishGates({ allowEvaluate: true, allowCdp: true, diagnostics: true })
   server = createServer(async (req, res) => {
     if (req.url === '/a') {
       res.writeHead(200, { 'content-type': 'text/html' })
@@ -276,11 +281,11 @@ test('快照路径也要认出"值像令牌"的 cookie（否则快照视图会�
   // 2026-10-16 用真实导出文件核对时发现：provider 的快照路径直接把导出文件的行丢给
   // summarizeLoginSites，而导出文件里只有原始 value、没有 tokenLike —— 于是"值像令牌"这条信号
   // 永远为假，同一个文件在快照路径下报 12 个登录、在线路径报 86 个。
-/** Temp dirs created by tests in this file (they used to leak into %TEMP%). */
-const createdTempDirs: string[] = []
-after(() => {
-  for (const dir of createdTempDirs) fs.rmSync(dir, { recursive: true, force: true })
-})
+  /** Temp dirs created by tests in this file (they used to leak into %TEMP%). */
+  const createdTempDirs: string[] = []
+  after(() => {
+    for (const dir of createdTempDirs) fs.rmSync(dir, { recursive: true, force: true })
+  })
 
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'dsh-provider-state-'))
   createdTempDirs.push(dir)

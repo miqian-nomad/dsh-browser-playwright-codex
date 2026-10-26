@@ -28,7 +28,7 @@ import path from 'node:path'
 import { PlaywrightProvider } from '../lib/provider.js'
 import { Config as ConfigSchema } from '../lib/config.js'
 import { renderSnapshot } from '../lib/snapshot-render.js'
-import { getEffectiveEngine, setSnapshotEngine } from '../lib/runtime-state.js'
+import { getEffectiveEngine, publishGates, setSnapshotEngine } from '../lib/runtime-state.js'
 
 // 验收必须只看代码，不看这台机器上用户的选择。
 // 设置页的「页面识别方式」存在 ~/.dsh/dsh-browser-playwright.state.json，运行时状态层
@@ -127,6 +127,36 @@ const provider = new PlaywrightProvider(
   ConfigSchema({ launch: { headless: true, persistent: false, navigationTimeoutMs: 20000 }, idleTimeoutMs: 0 }),
 )
 const session = await provider.acquire('verify')
+
+// ---------------------------------------------------------------------------
+// [0] 门禁在代码层也成立（2026-10-26 之前的漏洞：开关只在工具层挡）
+// ---------------------------------------------------------------------------
+// 本脚本不经过工具层，直接调 session —— 正是当初绕过门禁的那条路。默认（没发布门禁）
+// 必须拒绝；确认之后再把门禁打开，好让后面的用例能读页面状态。
+console.log('[0] 门禁：没开门禁时代码层也拒绝')
+let evaluateGate = ''
+try {
+  await session.evaluate('1 + 1')
+} catch (e) {
+  evaluateGate = e.code
+}
+check('evaluate 未开门禁时报 EVALUATE_DISABLED', evaluateGate === 'EVALUATE_DISABLED', evaluateGate)
+let cdpGate = ''
+try {
+  await session.cdp('DOM.getDocument', { depth: 1 })
+} catch (e) {
+  cdpGate = e.code
+}
+check('cdp 未开门禁时报 CDP_DISABLED', cdpGate === 'CDP_DISABLED', cdpGate)
+publishGates({ allowEvaluate: true, allowCdp: true, diagnostics: true })
+let cdpDenied = ''
+try {
+  // 门禁打开也仍然要过白名单：Runtime.evaluate 是任意页面 JS，永远不在名单里。
+  await session.cdp('Runtime.evaluate', { expression: 'document.cookie', returnByValue: true })
+} catch (e) {
+  cdpDenied = e.code
+}
+check('开门禁后 Runtime.evaluate 仍报 CDP_DENIED', cdpDenied === 'CDP_DENIED', cdpDenied)
 
 console.log('[1] 快照取名与折叠')
 const s0 = await session.navigate(URL_, 'load')
@@ -366,6 +396,9 @@ const expectedTools = contractMod.registeredToolNames(toolConfig.toolPrefix, {
   registerDisabledTools: toolConfig.registerDisabledTools,
 })
 const byName = (n) => reg.find((t) => t.name === n)
+// apply() 会把有效门禁刷成这份配置里的值（这里出厂默认是关），而下面的用例直接调
+// session 而不是走工具层，所以再打开一次。
+publishGates({ allowEvaluate: true, allowCdp: true, diagnostics: true })
 check('存在 browser_dialog', byName('browser_dialog') !== undefined)
 check(
   'browser_dialog 有 accept 参数',

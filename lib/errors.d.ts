@@ -23,3 +23,15 @@ export declare class BrowserError extends Error {
 }
 /** Wrap an unknown cause into a launch failure with the code preserved. */
 export declare function launchFailed(cause: unknown): BrowserError;
+/**
+ * "browser_evaluate is switched off". One wording, thrown by both layers that
+ * enforce it: the tool layer (before a browser is even launched) and the
+ * session itself (so a programmatic caller cannot go around the switch).
+ * @returns the denial, ready to throw.
+ */
+export declare function evaluateDisabled(): BrowserError;
+/**
+ * "browser_cdp is switched off". Same two-layer rule as {@link evaluateDisabled}.
+ * @returns the denial, ready to throw.
+ */
+export declare function cdpDisabled(): BrowserError;

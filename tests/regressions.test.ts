@@ -31,6 +31,7 @@ import { verifyFill } from '../src/page-actions.ts'
 import { extractionPrompt } from '../src/extract.ts'
 import type { PlaywrightSession } from '../src/session.ts'
 import type { BrowserNode } from '../src/types.ts'
+import { publishGates } from '../src/runtime-state.ts'
 
 // The suite expects the legacy tree and must not inherit the user's settings-page choice.
 process.env.DSH_BROWSER_STATE_FILE = path.join(os.tmpdir(), 'dsh-browser-tests-state-regressions.json')
@@ -144,6 +145,11 @@ function handle(req: IncomingMessage, res: ServerResponse): void {
 }
 
 before(async () => {
+  // Several regressions read page state with session.evaluate, which the session
+  // refuses unless the deployment turned the switch on. Same shape as
+  // cordis.patch.yml's allowEvaluate: true. The denial side is tested in
+  // tests/gates-enforcement.test.ts.
+  publishGates({ allowEvaluate: true, allowCdp: true, diagnostics: true })
   server = createServer(handle)
   await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve))
   const address = server.address()

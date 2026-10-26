@@ -21,6 +21,8 @@ import type { StreamChunk } from '@deepseek-ai/dsh-llm'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import BrowserRuntime from '../src/service.ts'
 import { PlaywrightProvider } from '../src/provider.ts'
+import { PlaywrightSession } from '../src/session.ts'
+import type { BrowserContext, Page } from 'playwright-core'
 import type { PlaywrightConfig } from '../src/config.ts'
 import * as browserTool from '../src/tool.ts'
 import type { ToolConfig } from '../src/tool.ts'
@@ -705,7 +707,7 @@ test('click policy: an in-page javascript: link is clickable and stays on the pa
   }
 })
 
-test('tab policy: switch_tab refuses a tab a page opened outside the allow-list', async () => {
+test('tab policy: a popup to a disallowed host is stopped on the wire, and switch_tab still refuses such a tab', async () => {
   const provider = policyProvider()
   try {
     const ctx = await assembleWith(provider)
@@ -713,39 +715,45 @@ test('tab policy: switch_tab refuses a tab a page opened outside the allow-list'
     const opened = await call(ctx, 'browser_navigate', { url: store.base + '/policy' }, agentId)
     assert.equal(opened.isError, false, textBlock(opened))
 
-    // window.open is the one navigation the plugin never sees, so this is how a
-    // tab outside the allow-list comes into existence in the first place.
+    // window.open is the one navigation no entry point sees. Until 2026-10-26
+    // this created a LOADED tab outside the allow-list, held back only by the
+    // switch_tab check. The host guard now refuses the document request itself
+    // (navigation-guard.ts), so the action reports the refusal instead of
+    // silently letting the tab load.
     const openRef = refInTree(treeOf(opened), 'button', 'Open external tab')
     assert.ok(openRef, 'the popup button must be in the snapshot')
     const popup = await call(ctx, 'browser_click', { ref: openRef }, agentId)
-    assert.equal(popup.isError, false, textBlock(popup))
+    assert.equal(popup.isError, true, 'the popup navigation must be reported: ' + textBlock(popup))
+    assert.ok(textBlock(popup).includes('allowedDomains'), textBlock(popup))
+    assert.ok(textBlock(popup).includes('localhost'), 'the refusal must name the host: ' + textBlock(popup))
 
-    const listed = await callUntil(
-      ctx,
-      'browser_tabs',
-      {},
-      (value) => ((value as { tabs?: unknown[] }).tabs ?? []).length >= 2,
-      'the page-opened tab is listed',
-      agentId,
+    // Whatever tab Chromium kept around, it never loaded the disallowed host.
+    await new Promise((resolve) => setTimeout(resolve, 500))
+    const listed = await call(ctx, 'browser_tabs', {}, agentId)
+    const tabs = ((listed.value as { tabs?: Array<{ index: number; url: string }> }).tabs ?? []).slice()
+    assert.ok(
+      tabs.every((tab) => !tab.url.includes('localhost')),
+      'no tab may end up on the disallowed host: ' + JSON.stringify(tabs),
     )
-    const tabs = (listed.value as { tabs: Array<{ index: number; url: string }> }).tabs
-    const outside = tabs.find((tab) => tab.url.includes('localhost'))
-    assert.ok(outside, 'the popup tab must be listed with its URL: ' + JSON.stringify(tabs))
-
-    const denied = await call(ctx, 'browser_switch_tab', { index: outside.index }, agentId)
-    assert.equal(denied.isError, true, 'switching to a disallowed tab must be refused')
-    assert.ok(textBlock(denied).includes('not in allowedDomains'), textBlock(denied))
 
     // The refusal left the session on the tab it was already driving.
     const still = await call(ctx, 'browser_snapshot', {}, agentId)
     assert.match(treeOf(still), /Link policy/)
-
-    // Control: the allowed tab is still reachable.
-    const back = await call(ctx, 'browser_switch_tab', { index: 0 }, agentId)
-    assert.equal(back.isError, false, textBlock(back))
   } finally {
     await provider.dispose()
   }
+  // Second layer, kept on purpose: a tab can already exist on a disallowed host
+  // (a profile restored from an older version, a document the guard never saw),
+  // and such a tab must not become one this agent drives.
+  const session = new PlaywrightSession(policyProvider(), 'unit-policy-tab', {} as BrowserContext)
+  const fakePage = (url: string) => ({ url: () => url }) as unknown as Page
+  assert.throws(
+    () => session.assertTabAllowed(fakePage('http://localhost:3000/x')),
+    /not in allowedDomains/,
+    'switch_tab must refuse a disallowed host',
+  )
+  assert.doesNotThrow(() => session.assertTabAllowed(fakePage('http://127.0.0.1:3000/x')))
+  assert.doesNotThrow(() => session.assertTabAllowed(fakePage('about:blank')))
 })
 
 // ---------------------------------------------------------------------------

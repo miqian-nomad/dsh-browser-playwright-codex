@@ -8,7 +8,9 @@ import type { PlaywrightProvider } from './provider.ts'
 import type { BrowserNode, BrowserSnapshot, DiagnosticsEntry, DocumentResponse, LoadState } from './types.ts'
 import type { RefSignature } from './page-snapshot.ts'
 import { looksLikeToken, registrableDomain, type CookieRow } from './login-sites.ts'
-import { BrowserError } from './errors.ts'
+import { BrowserError, cdpDisabled, evaluateDisabled } from './errors.ts'
+import { isCdpMethodAllowed, cdpDenialMessage } from './cdp-policy.ts'
+import { getGates } from './runtime-state.ts'
 import { asTimeoutError, isAbortError, isContextDestroyed, isCrashError } from './page-diagnostics.ts'
 import { consoleMessages, networkRequests, pageData, trackPage } from './page-diagnostics.ts'
 import { elementStabilityProbe, pageStabilityProbe } from './page-probes.ts'
@@ -49,7 +51,7 @@ import {
   snapshot,
 } from './page-snapshot.ts'
 
-import { assertAllowedUrl } from './url-policy.ts'
+import { assertAllowedUrl, isHostAllowed } from './url-policy.ts'
 
 /** Live session over one browser context owned by one caller. */
 export class PlaywrightSession {
@@ -99,6 +101,67 @@ export class PlaywrightSession {
     this.provider = provider
     this.owner = owner
     this.context = context
+  }
+  /**
+   * Turn a navigation the host guard refused into a named refusal.
+   *
+   * A page can navigate itself (location.href, meta refresh, a form submit, a
+   * 302) without passing any entry-point check. The guard stops the document
+   * request; this reports it, so "I clicked and nothing happened" becomes
+   * URL_NOT_ALLOWED naming the host. Consumed once: a later action must not
+   * inherit an earlier refusal.
+   */
+  throwIfNavigationBlocked() {
+    const refused = this.provider.takeBlockedNavigation()
+    if (refused === undefined) return
+    throw new BrowserError(
+      'URL_NOT_ALLOWED',
+      'the page tried to navigate to ' +
+        refused.url +
+        ' and was blocked: host ' +
+        refused.host +
+        ' is not in allowedDomains. Nothing left this site — the request was stopped before it reached the network. ' +
+        'The page you were on is unchanged; tell the user the site tried to leave the allow-list.',
+    )
+  }
+  /**
+   * Refuse to go on driving a page that is outside the allow-list.
+   *
+   * The request-level guard (navigation-guard.ts) catches navigations started
+   * from inside the page, but NOT a redirect the browser follows on its own:
+   * measured 2026-10-26, `context.route()` never sees the hop after a
+   * `continue()`d request, so `127.0.0.1/x` answering `302 → localhost/y` lands
+   * on the disallowed host with no route event at all. So every action that
+   * settles a page also checks where it actually ended up.
+   *
+   * The off-list page is abandoned for about:blank (hostless, always allowed)
+   * instead of being left there: otherwise the session would wedge on a page it
+   * may never drive, and "navigate somewhere allowed" could not fix it.
+   * @param page - the page this action ran on.
+   */
+  async assertCurrentUrlAllowed(page: Page) {
+    const raw = page.url()
+    if (raw === '') return
+    let target: URL
+    try {
+      target = new URL(raw)
+    } catch {
+      return
+    }
+    if (target.protocol !== 'http:' && target.protocol !== 'https:') return
+    const allowedDomains = this.provider.config.allowedDomains ?? []
+    if (isHostAllowed(target.hostname, allowedDomains)) return
+    await page.goto('about:blank').catch(() => {})
+    throw new BrowserError(
+      'URL_NOT_ALLOWED',
+      'the page ended up on host ' +
+        target.hostname +
+        ' (' +
+        raw +
+        '), which is not in allowedDomains — a redirect the browser followed on its own. ' +
+        'The tab has been reset to about:blank, so nothing outside the allow-list stays reachable. ' +
+        'Tell the user: the site tried to send this session off the allow-list.',
+    )
   }
   /**
    * The session's cookies, reduced to what the login inference needs. `value` is dropped here,
@@ -160,6 +223,9 @@ export class PlaywrightSession {
   }
   /** Run one operation under busy tracking: idle disposal defers until it settles. */
   run<T>(operation: () => Promise<T>): Promise<T> {
+    // Every action starts from a clean slate: a refusal recorded during an
+    // earlier action must not be reported as this one's outcome.
+    this.provider.blockedNavigation = undefined
     this.provider.beginOp(this.owner)
     return Promise.resolve()
       .then(operation)
@@ -535,6 +601,13 @@ export class PlaywrightSession {
     return pageData(this)
   }
   async evaluate(expression: string, signal?: AbortSignal) {
+    // The switch is enforced HERE, not only in the tool layer: browser_evaluate
+    // used to be guarded by tool.ts alone, so anything holding the service (a
+    // sibling plugin, a script) could run arbitrary page JavaScript with the
+    // user's logins while the setting said off (measured 2026-10-26). An
+    // unpublished gate set counts as OFF — a deployment that never said yes has
+    // not said yes.
+    if (!(getGates()?.allowEvaluate ?? false)) throw evaluateDisabled()
     return this.run(async () => {
       this.assertLive()
       this.provider.touch(this.owner)
@@ -553,11 +626,17 @@ export class PlaywrightSession {
    * Send one raw CDP command on the current page's session and return its
    * result. This is the "direct protocol" escape hatch behind every other
    * tool — the model can inspect geometry, dispatch trusted input events or
-   * query the DOM the same way Chrome DevTools does. Policy (which methods
-   * are allowed) lives in the tool layer via lib/cdp-policy.js; this method
-   * itself performs no filtering so internal callers keep full control.
+   * query the DOM the same way Chrome DevTools does.
+   *
+   * Both rules live here as well as in the tool layer, deliberately: the
+   * allow-list and the switch must hold for anything that reaches this method,
+   * not just for the registered tool. Before 2026-10-26 only `browser_cdp`
+   * checked them, so a caller working through the service could send
+   * `Runtime.evaluate` — arbitrary JavaScript — with the switch off (measured).
    */
   async cdp(method: string, params: Record<string, unknown>, signal?: AbortSignal) {
+    if (!(getGates()?.allowCdp ?? false)) throw cdpDisabled()
+    if (!isCdpMethodAllowed(method)) throw new BrowserError('CDP_DENIED', cdpDenialMessage(method))
     return this.run(async () => {
       this.assertLive()
       this.provider.touch(this.owner)

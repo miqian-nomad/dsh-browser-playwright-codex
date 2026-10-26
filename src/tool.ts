@@ -15,7 +15,7 @@ import { BlockAssembler, createUserMessage } from '@deepseek-ai/dsh-llm'
 // Type-only: makes the ctx.browser declaration merge visible to this module.
 import type {} from './service.ts'
 import type { BrowserSession, DiagnosticsValue } from './types.ts'
-import { BrowserError } from './errors.ts'
+import { BrowserError, cdpDisabled, evaluateDisabled } from './errors.ts'
 import { registeredSuffixes, type ToolSuffix, type ToolSurfaceConfig } from './contract.ts'
 import { getEnabled, publishGates, publishLoginSites } from './runtime-state.ts'
 import { summarizeLoginSites } from './login-sites.ts'
@@ -113,12 +113,17 @@ export function apply(ctx: Context, config: ToolConfig): void {
   // Tell the Settings page what is actually in effect. It cannot read this
   // config itself (the value may come from a bundle patch, a profile patch or a
   // home-level patch), so the tool family publishes it at registration and the
-  // switch shows the truth instead of a guess. Driven by the same values that
-  // decided which tools register, so the two can never disagree.
+  // switch shows the truth instead of a guess.
+  //
+  // These are the CAPABILITY values, not `registered.has(...)`: the session
+  // layer enforces the switch too, and `registerDisabledTools` deliberately
+  // registers a switched-off tool so the model can discover it. Reading
+  // registration as permission published "on" for a gate that was off — the
+  // settings card showed a switch that was not there.
   publishGates({
-    allowEvaluate: registered.has('evaluate'),
-    allowCdp: registered.has('cdp'),
-    diagnostics: registered.has('console_messages'),
+    allowEvaluate: config.allowEvaluate,
+    allowCdp: config.allowCdp,
+    diagnostics: config.diagnostics,
   })
   /** Register one gated tool only when this configuration keeps it live. */
   const registerMaybe = (suffix: ToolSuffix, definition: ToolDefinition): void => {
@@ -671,10 +676,7 @@ export function apply(ctx: Context, config: ToolConfig): void {
       },
       async execute(args, exec) {
         if (!config.allowEvaluate) {
-          throw new BrowserError(
-            'EVALUATE_DISABLED',
-            'browser_evaluate is disabled; set allowEvaluate: true on the browser-tool plugin to enable arbitrary page JavaScript',
-          )
+          throw evaluateDisabled()
         }
         const session = await acquire(exec)
         return (await session.evaluate(args.expression, exec.signal)) as JsonValue
@@ -714,10 +716,7 @@ export function apply(ctx: Context, config: ToolConfig): void {
       },
       async execute(args, exec) {
         if (!config.allowCdp) {
-          throw new BrowserError(
-            'CDP_DISABLED',
-            'browser_cdp is disabled; set allowCdp: true on the browser-tool plugin to enable raw CDP inspection commands',
-          )
+          throw cdpDisabled()
         }
         if (!isCdpMethodAllowed(args.method)) {
           throw new BrowserError('CDP_DENIED', cdpDenialMessage(args.method))

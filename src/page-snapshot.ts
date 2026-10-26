@@ -112,6 +112,11 @@ export async function settleAndSnapshot(
     return await session.capture(page, undefined, true)
   })
   if (raced.blocked) return session.blockedSnapshot(page, raced.pending)
+  // A page can leave the allow-list without any entry-point check seeing it: the
+  // request-level guard catches self-started navigations, and this catches the
+  // redirect the browser followed on its own.
+  session.throwIfNavigationBlocked()
+  await session.assertCurrentUrlAllowed(page)
   return raced.value as BrowserSnapshot
 }
 

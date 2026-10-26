@@ -4,6 +4,28 @@
  */
 import { BrowserError } from './errors.ts'
 
+/**
+ * Is this host inside the allow-list? Empty list means "any host".
+ *
+ * Suffix matching is deliberately anchored one level down: `example.com`
+ * admits `example.com` and `a.example.com`, never `notexample.com` and never
+ * `example.com.evil.net`. A configured entry is compared after
+ * normalisation (lower case, leading dot dropped), because a user writing
+ * `.example.com` means the domain, not a subdomain literally named "example".
+ * @param host - hostname to test, e.g. "a.example.com".
+ * @param allowedDomains - configured suffixes; empty means everything passes.
+ * @returns true when the host is allowed.
+ */
+export function isHostAllowed(host: string, allowedDomains: readonly string[]) {
+  if (allowedDomains.length === 0) return true
+  const target = host.toLowerCase()
+  return allowedDomains.some((raw) => {
+    const suffix = raw.trim().toLowerCase().replace(/^\.+/, '')
+    if (suffix === '') return false
+    return target === suffix || target.endsWith('.' + suffix)
+  })
+}
+
 /** Validate one absolute URL against the navigation policy. */
 export function assertAllowedUrl(raw: string, allowedDomains: readonly string[]) {
   let parsed
@@ -17,8 +39,7 @@ export function assertAllowedUrl(raw: string, allowedDomains: readonly string[])
   }
   if (allowedDomains.length > 0) {
     const host = parsed.hostname.toLowerCase()
-    const allowed = allowedDomains.some((suffix) => host === suffix || host.endsWith('.' + suffix))
-    if (!allowed) {
+    if (!isHostAllowed(host, allowedDomains)) {
       throw new BrowserError('URL_NOT_ALLOWED', 'host ' + parsed.hostname + ' is not in allowedDomains')
     }
   }

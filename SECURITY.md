@@ -114,7 +114,7 @@ Two honest notes:
 npm test          # 219 tests: contracts, tool schemas, scenarios,
                   # aria engine, CDP policy, diff, click/tab allow-lists, snapshot rendering,
                   # prompt budget, docs-vs-reality consistency
-npm run verify    # 57 self-contained acceptance checks in a checkout (56 checks + 1 skipped
+npm run verify    # 60 self-contained acceptance checks in a checkout (59 checks + 1 skipped
                   # from an npm install, where there is no src/): no DSH, no network, local fixture server
 npm run doctor    # the host packages this plugin imports are still exporting what it uses
 npm run cost      # resident prompt cost of the registered tool surface

@@ -153,6 +153,9 @@ export async function navigate(
       if (racedNav.blocked) return session.blockedSnapshot(page, racedNav.pending)
     } catch (error) {
       if (isAbortError(error) || signal?.aborted === true) throw error
+      // A redirect chain can leave the allow-list: the guard refuses the hop and
+      // Playwright reports a plain navigation failure. Name the real cause.
+      session.throwIfNavigationBlocked()
       throw asTimeoutError('navigation', error)
     }
     return session.settleAndSnapshot(page, true)
@@ -780,6 +783,7 @@ export async function back(session: PlaywrightSession, signal: AbortSignal | und
       await withAbort(page.goBack({ timeout: session.timeoutMs() }), signal)
     } catch (error) {
       if (isAbortError(error)) throw error
+      session.throwIfNavigationBlocked()
       throw asTimeoutError('navigation', error)
     }
     return session.settleAndSnapshot(page, true)
@@ -793,6 +797,7 @@ export async function forward(session: PlaywrightSession, signal: AbortSignal | 
       await withAbort(page.goForward({ timeout: session.timeoutMs() }), signal)
     } catch (error) {
       if (isAbortError(error)) throw error
+      session.throwIfNavigationBlocked()
       throw asTimeoutError('navigation', error)
     }
     return session.settleAndSnapshot(page, true)
@@ -842,6 +847,7 @@ export async function openTab(
       await withAbort(page.goto(target.toString(), { waitUntil, timeout: session.timeoutMs() }), signal)
     } catch (error) {
       if (isAbortError(error)) throw error
+      session.throwIfNavigationBlocked()
       throw asTimeoutError('navigation', error)
     }
     return session.settleAndSnapshot(page, true)

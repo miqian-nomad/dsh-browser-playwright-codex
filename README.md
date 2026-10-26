@@ -232,7 +232,7 @@ All tunables are patchable through the profile's `cordis.patch.yml` (later layer
         ignoreHTTPSErrors: false
       allowedDomains: []                  # e.g. ['github.com'] restricts navigation
       idleTimeoutMs: 0                    # shipped value: never auto-close (schema default 600000 = 10 min)
-      maxSessions: 8                      # LRU eviction (persistent mode: one window)
+      maxSessions: 8                      # live-session cap; persistent mode caps handles, still one window
       snapshot:
         engine: legacy                    # 'legacy' (default) or 'aria' (Playwright ariaSnapshot, refs aligned back)
         maxNodes: 500                     # token budget per snapshot tree
@@ -330,7 +330,7 @@ npm install
 npm test           # full suite: engine/action integration on real Chrome, policy, rendering,
                    # schema assembly, plus the realistic scenario suites below
 npm run verify     # naming/folding + click/hover/dialog acceptance; self-contained, prints its own count
-                   # (57 in a checkout; from an npm install it prints 56 + "1 skipped", because the
+                   # (60 in a checkout; from an npm install it prints 59 + "1 skipped", because the
                    #  `lib/`-vs-`src/` check has no `src/` to compare against)
 npm run verify:live  # same, plus a live sample of a real page (needs network)
 npm run doctor     # does the installed harness still export everything this plugin imports?
@@ -426,7 +426,7 @@ links below go to GitHub rather than to files inside the package:
 - **Headless servers must opt in** — the bundle defaults to `headless: false`; on a headless/remote host set `launch.headless: true`.
 - **Selector-free, not vision-free** — interaction is a11y-tree based; purely visual widgets (canvas, WebGL, custom-drawn controls) may expose no refs. `browser_screenshot` + an image-capable model is the fallback.
 - **Cross-origin iframes** appear as leaf `(frame)` nodes without refs; same-origin frames are walked up to two levels deep.
-- **Evaluate gate is config, not approval** — enabling `allowEvaluate` trusts the model with arbitrary page JavaScript; compose it with the harness approval/permission policy for stricter control.
+- **Evaluate gate is config, not approval** — enabling `allowEvaluate` trusts the model with arbitrary page JavaScript; compose it with the harness approval/permission policy for stricter control. The gate is enforced in **two** places: `tool.ts` refuses before a browser is even launched, and the session itself refuses too (`EVALUATE_DISABLED` / `CDP_DISABLED`), so a sibling plugin or a script holding the browser service cannot go around it. A gate that was never published counts as **off**. `browser_cdp` additionally passes the CDP allow-list at the session layer, so `Runtime.evaluate` is rejected even with the switch on.
 - **The package ships both power gates OFF, and that is deliberate** — `cordis.patch.yml` is part of the package, so anything it enables is enabled for *everyone who installs this*. It therefore sets `allowEvaluate: false` and `allowCdp: false` (the code defaults), and each deployment opts in through its **own profile patch** (`~/.dsh/profiles/<name>/cordis.patch.yml`). A package that shipped them on would be handing every installer a backdoor they never asked for. Snippet:
   ```yaml
   # dsh replaces an entry's config object wholesale — list every key you rely on.
@@ -444,7 +444,7 @@ links below go to GitHub rather than to files inside the package:
 - **`launch.viewport` only applies headless** — the visible window is a real window: it tracks the desktop size (`browser-lifecycle.ts` passes `viewport: null` in headful), so setting 1280×800 there changes nothing. Pin the size by running `headless: true`, or resize the window itself.
 - **Chromium family only** — Firefox/WebKit channels are not probed; providers are swappable if another engine is needed.
 - **Extract needs a dedicated model route** — it does not reuse the main request's route; misconfiguration fails loudly at call time.
-- **JS-driven navigations are not statically checkable** — `allowedDomains` covers `browser_navigate`, `browser_open_tab`, every navigating click (`browser_click`: `ref`, `text`, `precise` and raw-coordinate modes) and `browser_switch_tab`; `mode: "hover"` reveals content without activating anything, so it is not checked against the URL policy. A button whose handler runs `location.href = …` can still leave the allowed hosts, and so can a `<form>` whose `action` points at another host (pressing its submit button is a navigation this check does not statically see), and a tab that is already sitting on a disallowed host stays open (the agent simply refuses to drive it); deploy an external network guard for hard isolation.
+- **`allowedDomains` is enforced on the wire, not just at the entry points** — the host list is installed on the browser context itself (`navigation-guard.ts`), so a navigation nobody vetted is refused by the browser: `location.href = …`, `meta refresh`, a `<form>` posting to another host and a page-opened popup all stop at the request. Data requests (`fetch` / `xhr` / `EventSource`) to a host outside the list are refused too, so page script cannot move data off-site; rendering assets (script / image / CSS / font / media) are left alone, because blocking them only makes a page look broken. `browser_navigate`, `browser_open_tab`, every navigating click and `browser_switch_tab` still check first — that is what produces the friendly error before anything happens. One case needs a second look, because Chromium follows a redirect inside its own network stack where request interception never sees the hop: after every action the page's final URL is checked, and a landing outside the list is refused with `URL_NOT_ALLOWED` and the tab is reset to `about:blank`. Entry-point checks remain as the second layer for a tab that already existed on a disallowed host (a profile from an older version): the agent simply refuses to drive it. For hard isolation from the whole host stack, still deploy an external network guard.
 - **Stability waits are bounded by design** — a perpetually animating element falls back to a forced click on its current rect rather than stalling; a page that never settles is snapshotted after the cap. This is intentional: the agent must never hang.
 - **Challenge detection reads the responses it has actually seen** — the response-header tier applies to a document response this session observed after it attached to the tab. A tab that was already sitting on a challenge page when the session took it over falls through to the widget and wording tiers and, failing those, to the no-progress backstop: it reports a *possible* wall instead of guessing the vendor. A page that is not recognised still never goes silent: a non-2xx document carries an `[http NNN]` note, and a page with no clickable elements and almost no text carries a `[nothing here]` note.
 
@@ -454,7 +454,7 @@ The scenario suites originally surfaced four hazards, now fixed and regression-t
 
 - **Stale refs fail fast** — refs carry a per-snapshot nonce, so after a client-side re-render a stale ref matches nothing and `browser_click` fails with `REF_NOT_FOUND` instead of silently acting on a different element.
 - **Link clicks respect `allowedDomains`** — every click path is checked before any input is delivered: `browser_click` — ref mode (the element's `href`), `precise` ref mode, and raw-coordinate mode (the enclosing link found at the point). A disallowed host is rejected with `URL_NOT_ALLOWED`. `javascript:` links are exempt because they run in-page and navigate nowhere; other non-http(s) schemes stay refused.
-- **A page-opened tab outside `allowedDomains` cannot be driven** — a page can open a tab itself (`target="_blank"`, `window.open`) and the plugin never sees that navigation, so the policy is applied where it can be: `browser_switch_tab` refuses to enter such a tab (the current tab is kept, the tab itself stays open for the user).
+- **A page-opened tab outside `allowedDomains` cannot be driven** — two layers: the request-level guard refuses the popup's document (so it never loads the disallowed host), and `browser_switch_tab` still refuses to enter a tab that already sits on one (the current tab is kept).
 - **Idle disposal defers during operations** — a navigation slower than `idleTimeoutMs` completes normally; disposal only fires when the session is truly idle.
 - **Mid-navigation snapshots settle** — a `browser_snapshot` racing a JS navigation waits for the new document and retries instead of surfacing a raw "Execution context was destroyed" error.
 

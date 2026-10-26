@@ -11,15 +11,11 @@ import os from 'node:os'
 import path from 'node:path'
 import { PlaywrightSession } from './session.ts'
 import type { PlaywrightConfig } from './config.ts'
-import {
-  getEffectiveHeadless,
-  getEnabled,
-  publishConfiguredEngine,
-  publishLoginSites,
-} from './runtime-state.ts'
+import { getEffectiveHeadless, getEnabled, publishConfiguredEngine, publishLoginSites } from './runtime-state.ts'
 import { BrowserError } from './errors.ts'
 import { SNAPSHOT_SCRIPT } from './injected.ts'
 import { isWindowMinimized } from './window-focus.ts'
+import { installHostGuard, type BlockedRequest } from './navigation-guard.ts'
 
 /**
  * Playwright-backed {@link BrowserProvider}: one shared browser, one context
@@ -73,6 +69,26 @@ export class PlaywrightProvider {
   /** Owner that raised the dialog currently parked on a page. */
   lastActor: string | undefined
   lastStatePersist = 0
+  /**
+   * Launch in flight, so two sessions waking up at the same time share ONE
+   * launch instead of racing for the same profile directory.
+   *
+   * Measured 2026-10-26: two concurrent acquires both saw "no context yet" and
+   * both called launchPersistentContext. The second died on Chrome's profile
+   * singleton, the recovery path deleted the RUNNING browser's lock files, and
+   * the caller got "install a Chromium-family browser". The lock files being
+   * gone is what let a later launch start a second browser on the same profile
+   * and leave processes behind.
+   */
+  contextLaunch: Promise<BrowserContext> | undefined = undefined
+  /** Same for the legacy shared-browser launch. */
+  browserLaunch: Promise<Browser> | undefined = undefined
+  /**
+   * The last navigation the host guard refused. Read (and cleared) once by the
+   * action that caused it, so "I clicked and nothing happened" becomes a named
+   * URL_NOT_ALLOWED instead of a silent no-op.
+   */
+  blockedNavigation: BlockedRequest | undefined = undefined
   constructor(config: PlaywrightConfig) {
     this.config = config
     // Tell the settings card which page-reading mode this deployment was
@@ -252,6 +268,11 @@ export class PlaywrightProvider {
       // window (Codex-style). Entries are lightweight session handles on
       // the shared context; the last owner to leave closes the window.
       const context = await this.ensureContext()
+      // maxSessions applies here too, but as a cap on HANDLES: all of them
+      // drive the same window, so evicting one costs nothing visible and the
+      // owner simply gets a fresh handle (same page set, index back to 0) next
+      // time. Before this, the setting was inert in the default mode.
+      this.evictIdleHandles(owner)
       const session = new PlaywrightSession(this, owner, context)
       const entry = { context, session, lastUsed: Date.now(), pending: 0, timer: undefined }
       this.entries.set(owner, entry)
@@ -274,6 +295,8 @@ export class PlaywrightProvider {
       ignoreHTTPSErrors: this.config.launch.ignoreHTTPSErrors,
     })
     context.on('page', (page) => this.armDialogGuard(page))
+    // Allow-list on the wire, not just at the entry points (navigation-guard.ts).
+    await this.installHostGuard(context)
     await context.addInitScript(SNAPSHOT_SCRIPT)
     const session = new PlaywrightSession(this, owner, context)
     const entry = { context, session, lastUsed: Date.now(), pending: 0, timer: undefined }
@@ -286,6 +309,27 @@ export class PlaywrightProvider {
       }
     })
     return session
+  }
+  /**
+   * Keep the number of tracked owner handles inside maxSessions in persistent
+   * mode. Handles share one window, so dropping the least recently used idle
+   * handle costs nothing the user can see; the owner gets a fresh handle on the
+   * same window next time. An owner with an operation in flight is never dropped.
+   * @param keep - the owner being acquired right now.
+   */
+  private evictIdleHandles(keep: string) {
+    const limit = this.config.maxSessions
+    if (!Number.isFinite(limit) || limit <= 0) return
+    while (this.entries.size >= limit) {
+      const candidates = [...this.entries.entries()]
+        .filter(([key, entry]) => key !== keep && entry.pending === 0)
+        .sort((left, right) => left[1].lastUsed - right[1].lastUsed)
+      const oldest = candidates[0]
+      if (oldest === undefined) return
+      const [key, entry] = oldest
+      if (entry.timer !== undefined) clearTimeout(entry.timer)
+      this.entries.delete(key)
+    }
   }
   async disposeOwner(owner: string) {
     const entry = this.entries.get(owner)
@@ -308,6 +352,10 @@ export class PlaywrightProvider {
   }
   async dispose() {
     this.launchedHeadless = undefined
+    // A launch still in flight must not re-create a context after disposal.
+    this.contextLaunch = undefined
+    this.browserLaunch = undefined
+    this.blockedNavigation = undefined
     const owners = [...this.entries.keys()]
     for (const owner of owners) await this.disposeOwner(owner)
     if (this.config.launch.persistent) {
@@ -388,6 +436,32 @@ export class PlaywrightProvider {
   /** Remove stale Chrome singleton lock files inside the profile directory. */
   async clearChromeLocks() {
     return clearChromeLocks(this)
+  }
+  /**
+   * Put the allow-list on the wire for one context: every navigation and every
+   * data request outside the list is refused from then on, whoever started it.
+   * See navigation-guard.ts for why the entry-point checks alone were not enough.
+   * @param context - freshly created context, before its first navigation.
+   */
+  async installHostGuard(context: BrowserContext) {
+    this.blockedNavigation = undefined
+    await installHostGuard(
+      context,
+      () => this.config.allowedDomains ?? [],
+      (blocked) => {
+        if (blocked.document) this.blockedNavigation = blocked
+      },
+    )
+  }
+  /**
+   * Take the pending "a navigation was refused" record, if any. Consumed once:
+   * the next action must not inherit the previous action's refusal.
+   * @returns the refused navigation, or undefined.
+   */
+  takeBlockedNavigation() {
+    const blocked = this.blockedNavigation
+    this.blockedNavigation = undefined
+    return blocked
   }
   /**
    * Collect the login-state fallback WITHOUT ever opening a page while the

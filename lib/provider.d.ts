@@ -1,6 +1,7 @@
 import { type Browser, type BrowserContext, type Dialog, type Page } from 'playwright-core';
 import { PlaywrightSession } from './session.ts';
 import type { PlaywrightConfig } from './config.ts';
+import { type BlockedRequest } from './navigation-guard.ts';
 /**
  * Playwright-backed {@link BrowserProvider}: one shared browser, one context
  * per owner key, LRU eviction, idle disposal, ref-based snapshot interaction.
@@ -50,6 +51,26 @@ export declare class PlaywrightProvider {
     /** Owner that raised the dialog currently parked on a page. */
     lastActor: string | undefined;
     lastStatePersist: number;
+    /**
+     * Launch in flight, so two sessions waking up at the same time share ONE
+     * launch instead of racing for the same profile directory.
+     *
+     * Measured 2026-10-26: two concurrent acquires both saw "no context yet" and
+     * both called launchPersistentContext. The second died on Chrome's profile
+     * singleton, the recovery path deleted the RUNNING browser's lock files, and
+     * the caller got "install a Chromium-family browser". The lock files being
+     * gone is what let a later launch start a second browser on the same profile
+     * and leave processes behind.
+     */
+    contextLaunch: Promise<BrowserContext> | undefined;
+    /** Same for the legacy shared-browser launch. */
+    browserLaunch: Promise<Browser> | undefined;
+    /**
+     * The last navigation the host guard refused. Read (and cleared) once by the
+     * action that caused it, so "I clicked and nothing happened" becomes a named
+     * URL_NOT_ALLOWED instead of a silent no-op.
+     */
+    blockedNavigation: BlockedRequest | undefined;
     constructor(config: PlaywrightConfig);
     available(): boolean;
     /** Pages already carrying the dialog guard (WeakSet: pages stay collectable). */
@@ -98,6 +119,14 @@ export declare class PlaywrightProvider {
      */
     private relaunchIfModeChanged;
     acquire(owner: string): Promise<PlaywrightSession>;
+    /**
+     * Keep the number of tracked owner handles inside maxSessions in persistent
+     * mode. Handles share one window, so dropping the least recently used idle
+     * handle costs nothing the user can see; the owner gets a fresh handle on the
+     * same window next time. An owner with an operation in flight is never dropped.
+     * @param keep - the owner being acquired right now.
+     */
+    private evictIdleHandles;
     disposeOwner(owner: string): Promise<void>;
     dispose(): Promise<void>;
     /** Touch the entry's last-used clock and re-arm its idle timer. */
@@ -120,6 +149,19 @@ export declare class PlaywrightProvider {
     ensureContext(): Promise<BrowserContext>;
     /** Remove stale Chrome singleton lock files inside the profile directory. */
     clearChromeLocks(): Promise<void>;
+    /**
+     * Put the allow-list on the wire for one context: every navigation and every
+     * data request outside the list is refused from then on, whoever started it.
+     * See navigation-guard.ts for why the entry-point checks alone were not enough.
+     * @param context - freshly created context, before its first navigation.
+     */
+    installHostGuard(context: BrowserContext): Promise<void>;
+    /**
+     * Take the pending "a navigation was refused" record, if any. Consumed once:
+     * the next action must not inherit the previous action's refusal.
+     * @returns the refused navigation, or undefined.
+     */
+    takeBlockedNavigation(): BlockedRequest | undefined;
     /**
      * Collect the login-state fallback WITHOUT ever opening a page while the
      * window is put away.

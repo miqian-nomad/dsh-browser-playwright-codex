@@ -61,6 +61,32 @@ export declare class PlaywrightSession {
     lastRefNonce: string | undefined;
     constructor(provider: PlaywrightProvider, owner: string, context: BrowserContext);
     /**
+     * Turn a navigation the host guard refused into a named refusal.
+     *
+     * A page can navigate itself (location.href, meta refresh, a form submit, a
+     * 302) without passing any entry-point check. The guard stops the document
+     * request; this reports it, so "I clicked and nothing happened" becomes
+     * URL_NOT_ALLOWED naming the host. Consumed once: a later action must not
+     * inherit an earlier refusal.
+     */
+    throwIfNavigationBlocked(): void;
+    /**
+     * Refuse to go on driving a page that is outside the allow-list.
+     *
+     * The request-level guard (navigation-guard.ts) catches navigations started
+     * from inside the page, but NOT a redirect the browser follows on its own:
+     * measured 2026-10-26, `context.route()` never sees the hop after a
+     * `continue()`d request, so `127.0.0.1/x` answering `302 → localhost/y` lands
+     * on the disallowed host with no route event at all. So every action that
+     * settles a page also checks where it actually ended up.
+     *
+     * The off-list page is abandoned for about:blank (hostless, always allowed)
+     * instead of being left there: otherwise the session would wedge on a page it
+     * may never drive, and "navigate somewhere allowed" could not fix it.
+     * @param page - the page this action ran on.
+     */
+    assertCurrentUrlAllowed(page: Page): Promise<void>;
+    /**
      * The session's cookies, reduced to what the login inference needs. `value` is dropped here,
      * at the only place cookies enter the summary path, so nothing downstream can leak it.
      */
@@ -278,9 +304,13 @@ export declare class PlaywrightSession {
      * Send one raw CDP command on the current page's session and return its
      * result. This is the "direct protocol" escape hatch behind every other
      * tool — the model can inspect geometry, dispatch trusted input events or
-     * query the DOM the same way Chrome DevTools does. Policy (which methods
-     * are allowed) lives in the tool layer via lib/cdp-policy.js; this method
-     * itself performs no filtering so internal callers keep full control.
+     * query the DOM the same way Chrome DevTools does.
+     *
+     * Both rules live here as well as in the tool layer, deliberately: the
+     * allow-list and the switch must hold for anything that reaches this method,
+     * not just for the registered tool. Before 2026-10-26 only `browser_cdp`
+     * checked them, so a caller working through the service could send
+     * `Runtime.evaluate` — arbitrary JavaScript — with the switch off (measured).
      */
     cdp(method: string, params: Record<string, unknown>, signal?: AbortSignal): Promise<unknown>;
     close(): Promise<void>;

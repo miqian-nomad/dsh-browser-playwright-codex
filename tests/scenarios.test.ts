@@ -17,6 +17,7 @@ import { BrowserError } from '../src/errors.ts'
 import type { BrowserNode, BrowserSession, BrowserSnapshot } from '../src/types.ts'
 import { detectChallenge } from '../src/challenge.ts'
 import { snapshotValue } from '../src/tool-render.ts'
+import { publishGates } from '../src/runtime-state.ts'
 import {
   startStoreServer,
   CATALOG,
@@ -69,6 +70,11 @@ let boundedProvider: PlaywrightProvider
 let idleProvider: PlaywrightProvider
 
 before(async () => {
+  // The journeys assert on page state through session.evaluate, which the
+  // session refuses unless a deployment turned the switch on. Publishing the
+  // gates is what cordis.patch.yml does with allowEvaluate: true; the refusal
+  // side lives in tests/gates-enforcement.test.ts.
+  publishGates({ allowEvaluate: true, allowCdp: true, diagnostics: true })
   store = await startStoreServer()
   provider = new PlaywrightProvider(providerConfig())
   // allowedDomains pins browsing to 127.0.0.1; the storefront footer links to

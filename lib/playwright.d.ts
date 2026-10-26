@@ -11,6 +11,6 @@ export declare const inject: string[];
  */
 export { Config, type PageData, type PlaywrightConfig } from './config.ts';
 export { PlaywrightProvider } from './provider.ts';
-export { assertAllowedUrl } from './url-policy.ts';
+export { assertAllowedUrl, isHostAllowed } from './url-policy.ts';
 export { resolveSnapshotEngine } from './page-snapshot.ts';
 export declare function apply(ctx: Context, config: PlaywrightConfig): void;

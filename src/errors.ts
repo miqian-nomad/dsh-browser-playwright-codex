@@ -34,3 +34,27 @@ export function launchFailed(cause: unknown): BrowserError {
   const detail = cause instanceof Error ? cause.message : String(cause)
   return new BrowserError('BROWSER_LAUNCH_FAILED', 'failed to launch the browser: ' + detail)
 }
+
+/**
+ * "browser_evaluate is switched off". One wording, thrown by both layers that
+ * enforce it: the tool layer (before a browser is even launched) and the
+ * session itself (so a programmatic caller cannot go around the switch).
+ * @returns the denial, ready to throw.
+ */
+export function evaluateDisabled(): BrowserError {
+  return new BrowserError(
+    'EVALUATE_DISABLED',
+    'browser_evaluate is disabled; set allowEvaluate: true on the browser-tool plugin to enable arbitrary page JavaScript',
+  )
+}
+
+/**
+ * "browser_cdp is switched off". Same two-layer rule as {@link evaluateDisabled}.
+ * @returns the denial, ready to throw.
+ */
+export function cdpDisabled(): BrowserError {
+  return new BrowserError(
+    'CDP_DISABLED',
+    'browser_cdp is disabled; set allowCdp: true on the browser-tool plugin to enable raw CDP inspection commands',
+  )
+}
