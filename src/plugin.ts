@@ -30,6 +30,7 @@ import * as tool from './tool.ts'
 import * as settingsCard from './settings-card.ts'
 import { Config as PlaywrightConfigSchema, type PlaywrightConfig } from './config.ts'
 import { Config as ToolConfigSchema, type ToolConfig } from './tool.ts'
+import { warnLegacyRows } from './legacy-config.ts'
 
 /** Config accepted by the single loader row. */
 export interface BrowserPluginConfig {
@@ -59,6 +60,10 @@ export const name = 'browser'
  * @param config - nested config for each concern; the loader fills defaults
  */
 export function apply(ctx: Context, config: BrowserPluginConfig): void {
+  // 0.7.0 stopped reading the three legacy rows, and a stale row downgrades the
+  // deployment to package defaults (both power gates off) without an error.
+  // Advisory only: it reads the patch layers and never blocks the mount.
+  void warnLegacyRows(ctx).catch(() => {})
   ctx.plugin(BrowserRuntime, config.service ?? {})
   ctx.plugin(playwright, config.playwright as PlaywrightConfig)
   ctx.plugin(tool, config.tool as ToolConfig)

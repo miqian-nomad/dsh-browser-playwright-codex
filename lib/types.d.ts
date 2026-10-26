@@ -117,6 +117,29 @@ export interface TabInfo {
     /** True for the tab the session currently drives. */
     readonly active: boolean;
 }
+/**
+ * What `browser_wait` should wait for. Exactly one of `ms`, `selector`, `text`
+ * or `networkIdle` per call; `timeoutMs` bounds the three goal conditions.
+ */
+export interface WaitCondition {
+    /** Fixed sleep in milliseconds (the pre-0.7.6 behaviour, unchanged). */
+    readonly ms?: number;
+    /** Wait until an element matching this CSS selector is visible. */
+    readonly selector?: string;
+    /** Wait until visible text containing this string appears. */
+    readonly text?: string;
+    /** Wait until the page stops issuing requests for 500ms. */
+    readonly networkIdle?: boolean;
+    /** Upper bound for a goal condition; defaults to 15000 and is capped by the deployment. */
+    readonly timeoutMs?: number;
+}
+/** What a completed wait reports back. */
+export interface WaitOutcome {
+    /** Human description of the satisfied condition. */
+    readonly waitedFor: string;
+    /** Wall-clock milliseconds the wait actually took. */
+    readonly elapsedMs: number;
+}
 /** PNG capture of a page or element. */
 export interface ScreenshotCapture {
     readonly mime: 'image/png';
@@ -200,6 +223,11 @@ export interface BrowserSession {
     forward(signal?: AbortSignal): Promise<BrowserSnapshot>;
     /** Wait a bounded duration, letting lazy content arrive. */
     wait(ms: number, signal?: AbortSignal): Promise<void>;
+    /**
+     * Wait for a goal instead of a duration: an element, a piece of text, or a
+     * quiet network. `wait(ms)` stays as it was, so this is purely additive.
+     */
+    waitForCondition(condition: WaitCondition, signal?: AbortSignal): Promise<WaitOutcome>;
     /** List open tabs. */
     tabs(): Promise<readonly TabInfo[]>;
     /** Activate the tab at the given index. */

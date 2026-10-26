@@ -1,3 +1,30 @@
+## 0.7.6 — 2026-10-26
+
+一句话摘要：**等待从"猜时长"变成"等条件"，升级时旧配置不再静默降级** —— `browser_wait` 现在能等元素出现、等文字出现、等网络安静，条件达成那一刻就返回；同时 0.7.0 遗留的旧加载行第一次被主动报出来（此前它会让部署悄悄跑回默认值，两个强能力等于关着）。
+
+### Fixed
+
+- **旧加载行静默降级（升级坑）**：0.7.0 把三行 loader 并成一行 `- id: browser`，旧行不再被读取，但**没有任何提示**——补丁层里还写着 `- id: browser-tool` 的部署会直接按包内默认值运行（`allowEvaluate` / `allowCdp` 默认关闭），用户以为开着其实关着。实测在一个真实的 0.7.4 部署上就是这个状态：工具面只有 16 个，`evaluate` / `cdp` 全不在，而 YAML 里明明写着 `allowEvaluate: true`。新增 `src/legacy-config.ts`：启动时只读扫描 home 层与各 profile 层的 `cordis.patch.yml`，发现旧行就在宿主日志里报出**文件名 + 行号 + 改法**；同一个 DSH home 只报一次，读不到就静默跳过（这条检查永远不会阻止插件加载）。判据只认每行的 `name`（包名），**不认 `- id:`**——id 只是本地标签，别人的插件也可能把行叫成 `browser-tool`，按 id 报警会冤枉人。退役包（`dsh-browser-toggle` / `dsh-browser-playwright`）单独标一类：它们自带旧设置卡，会反复把配置改回旧写法，所以提示里点名"先去掉那一行"。
+- **报错文案还在教旧名字**：`EVALUATE_DISABLED` / `CDP_DISABLED` 的消息此前写"去 browser-tool 插件上打开 allowEvaluate"。那个插件 0.7.0 就没了，照着改还是改不到。现在指向真正的位置：`cordis.patch.yml` 里单行 `- id: browser` 的 `tool.allowEvaluate` / `tool.allowCdp`，并提示设置卡会自动重写这一行。
+- **快照工具的描述让模型去用一个不存在的工具**：合并 click / hover 之后描述里仍写着 `browser_hover`，模型照着调只会得到"没有这个工具"。改成 `browser_click` + `mode:"hover"`。
+- **设置卡写回的 YAML 里 `diagnostics` 键重复**：`renderBrowserBlock` 既按参数写一行、又硬写一行 `diagnostics: false`。解析方各自取第一条所以之前没炸，但重复键在严格 YAML 里是非法的。删掉多余那行。
+
+### Added
+
+- **`browser_wait` 支持条件等待**：`selector`（元素可见）、`text`（可见文字出现）、`networkIdle`（500ms 无请求），与旧的 `ms` 四选一。条件达成立刻返回，并回报"等了什么、花了多少毫秒"；超时报 `ACTION_TIMEOUT` 并提示先取快照看状态，而不是盲目重试。旧行为完整保留：`session.wait(ms)` 一个字没动，`browser_wait { ms }` 照常可用。
+- **`src/wait-conditions.ts`**：校验与执行分离，所以参数错误在**启动浏览器之前**就被拒；会话层自己也会校验一遍，程序化调用绕不过去。`timeoutMs` 默认 15000，上限由部署的 `maxWaitMs` 收紧。
+- **公开导出（只增不减）**：`normalizeWaitCondition`、`describeWait`、`DEFAULT_WAIT_TIMEOUT_MS`、类型 `WaitCondition` / `WaitOutcome`；方法 `PlaywrightSession.waitForCondition()`，以及 `BrowserSession` 接口里对应的声明。
+- **`tests/legacy-config.test.ts`（10 条）**：旧三行布局逐行报出、合并后的单行布局与注释掉的旧行都算干净、改名但沿用旧 `name` 的行也能抓、**别人的插件把行叫 `browser-tool` 不报**、退役包单独归类、警告文本含文件名/行号/替换写法与判据说明、home 与 profile 层都扫、干净的部署一声不响且同一 home 只报一次、home 不存在不抛错。
+- **`tests/wait-conditions.test.ts`（9 条）**：无条件/双条件被拒、`ms` 边界不变、默认 15s 与部署上限、超时文案指向快照、selector / text / networkIdle 三条执行路径各一条（用假页面，不需要真浏览器）。
+
+### Changed
+
+- **说明书瘦身**：新增 4 个参数的同时把常驻成本**净减**——16 工具 11,179 → **11,095** 字符（−84），全量注册 15,782 → 15,698（−84）；字符与 token 的对照见 README 的成本表。压缩的是重复与冗词：快照、填写、弹窗、导航、标签五处描述，加上点击工具的四个参数说明；点击工具那张"每条规则必须还在"的守卫表（30 条）一条没动。
+
+### Tests
+
+- 全套 255 → **274 条**（+19）：通过 271、跳过 3、失败 0。
+
 ## 0.7.5 — 2026-10-26
 
 一句话摘要：**两条安全洞补上，同时唤醒不再多开浏览器** —— 白名单从"门口打一次勾"变成"装在浏览器的请求上"，`allowEvaluate` / `allowCdp` 从工具层下沉到会话层（绕过工具直接拿服务也拒），两个任务同时要浏览器时共用一次启动，默认持久化模式下「最多几个会话」也真的算数了。

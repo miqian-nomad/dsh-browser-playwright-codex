@@ -5,7 +5,15 @@
  */
 import type { BrowserContext, CDPSession, Locator, Page, Request } from 'playwright-core'
 import type { PlaywrightProvider } from './provider.ts'
-import type { BrowserNode, BrowserSnapshot, DiagnosticsEntry, DocumentResponse, LoadState } from './types.ts'
+import type {
+  BrowserNode,
+  BrowserSnapshot,
+  DiagnosticsEntry,
+  DocumentResponse,
+  LoadState,
+  WaitCondition,
+  WaitOutcome,
+} from './types.ts'
 import type { RefSignature } from './page-snapshot.ts'
 import { looksLikeToken, registrableDomain, type CookieRow } from './login-sites.ts'
 import { BrowserError, cdpDisabled, evaluateDisabled } from './errors.ts'
@@ -52,6 +60,7 @@ import {
 } from './page-snapshot.ts'
 
 import { assertAllowedUrl, isHostAllowed } from './url-policy.ts'
+import { normalizeWaitCondition, SESSION_WAIT_CAP_MS, waitForCondition as runWait } from './wait-conditions.ts'
 
 /** Live session over one browser context owned by one caller. */
 export class PlaywrightSession {
@@ -535,6 +544,14 @@ export class PlaywrightSession {
       this.provider.touch(this.owner)
       await withAbort(new Promise((resolve) => setTimeout(resolve, ms)), signal)
     })
+  }
+  /**
+   * Wait for a goal instead of a duration: an element, a piece of text, or a
+   * quiet network. Validated here as well, so a programmatic caller gets the
+   * same refusals the tool layer gives instead of a raw Playwright timeout.
+   */
+  async waitForCondition(condition: WaitCondition, signal?: AbortSignal): Promise<WaitOutcome> {
+    return runWait(this, normalizeWaitCondition(condition, SESSION_WAIT_CAP_MS), signal)
   }
   async tabs() {
     return this.run(async () => {

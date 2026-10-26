@@ -5,7 +5,7 @@
  */
 import type { BrowserContext, CDPSession, Locator, Page, Request } from 'playwright-core';
 import type { PlaywrightProvider } from './provider.ts';
-import type { BrowserNode, BrowserSnapshot, DiagnosticsEntry, DocumentResponse, LoadState } from './types.ts';
+import type { BrowserNode, BrowserSnapshot, DiagnosticsEntry, DocumentResponse, LoadState, WaitCondition, WaitOutcome } from './types.ts';
 import type { RefSignature } from './page-snapshot.ts';
 import { type CookieRow } from './login-sites.ts';
 import type { ActionResult, PendingDialogRecord } from './provider.ts';
@@ -274,6 +274,12 @@ export declare class PlaywrightSession {
     back(signal?: AbortSignal): Promise<BrowserSnapshot>;
     forward(signal?: AbortSignal): Promise<BrowserSnapshot>;
     wait(ms: number, signal?: AbortSignal): Promise<void>;
+    /**
+     * Wait for a goal instead of a duration: an element, a piece of text, or a
+     * quiet network. Validated here as well, so a programmatic caller gets the
+     * same refusals the tool layer gives instead of a raw Playwright timeout.
+     */
+    waitForCondition(condition: WaitCondition, signal?: AbortSignal): Promise<WaitOutcome>;
     tabs(): Promise<{
         index: number;
         url: string;

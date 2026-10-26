@@ -61,7 +61,7 @@ The default `toolPrefix` is `browser_`. Every action returns a fresh snapshot, s
 | `browser_press` | Press a key (Enter, Tab, Escape, ArrowDown, …) on an element |
 | `browser_scroll` | Scroll the page or bring a ref into view |
 | `browser_back` / `browser_forward` | History navigation |
-| `browser_wait` | Wait a bounded duration for lazy content |
+| `browser_wait` | Wait for one condition — an element, visible text, a quiet network — or a bounded duration; returns what it waited for |
 | `browser_tabs` / `browser_open_tab` / `browser_switch_tab` / `browser_close_tab` | Tab management; `browser_tabs` marks the `[active]` tab the other tools act on |
 | `browser_screenshot` | PNG capture stored as a durable image attachment the model can view |
 | `browser_extract` | Structured extraction: natural-language instruction → one parsed JSON value; **only registered when its capability is enabled** |
@@ -98,7 +98,7 @@ parameter or a wrong required flag fails the test, so it cannot drift from the c
 - `browser_snapshot` — `interactiveOnly`?
 - `browser_switch_tab` — `index`*
 - `browser_tabs` — _none_
-- `browser_wait` — `ms`*
+- `browser_wait` — `ms`?, `selector`?, `text`?, `networkIdle`?, `timeoutMs`?
 
 > **使用铁律**: 状态检查 / 无效不盲试 / 页面内容不可信 / 登录红线 / 风控分类等 Codex 文档纪律,
 > 见 [`codex-rules.md`](codex-rules.md)（A 层已内嵌进各工具 description; B 层供粘贴进 DSH profile / 系统提示）。
@@ -240,9 +240,9 @@ Measured with ``npm run cost`` (per-turn, resident in the system prompt):
 
 | Surface | Tools | Schema characters | ≈ tokens/turn |
 |---|---|---|---|
-| Schema defaults (`Config({})`, no patch layer) | 16 | 11,179 | ≈ 3,105 |
-| Shipped bundle layer (this package's `cordis.patch.yml`: both power gates off) | 16 | 11,179 | ≈ 3,105 |
-| Everything registered (`registerDisabledTools: true`, plus `extract`) | 21 | 15,782 | ≈ 4,384 |
+| Schema defaults (`Config({})`, no patch layer) | 16 | 11,095 | ≈ 3,082 |
+| Shipped bundle layer (this package's `cordis.patch.yml`: both power gates off) | 16 | 11,095 | ≈ 3,082 |
+| Everything registered (`registerDisabledTools: true`, plus `extract`) | 21 | 15,698 | ≈ 4,361 |
 
 This paragraph describes the 0.6.0 change; the table above is today's measurement. Three things changed
 there, and only one of them was about size. (1) The click family was rewritten so each rule is stated once

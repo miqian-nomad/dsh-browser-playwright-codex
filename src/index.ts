@@ -27,6 +27,7 @@ export { PlaywrightProvider } from './provider.ts'
 export { assertAllowedUrl, isHostAllowed } from './url-policy.ts'
 export { installHostGuard } from './navigation-guard.ts'
 export type { BlockedRequest } from './navigation-guard.ts'
+export { DEFAULT_WAIT_TIMEOUT_MS, describeWait, normalizeWaitCondition } from './wait-conditions.ts'
 export { Config as PlaywrightConfigSchema } from './config.ts'
 export type { PlaywrightConfig, PageData } from './config.ts'
 export type {
@@ -37,6 +38,8 @@ export type {
   LoadState,
   ScreenshotCapture,
   TabInfo,
+  WaitCondition,
+  WaitOutcome,
 } from './types.ts'
 export type { ToolConfig } from './tool.ts'
 

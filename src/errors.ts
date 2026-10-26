@@ -44,7 +44,7 @@ export function launchFailed(cause: unknown): BrowserError {
 export function evaluateDisabled(): BrowserError {
   return new BrowserError(
     'EVALUATE_DISABLED',
-    'browser_evaluate is disabled; set allowEvaluate: true on the browser-tool plugin to enable arbitrary page JavaScript',
+    "browser_evaluate is disabled; set tool.allowEvaluate: true on the single '- id: browser' row of cordis.patch.yml (the Settings card rewrites that row for you) to enable arbitrary page JavaScript",
   )
 }
 
@@ -55,6 +55,6 @@ export function evaluateDisabled(): BrowserError {
 export function cdpDisabled(): BrowserError {
   return new BrowserError(
     'CDP_DISABLED',
-    'browser_cdp is disabled; set allowCdp: true on the browser-tool plugin to enable raw CDP inspection commands',
+    "browser_cdp is disabled; set tool.allowCdp: true on the single '- id: browser' row of cordis.patch.yml (the Settings card rewrites that row for you) to enable raw CDP inspection commands",
   )
 }

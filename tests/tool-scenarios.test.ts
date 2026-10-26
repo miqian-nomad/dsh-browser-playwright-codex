@@ -412,13 +412,28 @@ test('safety gates: evaluate is off by default, wait is bounded', async () => {
 
   const ok = await call(ctx, 'browser_wait', { ms: 50 })
   assert.equal(ok.isError, false)
-  assert.equal(ok.value, null)
+  // 0.7.6: the wait reports what it waited for instead of returning null, so the
+  // model can see that the condition (not a guessed duration) was satisfied.
+  const waited = ok.value as unknown as { waitedFor: string; elapsedMs: number }
+  assert.match(waited.waitedFor, /a fixed 50ms/)
+  assert.ok(waited.elapsedMs >= 40)
+
+  const noCondition = await call(ctx, 'browser_wait', {})
+  assert.equal(noCondition.isError, true)
+  assert.ok(textBlock(noCondition).includes('pass one of ms, selector, text or networkIdle'))
 
   // A separate deployment enables evaluate; then it returns page JSON.
   const open = await assemble({ allowEvaluate: true })
   await call(open, 'browser_navigate', { url: store.base + '/product/coffee-set' })
   const evaluated = await call(open, 'browser_evaluate', { expression: 'document.querySelector(".price").textContent' })
   assert.equal(evaluated.isError, false)
+  // Goal wait against a real page: the selector is already visible, so it must
+  // return at once instead of sleeping for the whole timeout.
+  const goal = await call(open, 'browser_wait', { selector: '.price', timeoutMs: 5000 })
+  assert.equal(goal.isError, false)
+  const goalValue = goal.value as unknown as { waitedFor: string; elapsedMs: number }
+  assert.match(goalValue.waitedFor, /selector "\.price" to become visible/)
+  assert.ok(goalValue.elapsedMs < 5000)
   assert.equal(evaluated.value, '$34.99')
 })
 
