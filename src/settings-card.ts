@@ -117,7 +117,6 @@ async function readBody(req) {
   return { ok: true, text: Buffer.concat(chunks).toString('utf8') }
 }
 
-
 /** The plugin's own version, used to refuse other versions' installers. */
 function installedVersion() {
   try {
@@ -151,7 +150,9 @@ function registerDiskRoutes(ctx) {
           const report = await scan(diskPaths())
           sendJson(res, 200, { ...report, browserActive: getEnabled() === true })
         } catch (error) {
-          sendJson(res, 500, { error: { code: 'DISK_SCAN', message: String(error && error.message ? error.message : error) } })
+          sendJson(res, 500, {
+            error: { code: 'DISK_SCAN', message: String(error && error.message ? error.message : error) },
+          })
         }
       },
     }),
@@ -180,20 +181,28 @@ function registerDiskRoutes(ctx) {
         const targets = []
         for (const value of payload.targets) {
           if (!isTargetId(value))
-            return sendJson(res, 400, { error: { code: 'UNKNOWN_TARGET', message: 'unknown target: ' + String(value) } })
+            return sendJson(res, 400, {
+              error: { code: 'UNKNOWN_TARGET', message: 'unknown target: ' + String(value) },
+            })
           targets.push(value)
         }
         try {
-          const report = await clean({ ...diskPaths(), targets, dryRun: payload.dryRun, browserActive: getEnabled() === true })
+          const report = await clean({
+            ...diskPaths(),
+            targets,
+            dryRun: payload.dryRun,
+            browserActive: getEnabled() === true,
+          })
           sendJson(res, 200, report)
         } catch (error) {
-          sendJson(res, 500, { error: { code: 'DISK_CLEAN', message: String(error && error.message ? error.message : error) } })
+          sendJson(res, 500, {
+            error: { code: 'DISK_CLEAN', message: String(error && error.message ? error.message : error) },
+          })
         }
       },
     }),
   )
 }
-
 
 /**
  * POST /window { headless } — the user's window-mode switch.

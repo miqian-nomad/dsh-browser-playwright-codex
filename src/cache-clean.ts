@@ -223,10 +223,7 @@ async function browserCacheDirs(profileDir: string): Promise<string[]> {
   return entries
     .filter((entry) => entry.isDirectory())
     .map((entry) => entry.name)
-    .filter(
-      (name) =>
-        (BROWSER_CACHE_DIRS as readonly string[]).includes(name) || /_crx_cache$/.test(name),
-    )
+    .filter((name) => (BROWSER_CACHE_DIRS as readonly string[]).includes(name) || /_crx_cache$/.test(name))
     .map((name) => join(defaultDir, name))
 }
 

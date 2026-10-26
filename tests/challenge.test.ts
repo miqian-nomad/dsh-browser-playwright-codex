@@ -472,7 +472,6 @@ test('the fingerprint changes when the title, the refs or a label change', () =>
   assert.notEqual(snapshotFingerprint({ ...base, url: 'https://example.test/next' }), hash)
 })
 
-
 test('the challenge hint tells the truth about the window mode', () => {
   const headful = challengeNote(false)
   assert.match(headful, /browser window is open on the user's desktop/i)

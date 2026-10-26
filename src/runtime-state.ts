@@ -140,7 +140,6 @@ export function subscribe(fn: (enabled: boolean) => void) {
   }
 }
 
-
 /**
  * The window mode the user picked (true = headless), or undefined when they
  * never picked one — the configured default then applies.
