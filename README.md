@@ -1,5 +1,7 @@
 # dsh-browser-playwright-codex
 
+[![npm 版本](https://img.shields.io/npm/v/dsh-browser-playwright-codex?label=npm)](https://www.npmjs.com/package/dsh-browser-playwright-codex) [![License](https://img.shields.io/npm/l/dsh-browser-playwright-codex)](LICENSE) [![Node](https://img.shields.io/node/v/dsh-browser-playwright-codex)](package.json) [![最新发布](https://img.shields.io/github/v/release/miqian-nomad/dsh-browser-playwright-codex)](https://github.com/miqian-nomad/dsh-browser-playwright-codex/releases)
+
 > [![dsh.so 安装验证 · harness 0.2.0-rc.1](https://www.dsh.so/badge/install/dsh-browser-playwright-codex@0.2.0-rc.1.svg)](https://www.dsh.so/zh/artifact/dsh-browser-playwright-codex/) [![dsh.so 风险](https://www.dsh.so/badge/dsh-browser-playwright-codex.svg)](https://www.dsh.so/zh/artifact/dsh-browser-playwright-codex/)
 
 **一句话**：让 AI 用你**已经登录的账号**在真实网页上干活 —— 填表、抓取列表、多标签查后台；浏览器窗口就在你桌面上、你随时看得见。原生弹框会被挂起、**绝不替你点「确定」**（机制级）；验证码/挑战页会被识别出来，并以提示要求模型停下交给你（**提示不是阻断**）。登录/二次验证**没有探测器**，靠模型从快照看出来并停下；密码、一次性验证码、卡号字段 `browser_fill` **直接拒绝**——这类字由你本人在窗口里输。
