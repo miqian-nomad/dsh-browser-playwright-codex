@@ -47,6 +47,19 @@ let _enabled = true
 let _engine: SnapshotEngine | undefined = undefined
 /** User's window-mode choice: true = headless, undefined = follow the config. */
 let _headless: boolean | undefined = undefined
+/** 进场特效的开关：true/false = 用户自己选的，undefined = 跟配置的默认值。 */
+let _swarm: boolean | undefined = undefined
+/** 进场特效的播放参数（速度/时长/是否只播一次），只存用户改过的项。 */
+export interface SwarmTuning {
+  speed?: number
+  maxMs?: number
+  oncePerSite?: boolean
+  /** 遮罩页面（登录墙、密码框）也播。默认关：会把没解锁的内容画出来。 */
+  playOnVeiled?: boolean
+  /** AI 要动手时怎么办：'auto-close' = 立刻关掉动画（默认）；'keep-alive' = 动画继续但不挡点击。 */
+  whileAiWorks?: 'auto-close' | 'keep-alive'
+}
+let _swarmTuning: SwarmTuning | undefined = undefined
 /** Config default pushed in by the provider (display only). */
 let _configuredHeadless: boolean | undefined = undefined
 /** Default pushed in by the provider that is actually loaded (display only). */
@@ -63,7 +76,13 @@ function load() {
   const previous = _enabled
   try {
     const txt = fs.readFileSync(stateFile(), 'utf8')
-    const obj = JSON.parse(txt) as { enabled?: unknown; engine?: unknown; headless?: unknown } | null
+    const obj = JSON.parse(txt) as {
+      enabled?: unknown
+      engine?: unknown
+      headless?: unknown
+      swarm?: unknown
+      swarmTuning?: unknown
+    } | null
     if (obj !== null && typeof obj === 'object') {
       if (typeof obj.enabled === 'boolean') _enabled = obj.enabled
       // The file is authoritative for the page-reading mode: an absent or
@@ -73,6 +92,22 @@ function load() {
       // Same contract as engine: absent/unknown means "follow the configured
       // default", so files written before this setting existed stay valid.
       _headless = typeof obj.headless === 'boolean' ? obj.headless : undefined
+      // 同一个约定：没写过或值不认识 = 跟配置默认值，老状态文件照样有效。
+      _swarm = typeof obj.swarm === 'boolean' ? obj.swarm : undefined
+      const tuning = obj.swarmTuning as SwarmTuning | undefined
+      if (tuning !== undefined && tuning !== null && typeof tuning === 'object') {
+        // 只收认识的项；缺的项不写，读的时候自然落回配置默认值。
+        const next: SwarmTuning = {}
+        if (typeof tuning.speed === 'number') next.speed = tuning.speed
+        if (typeof tuning.maxMs === 'number') next.maxMs = tuning.maxMs
+        if (typeof tuning.oncePerSite === 'boolean') next.oncePerSite = tuning.oncePerSite
+        if (typeof tuning.playOnVeiled === 'boolean') next.playOnVeiled = tuning.playOnVeiled
+        if (tuning.whileAiWorks === 'auto-close' || tuning.whileAiWorks === 'keep-alive')
+          next.whileAiWorks = tuning.whileAiWorks
+        _swarmTuning = next
+      } else {
+        _swarmTuning = undefined
+      }
     }
   } catch {
     // Missing file / parse error / unreadable: keep the current values.
@@ -98,9 +133,16 @@ function persist() {
     const tmp = target + '.tmp'
     // Keep the historical shape until the user actually picks a page-reading
     // mode: an absent `engine` means "use the configured default".
-    const payload: { enabled: boolean; engine?: SnapshotEngine; headless?: boolean } =
-      _engine === undefined ? { enabled: _enabled } : { enabled: _enabled, engine: _engine }
+    const payload: {
+      enabled: boolean
+      engine?: SnapshotEngine
+      headless?: boolean
+      swarm?: boolean
+      swarmTuning?: SwarmTuning
+    } = _engine === undefined ? { enabled: _enabled } : { enabled: _enabled, engine: _engine }
     if (_headless !== undefined) payload.headless = _headless
+    if (_swarm !== undefined) payload.swarm = _swarm
+    if (_swarmTuning !== undefined) payload.swarmTuning = _swarmTuning
     fs.writeFileSync(tmp, JSON.stringify(payload, null, 2))
     fs.renameSync(tmp, target)
   } catch {
@@ -155,6 +197,70 @@ export function setHeadless(next: boolean): boolean {
   if (typeof next !== 'boolean') return false
   if (_headless === next) return false
   _headless = next
+  persist()
+  return true
+}
+
+/**
+ * 进场特效的开关：用户自己选过的值，没选过返回 undefined（由配置默认值说话）。
+ */
+export function getSwarm(): boolean | undefined {
+  load()
+  return _swarm
+}
+
+/** 记下用户对进场特效的选择。Returns true when the value changed. */
+export function setSwarm(next: boolean): boolean {
+  load()
+  if (typeof next !== 'boolean') return false
+  if (_swarm === next) return false
+  _swarm = next
+  persist()
+  return true
+}
+
+/** 用户自己选过吗？（设置卡用来区分「你选的」和「默认的」。） */
+export function isSwarmUserChosen(): boolean {
+  load()
+  return _swarm !== undefined
+}
+
+/** 播放参数：只含用户改过的项，其余跟配置默认值。 */
+export function getSwarmTuning(): SwarmTuning {
+  load()
+  return _swarmTuning ?? {}
+}
+
+/** 改播放参数（只传要改的项）。Returns true when something changed. */
+export function setSwarmTuning(patch: SwarmTuning): boolean {
+  load()
+  const next = { ...(_swarmTuning ?? {}) }
+  let changed = false
+  if (typeof patch.speed === 'number' && next.speed !== patch.speed) {
+    next.speed = patch.speed
+    changed = true
+  }
+  if (typeof patch.maxMs === 'number' && next.maxMs !== patch.maxMs) {
+    next.maxMs = patch.maxMs
+    changed = true
+  }
+  if (typeof patch.oncePerSite === 'boolean' && next.oncePerSite !== patch.oncePerSite) {
+    next.oncePerSite = patch.oncePerSite
+    changed = true
+  }
+  if (typeof patch.playOnVeiled === 'boolean' && next.playOnVeiled !== patch.playOnVeiled) {
+    next.playOnVeiled = patch.playOnVeiled
+    changed = true
+  }
+  if (
+    (patch.whileAiWorks === 'auto-close' || patch.whileAiWorks === 'keep-alive') &&
+    next.whileAiWorks !== patch.whileAiWorks
+  ) {
+    next.whileAiWorks = patch.whileAiWorks
+    changed = true
+  }
+  if (!changed) return false
+  _swarmTuning = next
   persist()
   return true
 }

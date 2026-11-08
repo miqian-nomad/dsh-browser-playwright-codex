@@ -41,6 +41,19 @@ export interface PlaywrightConfig {
         /** Incremental ref-diff mode; false = always full snapshots (zero behavioral change). */
         diff: boolean;
     };
+    /** 进场特效：把一个页面抹白，再用一群光标把它重新画出来。 */
+    swarm: {
+        /** 出厂就开着：这是装完就能看见的那一下「哇」。设置卡上的开关可以随时关掉。 */
+        enabled: boolean;
+        /** 只在某个网站第一次打开时播；false = 每次导航都播（不建议）。 */
+        oncePerSite: boolean;
+        /** 播放速度档位 1–3（3 最快）。 */
+        speed: number;
+        /** 最多播多久（毫秒）。0 = 不限制，完整播完。 */
+        maxMs: number;
+        /** 遮罩页面（登录墙、密码框）也播。默认关：会把没解锁的内容画出来。 */
+        playOnVeiled: boolean;
+    };
 }
 /** Bounded page data the extraction consumer feeds to a model. */
 export interface PageData {

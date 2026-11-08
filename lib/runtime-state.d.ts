@@ -27,6 +27,16 @@
 import type { LoginSites } from './login-sites.ts';
 /** How a page is read into a snapshot tree. */
 export type SnapshotEngine = 'legacy' | 'aria';
+/** 进场特效的播放参数（速度/时长/是否只播一次），只存用户改过的项。 */
+export interface SwarmTuning {
+    speed?: number;
+    maxMs?: number;
+    oncePerSite?: boolean;
+    /** 遮罩页面（登录墙、密码框）也播。默认关：会把没解锁的内容画出来。 */
+    playOnVeiled?: boolean;
+    /** AI 要动手时怎么办：'auto-close' = 立刻关掉动画（默认）；'keep-alive' = 动画继续但不挡点击。 */
+    whileAiWorks?: 'auto-close' | 'keep-alive';
+}
 /** Current enable state (loads from disk on first call). */
 export declare function getEnabled(): boolean;
 /** Set the enable state. Returns true if the value actually changed. */
@@ -40,6 +50,18 @@ export declare function subscribe(fn: (enabled: boolean) => void): () => void;
 export declare function getHeadless(): boolean | undefined;
 /** Persist the window-mode choice. Returns true when the value changed. */
 export declare function setHeadless(next: boolean): boolean;
+/**
+ * 进场特效的开关：用户自己选过的值，没选过返回 undefined（由配置默认值说话）。
+ */
+export declare function getSwarm(): boolean | undefined;
+/** 记下用户对进场特效的选择。Returns true when the value changed. */
+export declare function setSwarm(next: boolean): boolean;
+/** 用户自己选过吗？（设置卡用来区分「你选的」和「默认的」。） */
+export declare function isSwarmUserChosen(): boolean;
+/** 播放参数：只含用户改过的项，其余跟配置默认值。 */
+export declare function getSwarmTuning(): SwarmTuning;
+/** 改播放参数（只传要改的项）。Returns true when something changed. */
+export declare function setSwarmTuning(patch: SwarmTuning): boolean;
 /** Publish the configured default (launch.headless) for display. */
 export declare function publishConfiguredHeadless(value: boolean): void;
 /** The configured default, when the provider has published it. */

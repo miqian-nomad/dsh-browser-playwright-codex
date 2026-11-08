@@ -39,6 +39,21 @@ export interface PlaywrightConfig {
     /** Incremental ref-diff mode; false = always full snapshots (zero behavioral change). */
     diff: boolean
   }
+  /** 进场特效：把一个页面抹白，再用一群光标把它重新画出来。 */
+  swarm: {
+    /** 出厂就开着：这是装完就能看见的那一下「哇」。设置卡上的开关可以随时关掉。 */
+    enabled: boolean
+    /** 只在某个网站第一次打开时播；false = 每次导航都播（不建议）。 */
+    oncePerSite: boolean
+    /** 播放速度档位 1–3（3 最快）。 */
+    speed: number
+
+    /** 最多播多久（毫秒）。0 = 不限制，完整播完。 */
+    maxMs: number
+
+    /** 遮罩页面（登录墙、密码框）也播。默认关：会把没解锁的内容画出来。 */
+    playOnVeiled: boolean
+  }
 }
 
 /** Bounded page data the extraction consumer feeds to a model. */
@@ -97,6 +112,20 @@ export const Config: z<PlaywrightConfig> = z.object({
       diff: z.boolean().default(false),
     })
     .default({ engine: 'legacy', maxNodes: 500, maxNameLength: 120, maxTextLength: 300, diff: false }),
+  swarm: z
+    .object({
+      // 出厂开：不装扩展、不改配置，第一次打开一个网站就能看见这个效果。
+      enabled: z.boolean().default(true),
+      // 只在每个网站第一次打开时播，避免每次导航都把页面盖住。
+      oncePerSite: z.boolean().default(true),
+      // 1–3 档，脚本里对应点几次速度按钮。
+      speed: z.number().default(3),
+      // 硬上限：到点无条件退回真实页面。原版脚本在长页面上要约 12 秒，留 15 秒。
+      maxMs: z.number().default(15000),
+      // 默认关：遮罩后面的内容没解锁就不该被画出来。自己的面板想看可以打开。
+      playOnVeiled: z.boolean().default(false),
+    })
+    .default({ enabled: true, oncePerSite: true, speed: 3, maxMs: 15000, playOnVeiled: false }),
 })
 
 /** Channels probed in order when none is configured. */

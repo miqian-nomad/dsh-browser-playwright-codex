@@ -10,6 +10,7 @@ import type { PlaywrightProvider } from './provider.ts'
 import { AUTO_CHANNELS, HUMANIZED_LAUNCH } from './config.ts'
 import { SNAPSHOT_SCRIPT } from './injected.ts'
 import { BrowserError, launchFailed } from './errors.ts'
+import { showWelcome } from './swarm-intro.ts'
 
 /**
  * Ensure the shared persistent context is alive (persistent mode). A
@@ -118,6 +119,12 @@ async function launchContext(provider: PlaywrightProvider) {
     // snapshot engine and restored localStorage apply on first use.
     for (const page of ctx.pages()) {
       await page.reload({ waitUntil: 'domcontentloaded' }).catch(() => {})
+    }
+    // 刚开的窗口停在 about:blank —— 一张纯白占位页。换成启动卡片，并让光标把
+    // 它画一遍。只处理还没去任何网址的初始页，不动已恢复的标签。
+    const firstPage = ctx.pages()[0]
+    if (firstPage !== undefined && firstPage.url() === 'about:blank') {
+      await showWelcome(firstPage, provider.config)
     }
     return ctx
   }

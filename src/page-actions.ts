@@ -13,6 +13,7 @@ import { assertAllowedUrl } from './url-policy.ts'
 import { asTimeoutError, isAbortError } from './page-diagnostics.ts'
 import { clearLabelTargets, labelTargetProbe } from './page-probes.ts'
 import { createBackgroundPage, isWindowMinimized } from './window-focus.ts'
+import { maybePlaySwarm, stopSwarm } from './swarm-intro.ts'
 
 /** Wrap a Playwright op so an aborted signal rejects while the op keeps draining in the background. */
 export async function withAbort<T>(promise: Promise<T>, signal: AbortSignal | undefined): Promise<T> {
@@ -125,6 +126,10 @@ export async function runAction(
 ): Promise<ActionResult> {
   const already = session.provider.pendingDialogFor(page)
   if (already !== undefined) return { blocked: true, pending: already }
+  // 进场特效运行时页面最上层盖着覆盖层。它不接管鼠标（pointer-events:none），
+  // 拦不住点击，但 AI 动手时它该让开。放在对话框检查之后：页面被原生对话框
+  // 卡住时 evaluate 会一直挂着，那会把整个动作拖死，所以还加了个 300ms 上限。
+  await Promise.race([stopSwarm(page), new Promise((resolve) => setTimeout(resolve, 300))])
   const wait = session.provider.armDialogWait(page)
   const outcome = action().then(
     (value): { ok: true; value: unknown } => ({ ok: true, value }),
@@ -158,7 +163,10 @@ export async function navigate(
       session.throwIfNavigationBlocked()
       throw asTimeoutError('navigation', error)
     }
-    return session.settleAndSnapshot(page, true)
+    const snapshot = await session.settleAndSnapshot(page, true)
+    // 快照先拿到手，再播特效：覆盖层不能出现在页面树里，导航也不能被它拖慢。
+    maybePlaySwarm(page, session.provider.config, session.provider.desiredHeadless())
+    return snapshot
   })
 }
 
