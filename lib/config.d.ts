@@ -41,8 +41,14 @@ export interface PlaywrightConfig {
         /** Incremental ref-diff mode; false = always full snapshots (zero behavioral change). */
         diff: boolean;
     };
-    /** 进场特效：把一个页面抹白，再用一群光标把它重新画出来。 */
-    swarm: {
+    /**
+     * 进场特效：把一个页面抹白，再用一群光标把它重新画出来。
+     *
+     * 可选：老配置对象里没有这一节时，由 Schemastery 的 Config 补齐默认值
+     * （见下面的 `swarm: z.object(...).default(...)`）。做成可选是为了让手写的
+     * 测试配置、以及旧部署的 patch 层都能直接通过类型检查。
+     */
+    swarm?: {
         /** 出厂就开着：这是装完就能看见的那一下「哇」。设置卡上的开关可以随时关掉。 */
         enabled: boolean;
         /** 只在某个网站第一次打开时播；false = 每次导航都播（不建议）。 */
