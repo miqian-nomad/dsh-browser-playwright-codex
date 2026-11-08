@@ -33,8 +33,12 @@ interface Recorded {
  */
 function fakePage() {
   const calls: Recorded[] = []
+  /** 每次以函数形式 evaluate 的源码，用来断言"发给页面的指令里有什么"。 */
+  const sources: string[] = []
   const state = {
     poll: 'playing' as 'playing' | 'complete' | 'gone',
+    /** 资产的"已画完图层数"，看门狗靠它判断有没有进展。 */
+    done: 5,
     hostGone: true,
     scrollY: 12,
     scrolled: [] as number[],
@@ -47,6 +51,7 @@ function fakePage() {
         calls.push({ kind: 'inject' })
         return undefined
       }
+      sources.push(String(target))
       if (arg !== undefined && arg !== null && typeof arg === 'object' && 'findRootSource' in arg) {
         calls.push({ kind: 'hud' })
         return true
@@ -77,13 +82,13 @@ function fakePage() {
       }
       if (src.includes('__swarmRebuild')) {
         calls.push({ kind: 'poll' })
-        return state.poll
+        return { kind: state.poll, done: state.done }
       }
       calls.push({ kind: 'other' })
       return undefined
     },
   }
-  return { page: page as unknown as Page, calls, state }
+  return { page: page as unknown as Page, calls, state, sources }
 }
 
 const count = (calls: Recorded[], kind: string): number => calls.filter((call) => call.kind === kind).length
@@ -181,4 +186,43 @@ test('maxMs：0 表示完整播完，越界值被夹进 3000–30000', async () 
   } finally {
     Date.now = realNow
   }
+})
+
+test('不再点 Tour（自动滚动）：发给页面的设置代码里没有 tour 按钮', async () => {
+  swarm.resetPlayed()
+  const { page, calls, sources, state } = fakePage()
+  swarm.maybePlaySwarm(page, CONFIG, false)
+  await settle()
+
+  assert.equal(count(calls, 'hud'), 1, '应该有一次设置控制条的调用')
+  const hud = sources.find((src) => src.includes('findRootSource'))
+  assert.ok(hud !== undefined, '找不到设置控制条的那段代码')
+  // 2026-11-08 必应实测：Tour 会滚页面，但蓝图是点击那一刻的快照、不跟着位移，
+  // 下半页图层全叠在首屏上（滚动条动、画面卡住）。所以只调速度，不点 Tour。
+  assert.ok(hud.includes('data-a="speed"'), '速度仍要调')
+  assert.ok(!hud.includes('data-a="tour"'), '不该再点 Tour，否则下半页会叠在首屏')
+
+  state.poll = 'gone'
+  await settle(400)
+})
+
+test('连续 2.5 秒画不出新图层就收尾，不会空转', async () => {
+  swarm.resetPlayed()
+  const f = fakePage()
+  f.state.poll = 'playing'
+  f.state.done = 7 // 一直不变 = 没有新图层
+
+  const started = Date.now()
+  swarm.maybePlaySwarm(f.page, { swarm: { ...CONFIG.swarm, maxMs: 15_000 } }, false)
+  let elapsed = 0
+  while (Date.now() - started < 8000) {
+    if (count(f.calls, 'stop') >= 1) {
+      elapsed = Date.now() - started
+      break
+    }
+    await new Promise((resolve) => setTimeout(resolve, 100))
+  }
+
+  assert.ok(elapsed >= 2500, '看门狗至少要等满 2.5 秒，实测 ' + String(elapsed) + 'ms')
+  assert.ok(elapsed < 7000, '看门狗应该在 2.5 秒后很快收尾，实测 ' + String(elapsed) + 'ms')
 })

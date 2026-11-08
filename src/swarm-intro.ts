@@ -200,7 +200,10 @@ async function playSwarm(page: Page, options: SwarmPlayOptions): Promise<void> {
           if (keepAlive) (root.host as HTMLElement).style.setProperty('pointer-events', 'none', 'important')
           const speed = root.querySelector('[data-a="speed"]') as HTMLElement | null
           for (let i = 0; i < clicks; i++) speed?.click()
-          ;(root.querySelector('[data-a="tour"]') as HTMLElement | null)?.click()
+          // 不点 Tour（自动滚动）。实测 2026-11-08：Tour 会逐像素滚页面，但覆盖层里的
+          // 蓝图是点击那一刻拍的快照、不跟着位移，结果下方图层全叠在首屏上 —— 用户看到
+          // 的就是"滚动条在动、画面卡在第一屏、只有框框没有图片"。脚本默认 tour=false，
+          // 只要不主动点它，就只画当前这一屏，干净利落。
           ;(window as unknown as { __dshSwarmStop?: () => void }).__dshSwarmStop = () => {
             const again = findRoot()
             const button = again?.querySelector('[data-a="live"]') ?? again?.querySelector('[data-a="close"]')
@@ -218,17 +221,33 @@ async function playSwarm(page: Page, options: SwarmPlayOptions): Promise<void> {
 
     const deadline = Date.now() + options.maxMs
     let reachedEnd = false
+    // 进度看门狗：不滚之后，脚本里"等滚动才解锁"的下半页图层永远等不到，
+    // 引擎不会报 complete，光标会一直空转（用户实测：21 秒画面没变过）。
+    // 连续 2.5 秒画不出新图层就当这一屏画完，主动收尾。
+    let lastDone = -1
+    let stalledMs = 0
     while (Date.now() < deadline) {
       if (page.isClosed()) return
       const state = await page.evaluate(() => {
         const app = (window as unknown as { __swarmRebuild?: { app?: { complete?: boolean } } }).__swarmRebuild?.app
-        if (app === undefined) return 'gone'
-        return app.complete === true ? 'complete' : 'playing'
+        if (app === undefined) return { kind: 'gone', done: -1 }
+        const engine = (app as unknown as { engine?: { doneCount?: number } }).engine
+        return { kind: app.complete === true ? 'complete' : 'playing', done: engine?.doneCount ?? -1 }
       })
-      if (state === 'gone') return
-      if (state === 'complete') {
+      if (state.kind === 'gone') return
+      if (state.kind === 'complete') {
         reachedEnd = true
         break
+      }
+      if (state.done === lastDone) {
+        stalledMs += 350
+        if (stalledMs >= 2500) {
+          reachedEnd = true
+          break
+        }
+      } else {
+        lastDone = state.done
+        stalledMs = 0
       }
       await new Promise((resolve) => setTimeout(resolve, 350))
     }
