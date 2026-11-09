@@ -1637,17 +1637,7 @@
 <div class="badges"></div>
 <div class="cursors"></div>
 <div class="rulers"></div>
-<div class="hud">
-  <div class="dots"></div>
-  <div class="txt"><span class="status">Scanning page…</span></div>
-  <div class="bar"><i></i></div>
-  <button data-a="tour" title="Auto-scroll while the swarm builds">Tour</button>
-  <button data-a="speed" title="Build speed">1×</button>
-  <button data-a="sound" class="snd" title="Sound (M)"></button>
-  <button data-a="live" class="pri" hidden title="Fade back to the real page">Go live</button>
-  <button data-a="replay" hidden title="Wipe and rebuild again">Replay</button>
-  <button data-a="close" class="x" title="Exit (Esc)">✕</button>
-</div>`;
+`;
       const $ = (s) => root.querySelector(s);
       this.bg = $(".bg");
       this.under = $(".under");
@@ -1659,10 +1649,12 @@
       this.badges = $(".badges");
       this.cursorsEl = $(".cursors");
       this.rulers = $(".rulers");
-      this.hud = $(".hud");
-      this.status = $(".status");
-      this.barFill = $(".bar i");
-      this.dots = $(".dots");
+      // 控制条已移除（见 scripts/swarm-patch.mjs）。下面四个字段在各处被写，
+      // 换成不挂在文档里的哑元素：写入照常成功，但屏幕上什么都不会出现。
+      this.hud = $(".hud") || document.createElement("div");
+      this.status = $(".status") || document.createElement("span");
+      this.barFill = $(".bar i") || document.createElement("i");
+      this.dots = $(".dots") || document.createElement("div");
       this.cursorEls = new Map();
       this._ovS = "";
       this._ovB = "";
@@ -3505,6 +3497,8 @@
       await nextFrame();
       this.renderSoundBtn();
       this.sfx.intro();
+      // 白底不做 .5s 淡入（见 scripts/swarm-patch.mjs）：第一帧就盖死，别让原页面透出来。
+      this.view.bg.style.setProperty("transition", "none", "important");
       this.view.bg.classList.add("on");
       this.view.intro.classList.add("on");
       this.view.hud.classList.add("on");
@@ -3513,6 +3507,38 @@
       await unhidePage();
       mark("blank");
       if (this.dead) return;
+      // 等插件放行（它要先拍完快照），并且给开场留够时间：白幕→特效这段是
+      // "空白 + 光标飞进来打转"，太短会一闪而过（用户实测豆瓣那种快站看不到）。
+      // 至少 2.8 秒、最多 5 秒，之后无论有没有信号都开始画，不能把页面卡在空白上。
+      {
+        const waitFrom = performance.now();
+        while (
+          (window.__dshSwarmGo !== true || performance.now() - waitFrom < 2800) &&
+          !this.dead &&
+          performance.now() - waitFrom < 5000
+        ) {
+          await new Promise((r) => setTimeout(r, 40));
+        }
+      }
+      // 提前注入时 document_start 的 DOM 还没建全，滚动容器可能认错（异步渲染站）。
+      // 放行之后页面已 load，重认一次滚动环境；**不动白底颜色**，避免中途变色闪一下。
+      if (window.__dshSwarmEarly === true) {
+        const oldTarget = this.env.isRoot ? window : this.env.scroller;
+        const fresh = detectEnv();
+        fresh.host = this.view.host;
+        this.env = fresh;
+        this.view.env = fresh;
+        this.view.measure();
+        // bind() 在开场就把 scroll 监听绑死在"当时的" scroller 上。重认后若换了容器，
+        // 补一条到新容器，否则容器滚动时世界图层不跟随（2026-11-09 复核 find A）。
+        // 旧监听留在原目标上无害：syncWorld() 每次读的都是新 env，幂等。
+        const newTarget = fresh.isRoot ? window : fresh.scroller;
+        if (newTarget !== oldTarget) {
+          const sync = () => { if (!this.view.frozen) this.view.syncWorld(); };
+          newTarget.addEventListener("scroll", sync, { passive: true });
+          (this.unbinds || (this.unbinds = [])).push(() => newTarget.removeEventListener("scroll", sync, { passive: true }));
+        }
+      }
       await this.scan();
       mark("scan");
       if (this.dead) return;
@@ -3689,6 +3715,7 @@
     updateHud() {
       const E = this.engine;
       const v = this.view;
+      if (!v.hud.isConnected) return;
       if (!E.ready) return;
       const workers = E.cursors.filter((c) => c.worked).length + E.retired;
       const total = E.tasks.length;
@@ -3721,10 +3748,11 @@
       v.status.innerHTML = `Rebuilt by <b>${workers}</b> agents in <b>${secs}s</b>`;
       v.barFill.style.width = "100%";
       v.dots.innerHTML = "";
-      v.root.querySelector('[data-a="live"]').hidden = false;
-      v.root.querySelector('[data-a="replay"]').hidden = false;
-      v.root.querySelector('[data-a="tour"]').hidden = true;
-      v.root.querySelector('[data-a="speed"]').hidden = true;
+      // 控制条已移除：逐个找、找到才设，找不到就跳过（原来这里是硬取 .hidden）。
+      for (const [name, hidden] of [["live", false], ["replay", false], ["tour", true], ["speed", true]]) {
+        const button = v.root.querySelector('[data-a="' + name + '"]');
+        if (button) button.hidden = hidden;
+      }
       this.tour = false;
     }
 
@@ -3822,5 +3850,15 @@
     },
     debug: { captureModel, detectEnv, Sound },
   };
-  start();
+  // document_start 注入时 <html> 还没建好（实测 scrollingElement 为 null）。等解析器
+  // 把 <html> 挂上来再启动，就能从第一帧用**原版自己的引擎**盖住页面：白底 + 18 个
+  // 光标飞进来打转，全程只有这一套，不再有"自造白幕 → 切换引擎"的断层。
+  const _dshBoot = () => {
+    if (document.documentElement) { start(); return; }
+    const mo = new MutationObserver(() => {
+      if (document.documentElement) { mo.disconnect(); start(); }
+    });
+    mo.observe(document, { childList: true });
+  };
+  _dshBoot();
 })();

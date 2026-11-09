@@ -58,6 +58,10 @@ export interface SwarmTuning {
   playOnVeiled?: boolean
   /** AI 要动手时怎么办：'auto-close' = 立刻关掉动画（默认）；'keep-alive' = 动画继续但不挡点击。 */
   whileAiWorks?: 'auto-close' | 'keep-alive'
+  /** 播放范围：只画首屏 / 整页（由插件接管滚动，一屏一屏画完）。 */
+  range?: 'viewport' | 'page'
+  /** 一直记住播过哪些站：关掉整个浏览器窗口也不重播。默认关（关窗就重播）。 */
+  persistPlayed?: boolean
 }
 let _swarmTuning: SwarmTuning | undefined = undefined
 /** Config default pushed in by the provider (display only). */
@@ -104,6 +108,8 @@ function load() {
         if (typeof tuning.playOnVeiled === 'boolean') next.playOnVeiled = tuning.playOnVeiled
         if (tuning.whileAiWorks === 'auto-close' || tuning.whileAiWorks === 'keep-alive')
           next.whileAiWorks = tuning.whileAiWorks
+        if (tuning.range === 'viewport' || tuning.range === 'page') next.range = tuning.range
+        if (typeof tuning.persistPlayed === 'boolean') next.persistPlayed = tuning.persistPlayed
         _swarmTuning = next
       } else {
         _swarmTuning = undefined
@@ -257,6 +263,14 @@ export function setSwarmTuning(patch: SwarmTuning): boolean {
     next.whileAiWorks !== patch.whileAiWorks
   ) {
     next.whileAiWorks = patch.whileAiWorks
+    changed = true
+  }
+  if ((patch.range === 'viewport' || patch.range === 'page') && next.range !== patch.range) {
+    next.range = patch.range
+    changed = true
+  }
+  if (typeof patch.persistPlayed === 'boolean' && next.persistPlayed !== patch.persistPlayed) {
+    next.persistPlayed = patch.persistPlayed
     changed = true
   }
   if (!changed) return false

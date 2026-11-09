@@ -10,7 +10,8 @@ import type { PlaywrightProvider } from './provider.ts'
 import { AUTO_CHANNELS, HUMANIZED_LAUNCH } from './config.ts'
 import { SNAPSHOT_SCRIPT } from './injected.ts'
 import { BrowserError, launchFailed } from './errors.ts'
-import { showWelcome } from './swarm-intro.ts'
+import { forgetOnBrowserClose, showWelcome } from './swarm-intro.ts'
+import { swarmBootScript } from './swarm-curtain.ts'
 
 /**
  * Ensure the shared persistent context is alive (persistent mode). A
@@ -97,6 +98,8 @@ async function launchContext(provider: PlaywrightProvider) {
     // External close (user closed the window, crash): forget every
     // session handle bound to this context; the next acquire relaunches.
     void ctx.on('close', () => {
+      // 整个插件浏览器窗口关掉：默认忘掉这趟播过哪些站，下次重开全部重播。
+      forgetOnBrowserClose(ctx)
       if (provider.context !== ctx) return
       provider.context = undefined
       for (const [key, entry] of [...provider.entries]) {
@@ -115,6 +118,10 @@ async function launchContext(provider: PlaywrightProvider) {
     // page cannot leave the list by itself (navigation-guard.ts).
     await provider.installHostGuard(ctx)
     await ctx.addInitScript(SNAPSHOT_SCRIPT)
+    // 共享窗口（persistent）这条路也要注册「同一个引擎」的提前启动脚本。
+    // 之前只加在 provider.ts 的 newContext 分支，用户实际用的是这里，
+    // 第一帧脚本根本没注册 —— 标记留在 window.name 里没被消费（2026-11-09 实测）。
+    await ctx.addInitScript({ content: swarmBootScript() })
     // The initial blank page predates addInitScript: reload so the
     // snapshot engine and restored localStorage apply on first use.
     for (const page of ctx.pages()) {

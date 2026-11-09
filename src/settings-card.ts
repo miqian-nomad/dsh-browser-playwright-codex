@@ -63,7 +63,7 @@ import * as runtimeState from './runtime-state.ts'
 // The patch writer lives in its own dependency-free module so it can be tested
 // without a DSH host (a half-written patch layer would break every plugin load).
 import { homePatchPath, parseGatesBlock, writeGates } from './gates-patch.ts'
-import { resetPlayed } from './swarm-intro.ts'
+import { onPersistPlayedChanged, resetPlayed } from './swarm-intro.ts'
 import { readFileSync } from 'node:fs'
 import { clean, isTargetId, resolvePaths, scan, type TargetId } from './cache-clean.ts'
 
@@ -285,6 +285,8 @@ function registerSwarmRoute(ctx) {
           oncePerSite?: boolean
           playOnVeiled?: boolean
           whileAiWorks?: 'auto-close' | 'keep-alive'
+          range?: 'viewport' | 'page'
+          persistPlayed?: boolean
         } = {}
         if (payload.speed !== undefined) {
           const speed = Number(payload.speed)
@@ -317,7 +319,23 @@ function registerSwarmRoute(ctx) {
             })
           patch.whileAiWorks = payload.whileAiWorks
         }
+        if (payload.range !== undefined) {
+          if (payload.range !== 'viewport' && payload.range !== 'page')
+            return sendJson(res, 400, {
+              error: { code: 'INVALID_BODY', message: '`range` must be viewport or page' },
+            })
+          patch.range = payload.range
+        }
+        if (payload.persistPlayed !== undefined) {
+          if (typeof payload.persistPlayed !== 'boolean')
+            return sendJson(res, 400, { error: { code: 'INVALID_BODY', message: '`persistPlayed` must be a boolean' } })
+          patch.persistPlayed = payload.persistPlayed
+        }
+        const wasPersist = runtimeState.getSwarmTuning().persistPlayed === true
         if (Object.keys(patch).length > 0) changed = runtimeState.setSwarmTuning(patch) || changed
+        // 开关真的翻了才动记录：打开立刻把这趟落盘，关掉删盘（防幽灵复活）。
+        const nowPersist = runtimeState.getSwarmTuning().persistPlayed === true
+        if (nowPersist !== wasPersist) onPersistPlayedChanged(nowPersist)
         const tuning = runtimeState.getSwarmTuning()
         sendJson(res, 200, {
           swarm: runtimeState.getSwarm(),
@@ -326,6 +344,8 @@ function registerSwarmRoute(ctx) {
           swarmOncePerSite: tuning.oncePerSite ?? null,
           swarmPlayOnVeiled: tuning.playOnVeiled ?? null,
           swarmWhileAiWorks: tuning.whileAiWorks ?? null,
+          swarmRange: tuning.range ?? null,
+          swarmPersistPlayed: tuning.persistPlayed ?? null,
           changed,
           resetPlayed: reset,
           appliedOn: 'next-navigation',
@@ -373,6 +393,8 @@ export function apply(ctx) {
           // null = 跟配置默认（遮罩不播 / AI 动手时自动关闭动画）。
           swarmPlayOnVeiled: runtimeState.getSwarmTuning().playOnVeiled ?? null,
           swarmWhileAiWorks: runtimeState.getSwarmTuning().whileAiWorks ?? null,
+          swarmRange: runtimeState.getSwarmTuning().range ?? null,
+          swarmPersistPlayed: runtimeState.getSwarmTuning().persistPlayed ?? null,
           // What the user's own layer says right now. Differs from the above
           // between a write and the live reload that applies it.
           patchGates: managedBlockGates() ?? null,

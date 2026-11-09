@@ -36,6 +36,10 @@ export interface SwarmTuning {
     playOnVeiled?: boolean;
     /** AI 要动手时怎么办：'auto-close' = 立刻关掉动画（默认）；'keep-alive' = 动画继续但不挡点击。 */
     whileAiWorks?: 'auto-close' | 'keep-alive';
+    /** 播放范围：只画首屏 / 整页（由插件接管滚动，一屏一屏画完）。 */
+    range?: 'viewport' | 'page';
+    /** 一直记住播过哪些站：关掉整个浏览器窗口也不重播。默认关（关窗就重播）。 */
+    persistPlayed?: boolean;
 }
 /** Current enable state (loads from disk on first call). */
 export declare function getEnabled(): boolean;

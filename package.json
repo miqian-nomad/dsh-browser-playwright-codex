@@ -40,6 +40,7 @@
   "files": [
     "lib",
     "assets",
+    "!assets/swarm-rebuild.upstream.js",
     "cordis.patch.yml",
     "README.md",
     "CHANGELOG.md",
@@ -58,10 +59,12 @@
     "verify": "npm run build && node scripts/dsh-browser-verify.mjs",
     "verify:live": "npm run build && node scripts/dsh-browser-verify.mjs --live",
     "doctor": "node scripts/doctor.mjs",
+    "swarm:patch": "node scripts/swarm-patch.mjs",
+    "swarm:check": "node scripts/swarm-patch.mjs --check",
     "cost": "node node_modules/tsx/dist/cli.mjs scripts/measure-prompt-cost.mjs",
     "format": "node node_modules/prettier/bin/prettier.cjs --write \"src/**/*.ts\" \"tests/**/*.ts\" \"scripts/**/*.mjs\"",
     "format:check": "node node_modules/prettier/bin/prettier.cjs --check \"src/**/*.ts\" \"tests/**/*.ts\" \"scripts/**/*.mjs\"",
-    "prepublishOnly": "npm run build && npm run typecheck && npm test && npm run verify && npm run preflight",
+    "prepublishOnly": "npm run build && npm run typecheck && npm test && npm run swarm:check && npm run verify && npm run preflight",
     "preflight": "node scripts/preflight.mjs ."
   },
   "dependencies": {

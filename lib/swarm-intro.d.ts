@@ -1,10 +1,23 @@
 import type { Page } from 'playwright-core';
-/** 这个域名播过没有。 */
+/** 这个域名播过没有。跨所有活着的窗口判断。 */
 export declare function hasPlayed(host: string): boolean;
-/** 记下这个域名已经播过（立刻写盘：页面随时可能被关掉）。 */
-export declare function markPlayed(host: string): void;
-/** 清空播放记录（设置卡上的「清空记录」用）。 */
+/** 记下这个域名已经播过；ctx 传所属浏览器上下文，不传则用兜底。 */
+export declare function markPlayed(host: string, ctx?: object): void;
+/** 清空播放记录（设置卡上的「清空记录」用）：内存和磁盘一起清。 */
 export declare function resetPlayed(): void;
+/**
+ * 「一直记住」开关切换时调用：打开就把这趟已有记录立刻落盘（别等关窗，
+ * 免得宿主崩溃丢记录）；关掉就删掉磁盘记录，防止以后切回来时幽灵复活
+ * （2026-11-09 复核 find A）。这个文件是插件自己写的，删它不动用户数据。
+ */
+export declare function onPersistPlayedChanged(enabled: boolean): void;
+/**
+ * 某个浏览器上下文关掉时调用：只忘掉**它自己**那趟播过哪些站。
+ * 还有别的窗口活着时，别的窗口的记录一律保留（复核 find B）。
+ * persist 打开时把这趟记录落盘，下次接着记。
+ * 关单个标签不会走到这里 —— 那是 closeTab，不是 context 关闭。
+ */
+export declare function forgetOnBrowserClose(ctx?: object): void;
 /** 这个页面正在播吗。 */
 export declare function isPlaying(page: Page): boolean;
 /**
@@ -33,6 +46,13 @@ export declare function showWelcome(page: Page, config: {
         maxMs?: number;
     };
 } | undefined): Promise<void>;
+/**
+ * 这次导航要不要播（只看不费时的条件，用来决定"开场白幕"要不要提前挂）。
+ *
+ * 注意传的是**目标地址**：导航前的 `page.url()` 还是旧页面，拿它判断会永远不播。
+ * 遮罩页那种需要读页面的判断留到注入之后做，那时会顺手把白幕撤掉。
+ */
+export declare function willPlaySwarm(targetUrl: string, config: Parameters<typeof maybePlaySwarm>[1], headless?: boolean): boolean;
 /** 导航之后调用：够条件就播一次，不等它播完（导航照常立刻返回快照）。 */
 export declare function maybePlaySwarm(page: Page, config: {
     swarm?: {
@@ -41,5 +61,6 @@ export declare function maybePlaySwarm(page: Page, config: {
         speed?: number;
         maxMs?: number;
         playOnVeiled?: boolean;
+        range?: 'viewport' | 'page';
     };
 } | undefined, headless?: boolean): void;

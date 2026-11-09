@@ -57,6 +57,13 @@ export interface PlaywrightConfig {
     maxMs: number
     /** 遮罩页面（登录墙、密码框）也播。默认关：会把没解锁的内容画出来。 */
     playOnVeiled: boolean
+    /** 一直记住播过哪些站：关掉整个浏览器窗口也不重播。默认关（关窗就重播）。 */
+    persistPlayed: boolean
+    /**
+     * 播放范围：`viewport` = 只画当前这一屏（默认，1–10 秒结束）；
+     * `page` = 由插件按节奏往下滚，一屏一屏把整页画完（会接管滚动，时间长得多）。
+     */
+    range: 'viewport' | 'page'
   }
 }
 
@@ -128,8 +135,13 @@ export const Config: z<PlaywrightConfig> = z.object({
       maxMs: z.number().default(15000),
       // 默认关：遮罩后面的内容没解锁就不该被画出来。自己的面板想看可以打开。
       playOnVeiled: z.boolean().default(false),
+      // 默认关：整个浏览器窗口一关就忘掉这趟播过哪些站，下次重开全部重播。
+      persistPlayed: z.boolean().default(false),
+      // 只画首屏：长页面不动，短页面也不会卡在"下半页永远等不到"。想看整页的人
+      // 到设置卡选「整页」——那会把滚动接过去几秒，所以不做默认。
+      range: z.union([z.const('viewport'), z.const('page')]).default('viewport'),
     })
-    .default({ enabled: true, oncePerSite: true, speed: 3, maxMs: 15000, playOnVeiled: false }),
+    .default({ enabled: true, oncePerSite: true, speed: 3, maxMs: 15000, playOnVeiled: false, persistPlayed: false }),
 })
 
 /** Channels probed in order when none is configured. */

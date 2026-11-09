@@ -467,7 +467,7 @@ The scenario suites originally surfaced four hazards, now fixed and regression-t
 The first-open effect (the page is wiped white, then a swarm of cursors draws the boxes, text and images back) is **not this project's work**, and it ships as one third-party file:
 
 - **The effect and its choreography** — [Swarm](https://github.com/califa/swarm-site) by **Joel Califa** ([swarm.joelcalifa.com](https://swarm.joelcalifa.com)). Used with his written permission (2026-11-08), on his one condition: **credit him** — this section is that credit.
-- **The bundled code** — `assets/swarm-rebuild.js`, taken verbatim from [`DhvanilPatel/swarm-cursors`](https://github.com/DhvanilPatel/swarm-cursors) at commit `3d49e0ac` (2026-11-06, file `swarm-rebuild/swarm.js`; the bundled copy is byte-identical, SHA-256 `6a30f19d…c7bfe`).
+- **The bundled code** — `assets/swarm-rebuild.js`, from [`DhvanilPatel/swarm-cursors`](https://github.com/DhvanilPatel/swarm-cursors) at commit `3d49e0ac` (2026-11-06, file `swarm-rebuild/swarm.js`), **with the vendor's own control bar removed and three related fixes** (four changes in total, all in [`scripts/swarm-patch.mjs`](https://github.com/miqian-nomad/dsh-browser-playwright-codex/blob/main/scripts/swarm-patch.mjs); the last one fixes a crash the removal would otherwise cause at the end of playback. The pristine file stays in the repository as `assets/swarm-rebuild.upstream.js`, SHA-256 `6a30f19d…c7bfe`).
 
 The exact licensing split, and what is still outstanding, is recorded in [`NOTICE.md`](https://github.com/miqian-nomad/dsh-browser-playwright-codex/blob/main/NOTICE.md).
 

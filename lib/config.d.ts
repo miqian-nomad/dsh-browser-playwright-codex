@@ -59,6 +59,13 @@ export interface PlaywrightConfig {
         maxMs: number;
         /** 遮罩页面（登录墙、密码框）也播。默认关：会把没解锁的内容画出来。 */
         playOnVeiled: boolean;
+        /** 一直记住播过哪些站：关掉整个浏览器窗口也不重播。默认关（关窗就重播）。 */
+        persistPlayed: boolean;
+        /**
+         * 播放范围：`viewport` = 只画当前这一屏（默认，1–10 秒结束）；
+         * `page` = 由插件按节奏往下滚，一屏一屏把整页画完（会接管滚动，时间长得多）。
+         */
+        range: 'viewport' | 'page';
     };
 }
 /** Bounded page data the extraction consumer feeds to a model. */
