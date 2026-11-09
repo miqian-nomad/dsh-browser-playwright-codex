@@ -41,6 +41,8 @@ dsh plugin --profile <name> add github:miqian-nomad/dsh-browser-playwright-codex
   silently clicking a different element.
 - **强力工具默认关闭** — `browser_evaluate` / `browser_cdp` are **not registered at all** unless your
   deployment opts in; this package ships both off.
+- **第一次打开一个网站时，页面会自己「长」出来** — 整页被抹白，然后一群光标把方框、文字、图片一笔一笔画回来，播完自动退回真实页面（可关，设置卡里可调速度/时长）。动效与编排出自 **Joel Califa** 的 [Swarm](https://github.com/califa/swarm-site) — 他 2026-11-08 书面同意本项目使用，条件是**署名**，见 [Credits](#credits--the-intro-effect)。
+  The page is wiped white, then a swarm of cursors draws it back — boxes, text and images, one stroke at a time, before handing the real page over. The effect and its choreography are **Joel Califa's** [Swarm](https://github.com/califa/swarm-site), used with his written permission on the one condition that he is credited ([Credits](#credits--the-intro-effect)).
 
 **安全一览 / Security at a glance** — dsh.so's scanner flags this repository's **one Critical finding**, and that finding **is** the
 implementation of `browser_evaluate` (its dynamic evaluation), which this package ships switched off.
@@ -460,9 +462,22 @@ The scenario suites originally surfaced four hazards, now fixed and regression-t
 - **Idle disposal defers during operations** — a navigation slower than `idleTimeoutMs` completes normally; disposal only fires when the session is truly idle.
 - **Mid-navigation snapshots settle** — a `browser_snapshot` racing a JS navigation waits for the new document and retries instead of surfacing a raw "Execution context was destroyed" error.
 
+## Credits — the intro effect
+
+The first-open effect (the page is wiped white, then a swarm of cursors draws the boxes, text and images back) is **not this project's work**, and it ships as one third-party file:
+
+- **The effect and its choreography** — [Swarm](https://github.com/califa/swarm-site) by **Joel Califa** ([swarm.joelcalifa.com](https://swarm.joelcalifa.com)). Used with his written permission (2026-11-08), on his one condition: **credit him** — this section is that credit.
+- **The bundled code** — `assets/swarm-rebuild.js`, taken verbatim from [`DhvanilPatel/swarm-cursors`](https://github.com/DhvanilPatel/swarm-cursors) at commit `3d49e0ac` (2026-11-06, file `swarm-rebuild/swarm.js`; the bundled copy is byte-identical, SHA-256 `6a30f19d…c7bfe`).
+
+The exact licensing split, and what is still outstanding, is recorded in [`NOTICE.md`](https://github.com/miqian-nomad/dsh-browser-playwright-codex/blob/main/NOTICE.md).
+
+**中文**：首次打开网页的「进场特效」——页面被抹白，再由一群光标把方框、文字、图片一笔一笔画回来——**不是本项目自己的作品**。动效与编排出自 **Joel Califa** 的 [Swarm](https://github.com/califa/swarm-site)，他于 2026-11-08 书面同意本项目使用，唯一条件是**署名**，此节即为署名；随包发布的 `assets/swarm-rebuild.js` 来自 [DhvanilPatel/swarm-cursors](https://github.com/DhvanilPatel/swarm-cursors)。许可切分与仍在等的事见 `NOTICE.md`。
+
 ## License
 
-MIT
+MIT — **except `assets/swarm-rebuild.js`**, which is third-party work: see [Credits](#credits--the-intro-effect) above and [`NOTICE.md`](https://github.com/miqian-nomad/dsh-browser-playwright-codex/blob/main/NOTICE.md) §3. This project grants no rights in that file.
+
+**中文**：插件本体与随包文档是 MIT；**`assets/swarm-rebuild.js` 除外**，它是第三方作品，本项目不对它主张也不授予任何权利，详见上文 Credits 与 `NOTICE.md` §3。
 
 
 <!-- changelog:today -->
