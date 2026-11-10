@@ -103,7 +103,10 @@ export const Config: z<PlaywrightConfig> = z.object({
     viewport: z
       .object({ width: z.number().default(1280), height: z.number().default(800) })
       .default({ width: 1280, height: 800 }),
-    navigationTimeoutMs: z.number().default(30000),
+    // 0 used to be accepted, and Playwright reads timeout: 0 as "no timeout",
+    // so a stuck page could hang the tool forever (issue #5). Require at least
+    // one second; the default stays 30s.
+    navigationTimeoutMs: z.number().min(1000).default(30000),
     ignoreHTTPSErrors: z.boolean().default(false),
   }),
   allowedDomains: z.array(z.string()),
