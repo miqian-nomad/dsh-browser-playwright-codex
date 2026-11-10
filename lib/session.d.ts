@@ -154,6 +154,10 @@ export declare class PlaywrightSession {
      * on a live tab instead of inheriting it. Bounded and best-effort: main thread
      * wedged badly enough to stall an evaluate may never answer close either, and
      * this runs on the error path — it must never turn a timeout into a second hang.
+     *
+     * 代价要说清楚：`runBeforeUnload:false` 意味着**不弹**「确定要离开吗」，所以页面上
+     * 填了一半的表单、没提交的内容直接丢弃；如果那是唯一一个标签，接下来是一张空白页。
+     * 对真卡死的页这笔账划算，但用户必须被告知——所以 capture() 的报错文案里写明这件事。
      */
     private discardStuckPage;
     /**

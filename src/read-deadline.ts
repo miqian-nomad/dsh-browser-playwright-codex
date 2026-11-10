@@ -27,6 +27,10 @@ import { isAbortError } from './page-diagnostics.ts'
  * @param timeoutMs - 硬期限（毫秒），应来自部署配置，且已校验有下限
  * @param label - 超时消息里说明卡在哪一步
  * @param signal - 可选的取消信号
+ * @param onTimeout - `reject` 抛 `ACTION_TIMEOUT`；`resolve-undefined` 供可降级场景
+ * @param consequence - 超时之后**实际发生了什么**。必须写真的后果：这里只报超时，
+ *   后续清理由调用方负责，别在这里替它许诺「下次会重开会话」——0.7.9 的超时消息
+ *   就写着这句，而实际做的是把那一页关掉，用户看到标签页凭空少了一个却没人告诉他。
  */
 export async function withDeadline<T>(
   promise: Promise<T>,
@@ -34,6 +38,7 @@ export async function withDeadline<T>(
   label: string,
   signal?: AbortSignal,
   onTimeout: 'reject' | 'resolve-undefined' = 'reject',
+  consequence = 'The call was abandoned; the page may still be running its script.',
 ): Promise<T | undefined> {
   const guarded = Promise.resolve(promise)
   guarded.catch(() => {}) // 超时后原调用仍在跑：别让它的 rejection 冒到宿主
@@ -60,7 +65,8 @@ export async function withDeadline<T>(
               label +
               ' did not finish within ' +
               String(timeoutMs) +
-              'ms; the page may be stuck running script. The next browser call reopens the session.',
+              'ms; the page may be stuck running script. ' +
+              consequence,
           ),
         ),
       )

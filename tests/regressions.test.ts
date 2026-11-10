@@ -374,8 +374,11 @@ test('fill: password and one-time-code fields are refused with CREDENTIAL_FIELD'
 //
 // Round 1 shipped the hard deadline but only dropped the session entry: in persistent mode the
 // next acquire got pages[currentIndex] back — the same wedged page — so "the next browser call
-// reopens the session" was never true. These pin the disposal, plus the two defaults that made a
-// perfectly usable page hang the call in the first place.
+// reopens the session" was never true. The three cases below are UNIT-level pins: two call the
+// disposal hook directly with a fake page, one greps the source text. They stay green even if
+// capture() stops calling the hook — 0.7.9 shipped exactly that hole. The end-to-end proof (real
+// wedged renderer → read timeout → page closed → next acquire gets a live page) is
+// tests/read-timeout-e2e.test.ts; comment out the call in capture() and THAT case goes red.
 
 /** Call the private disposal hook the way the timeout path calls it. */
 function discardStuckPage(page: unknown): Promise<void> {
