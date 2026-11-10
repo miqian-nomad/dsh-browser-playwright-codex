@@ -389,7 +389,16 @@ export class PlaywrightSession {
       return this.attachDiff(attachNoProgress(this, attachDocResponse(this, page, raw), afterAction))
     }
     try {
-      const snap = await withDeadline(read(), this.timeoutMs(), 'reading the page content', this.currentSignal)
+      const snap = await withDeadline(
+        read(),
+        this.timeoutMs(),
+        'reading the page content',
+        this.currentSignal,
+        'reject',
+        // 报错文案必须说人话、说真话：这一页真的被关掉了，页面里没提交的东西跟着没了。
+        // 关页不弹 beforeunload（弹了可能又卡死），所以用户只有从这条消息里才知道。
+        'That page has been closed; anything typed into it but not submitted is lost, and if it was the last tab the session now starts on a blank page.',
+      )
       return snap as BrowserSnapshot
     } catch (error) {
       // 超时只能让我们这一侧返回，页面里那个 evaluate 还在跑。作废会话句柄，
@@ -408,6 +417,10 @@ export class PlaywrightSession {
    * on a live tab instead of inheriting it. Bounded and best-effort: main thread
    * wedged badly enough to stall an evaluate may never answer close either, and
    * this runs on the error path — it must never turn a timeout into a second hang.
+   *
+   * 代价要说清楚：`runBeforeUnload:false` 意味着**不弹**「确定要离开吗」，所以页面上
+   * 填了一半的表单、没提交的内容直接丢弃；如果那是唯一一个标签，接下来是一张空白页。
+   * 对真卡死的页这笔账划算，但用户必须被告知——所以 capture() 的报错文案里写明这件事。
    */
   private async discardStuckPage(page: Page): Promise<void> {
     try {

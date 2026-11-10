@@ -23,10 +23,29 @@ test('硬期限：读内容卡住时按时抛 ACTION_TIMEOUT，而不是永远�
     assert.equal(e.code, 'ACTION_TIMEOUT')
     assert.match(e.message, /reading the page content/)
     assert.match(e.message, /120ms/)
-    assert.match(e.message, /next browser call reopens/)
+    // 默认文案不许再替调用方许诺它没做的事：0.7.9 这里写着 "the next browser call
+    // reopens the session"，而实际行为是把那一页关掉。
+    assert.doesNotMatch(e.message, /reopens the session/)
     return true
   })
   assert.ok(Date.now() - started < 1000, '应该在期限附近返回，实测 ' + String(Date.now() - started) + 'ms')
+})
+
+test('超时文案由调用方写明真实后果，不是一句通用套话', async () => {
+  await assert.rejects(
+    withDeadline(
+      never(),
+      80,
+      'reading',
+      undefined,
+      'reject',
+      'That page has been closed; anything typed into it is lost.',
+    ),
+    (error: unknown) => {
+      assert.match((error as { message: string }).message, /That page has been closed/)
+      return true
+    },
+  )
 })
 
 test('取消信号：到点之前按取消，原样抛 AbortError', async () => {
