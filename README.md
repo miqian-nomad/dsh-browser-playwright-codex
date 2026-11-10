@@ -382,9 +382,9 @@ Measured with ``npm run cost`` (per-turn, resident in the system prompt):
 
 | Surface | Tools | Schema characters | ≈ tokens/turn |
 |---|---|---|---|
-| Schema defaults (`Config({})`, no patch layer) | 16 | 11,095 | ≈ 3,082 |
-| Shipped bundle layer (this package's `cordis.patch.yml`: both power gates off) | 16 | 11,095 | ≈ 3,082 |
-| Everything registered (`registerDisabledTools: true`, plus `extract`) | 21 | 15,698 | ≈ 4,361 |
+| Schema defaults (`Config({})`, no patch layer) | 16 | 11,283 | ≈ 3,134 |
+| Shipped bundle layer (this package's `cordis.patch.yml`: both power gates off) | 16 | 11,283 | ≈ 3,134 |
+| Everything registered (`registerDisabledTools: true`, plus `extract`) | 21 | 15,886 | ≈ 4,413 |
 
 This paragraph describes the 0.6.0 change; the table above is today's measurement. Three things changed
 there, and only one of them was about size. (1) The click family was rewritten so each rule is stated once

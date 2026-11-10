@@ -23,13 +23,14 @@ import assert from 'node:assert/strict'
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http'
 import os from 'node:os'
 import path from 'node:path'
+import { readFileSync } from 'node:fs'
 import type { Locator } from 'playwright-core'
 import { PlaywrightProvider } from '../src/provider.ts'
 import type { PlaywrightConfig } from '../src/config.ts'
 import { BrowserError } from '../src/errors.ts'
 import { verifyFill } from '../src/page-actions.ts'
 import { extractionPrompt } from '../src/extract.ts'
-import type { PlaywrightSession } from '../src/session.ts'
+import { PlaywrightSession } from '../src/session.ts'
 import type { BrowserNode } from '../src/types.ts'
 import { publishGates } from '../src/runtime-state.ts'
 
@@ -367,4 +368,47 @@ test('fill: password and one-time-code fields are refused with CREDENTIAL_FIELD'
   } finally {
     await s.close()
   }
+})
+
+// --- issue #5 (round 2): the read deadline must dispose of the page it gave up on -------------
+//
+// Round 1 shipped the hard deadline but only dropped the session entry: in persistent mode the
+// next acquire got pages[currentIndex] back — the same wedged page — so "the next browser call
+// reopens the session" was never true. These pin the disposal, plus the two defaults that made a
+// perfectly usable page hang the call in the first place.
+
+/** Call the private disposal hook the way the timeout path calls it. */
+function discardStuckPage(page: unknown): Promise<void> {
+  const proto = PlaywrightSession.prototype as unknown as { discardStuckPage(p: unknown): Promise<void> }
+  return proto.discardStuckPage.call({}, page)
+}
+
+test('issue5: the page that missed its read deadline is closed, not just forgotten', async () => {
+  let closes = 0
+  await discardStuckPage({
+    close: async (): Promise<void> => {
+      closes += 1
+    },
+  })
+  assert.equal(closes, 1, 'the stuck page must be closed so the next call cannot inherit it')
+})
+
+test('issue5: a renderer too wedged to answer close() cannot re-hang the error path', async () => {
+  const started = Date.now()
+  await discardStuckPage({ close: (): Promise<void> => new Promise<void>(() => {}) })
+  const spent = Date.now() - started
+  assert.ok(spent < 2_900, 'disposal blocked for ' + String(spent) + 'ms: the timeout became a second hang')
+})
+
+test('issue5: the launcher and the navigation defaults stay on the side that cannot hang', () => {
+  const tool = readFileSync(new URL('../src/tool.ts', import.meta.url), 'utf8')
+  const launch = readFileSync(new URL('../src/browser-lifecycle.ts', import.meta.url), 'utf8')
+  // 'load' never fires on a long-polling, streaming or download page: both entry points must
+  // default to domcontentloaded, and the old default must not come back.
+  assert.equal((tool.match(/args\.waitFor \?\? 'domcontentloaded'/g) ?? []).length, 2)
+  assert.ok(!tool.includes("args.waitFor ?? 'load'"), 'navigate/open_tab defaulted back to load')
+  // launchPersistentContext waits forever unless told otherwise; the lock retry must also match
+  // Playwright's timeout-shaped report of a held profile, not only the lock filenames.
+  assert.ok(launch.includes('timeout: launchTimeoutMs'), 'launchPersistentContext lost its deadline')
+  assert.ok(launch.includes('Timeout \\d+ms exceeded'), 'the profile-lock retry no longer matches a launch timeout')
 })
