@@ -150,6 +150,13 @@ export declare class PlaywrightSession {
         interactiveOnly?: boolean;
     } | undefined, afterAction?: boolean): Promise<BrowserSnapshot>;
     /**
+     * Close one page whose script has stopped answering, so the next acquire starts
+     * on a live tab instead of inheriting it. Bounded and best-effort: main thread
+     * wedged badly enough to stall an evaluate may never answer close either, and
+     * this runs on the error path — it must never turn a timeout into a second hang.
+     */
+    private discardStuckPage;
+    /**
      * Semantic-tree capture via Playwright's official ariaSnapshot(mode:'ai').
      * An unavailable or unreadable aria tree (`missing`) degrades to the legacy
      * DOM walker instead of returning an empty snapshot: the model must never
