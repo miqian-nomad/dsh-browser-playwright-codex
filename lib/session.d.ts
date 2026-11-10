@@ -59,6 +59,17 @@ export declare class PlaywrightSession {
     lastRefSignatures: Map<string, RefSignature> | undefined;
     /** Nonce of the baseline ref space; a change means navigation reset. */
     lastRefNonce: string | undefined;
+    /**
+     * The cancellation signal of the tool call currently driving this session.
+     * Tools set it via `setSignal` before an action; `capture()` reads it so a
+     * stuck page read can be aborted without threading a signal through every
+     * action function (issue #5).
+     */
+    private currentSignal;
+    /** Bind the current tool call's cancellation signal to this session. */
+    setSignal(signal: AbortSignal | undefined): void;
+    /** Cancellation signal for the current tool call, if any. */
+    signal(): AbortSignal | undefined;
     constructor(provider: PlaywrightProvider, owner: string, context: BrowserContext);
     /**
      * Turn a navigation the host guard refused into a named refusal.

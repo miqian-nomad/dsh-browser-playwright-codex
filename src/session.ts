@@ -19,6 +19,7 @@ import { looksLikeToken, registrableDomain, type CookieRow } from './login-sites
 import { BrowserError, cdpDisabled, evaluateDisabled } from './errors.ts'
 import { isCdpMethodAllowed, cdpDenialMessage } from './cdp-policy.ts'
 import { getGates } from './runtime-state.ts'
+import { isReadTimeout, withDeadline } from './read-deadline.ts'
 import { asTimeoutError, isAbortError, isContextDestroyed, isCrashError } from './page-diagnostics.ts'
 import { consoleMessages, networkRequests, pageData, trackPage } from './page-diagnostics.ts'
 import { elementStabilityProbe, pageStabilityProbe } from './page-probes.ts'
@@ -106,6 +107,21 @@ export class PlaywrightSession {
   lastRefSignatures: Map<string, RefSignature> | undefined = undefined
   /** Nonce of the baseline ref space; a change means navigation reset. */
   lastRefNonce: string | undefined = undefined
+  /**
+   * The cancellation signal of the tool call currently driving this session.
+   * Tools set it via `setSignal` before an action; `capture()` reads it so a
+   * stuck page read can be aborted without threading a signal through every
+   * action function (issue #5).
+   */
+  private currentSignal: AbortSignal | undefined = undefined
+  /** Bind the current tool call's cancellation signal to this session. */
+  setSignal(signal: AbortSignal | undefined): void {
+    this.currentSignal = signal
+  }
+  /** Cancellation signal for the current tool call, if any. */
+  signal(): AbortSignal | undefined {
+    return this.currentSignal
+  }
   constructor(provider: PlaywrightProvider, owner: string, context: BrowserContext) {
     this.provider = provider
     this.owner = owner
@@ -267,7 +283,17 @@ export class PlaywrightSession {
   }
   /** Page-level render stability, bounded — a busy page never stalls the agent. */
   async waitForPageStable(page: Page, timeoutMs = 1200) {
-    await page.evaluate(pageStabilityProbe, { frames: 2, timeoutMs }).catch(() => false)
+    // page.evaluate has no timeout: a page whose script holds the main thread
+    // would hang here before capture even starts (issue #5). Give the probe a
+    // hard outer deadline; on timeout degrade to "not stable" and carry on —
+    // the same best-effort semantics as the existing .catch(() => false).
+    await withDeadline(
+      page.evaluate(pageStabilityProbe, { frames: 2, timeoutMs }).catch(() => false),
+      Math.max(2000, timeoutMs + 1000),
+      'waiting for the page to settle',
+      this.currentSignal,
+      'resolve-undefined',
+    ).catch(() => false)
   }
   /** Element-level stability before a pointer/keyboard action, bounded. Returns true when stable. */
   async waitForElementStable(locator: Locator) {
@@ -349,14 +375,31 @@ export class PlaywrightSession {
   /** Read the snapshot tree from one page (must run inside a run()). */
   async capture(page: Page, opts: { interactiveOnly?: boolean } | undefined, afterAction = false) {
     this.provider.armDialogGuard(page)
-    const raw =
-      resolveSnapshotEngine(this.provider.config.snapshot.engine) === 'aria'
-        ? await this.captureAria(page, opts)
-        : await this.captureLegacy(page, opts)
-    // Order matters: the response metadata is attached before the diff, so the
-    // snapshot the model reads carries the same evidence the detector used, and
-    // the no-progress backstop sees the final tree.
-    return this.attachDiff(attachNoProgress(this, attachDocResponse(this, page, raw), afterAction))
+    // 读页面内容（page.evaluate / ariaSnapshot）没有 timeout 参数：页面脚本占住
+    // 主线程时它会永远挂着，连工具调用一起卡死（issue #5）。这里给整次读加
+    // 硬期限 + 取消信号。所有读内容都经过这个咽喉点，一处覆盖全部动作。
+    const read = async (): Promise<BrowserSnapshot> => {
+      const raw =
+        resolveSnapshotEngine(this.provider.config.snapshot.engine) === 'aria'
+          ? await this.captureAria(page, opts)
+          : await this.captureLegacy(page, opts)
+      // Order matters: the response metadata is attached before the diff, so the
+      // snapshot the model reads carries the same evidence the detector used, and
+      // the no-progress backstop sees the final tree.
+      return this.attachDiff(attachNoProgress(this, attachDocResponse(this, page, raw), afterAction))
+    }
+    try {
+      const snap = await withDeadline(read(), this.timeoutMs(), 'reading the page content', this.currentSignal)
+      return snap as BrowserSnapshot
+    } catch (error) {
+      // 超时只能让我们这一侧返回，页面里那个 evaluate 还在跑。作废会话句柄，
+      // 下一次调用会重新拿到干净窗口，而不是继承这个卡住的页面。
+      if (isReadTimeout(error)) {
+        this.closed = true
+        this.provider.invalidateOwner(this.owner)
+      }
+      throw error
+    }
   }
   /**
    * Semantic-tree capture via Playwright's official ariaSnapshot(mode:'ai').

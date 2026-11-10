@@ -167,6 +167,10 @@ export function apply(ctx: Context, config: ToolConfig): void {
       )
     }
     return ctx.browser.acquire(ownerFor(exec), exec.signal).then((session) => {
+      // Let the session's page read honour this call's cancellation signal:
+      // a stuck page no longer hangs the whole tool call (issue #5).
+      const withSet = session as unknown as { setSignal?: (s?: AbortSignal) => void }
+      if (typeof withSet.setSignal === 'function') withSet.setSignal(exec.signal)
       publishLogins(session)
       return session
     })
