@@ -464,26 +464,34 @@ The scenario suites originally surfaced four hazards, now fixed and regression-t
 
 ## Credits — the intro effect
 
-The first-open effect (the page is wiped white, then a swarm of cursors draws the boxes, text and images back) is **not this project's work**, and it ships as one third-party file:
+The first-open effect (the page is wiped white, then a swarm of cursors draws the boxes, text and images back) is **not this project's work**, and its code is one third-party file — **repository-only since 0.8.0, no longer in the npm package**:
 
 - **The effect and its choreography** — [Swarm](https://github.com/califa/swarm-site) by **Joel Califa** ([swarm.joelcalifa.com](https://swarm.joelcalifa.com)). Used with his written permission (2026-11-08), on his one condition: **credit him** — this section is that credit.
-- **The bundled code** — `assets/swarm-rebuild.js`, from [`DhvanilPatel/swarm-cursors`](https://github.com/DhvanilPatel/swarm-cursors) at commit `3d49e0ac` (2026-11-06, file `swarm-rebuild/swarm.js`), **with the vendor's own control bar removed and three related fixes** (four changes in total, all in [`scripts/swarm-patch.mjs`](https://github.com/miqian-nomad/dsh-browser-playwright-codex/blob/main/scripts/swarm-patch.mjs); the last one fixes a crash the removal would otherwise cause at the end of playback. The pristine file stays in the repository as `assets/swarm-rebuild.upstream.js`, SHA-256 `6a30f19d…c7bfe`).
+- **The code** — `assets/swarm-rebuild.js`, from [`DhvanilPatel/swarm-cursors`](https://github.com/DhvanilPatel/swarm-cursors) at commit `3d49e0ac` (2026-11-06, file `swarm-rebuild/swarm.js`), **with seven changes** (all in [`scripts/swarm-patch.mjs`](https://github.com/miqian-nomad/dsh-browser-playwright-codex/blob/main/scripts/swarm-patch.mjs): the vendor's own control bar removed, its four DOM fields retargeted at off-screen placeholders, the per-frame HUD refresh short-circuited, the end-of-playback updates null-guarded — that one fixes a crash the removal would otherwise cause — scanning gated on the plugin's go-ahead, the 0.5 s white fade-in dropped, and its self-start deferred until `<html>` exists. The pristine baseline stays in the repository as `assets/swarm-rebuild.upstream.js`, SHA-256 `6a30f19d…c7bfe`).
 
 The exact licensing split, and what is still outstanding, is recorded in [`NOTICE.md`](https://github.com/miqian-nomad/dsh-browser-playwright-codex/blob/main/NOTICE.md).
 
-**中文**：首次打开网页的「进场特效」——页面被抹白，再由一群光标把方框、文字、图片一笔一笔画回来——**不是本项目自己的作品**。动效与编排出自 **Joel Califa** 的 [Swarm](https://github.com/califa/swarm-site)，他于 2026-11-08 书面同意本项目使用，唯一条件是**署名**，此节即为署名；随包发布的 `assets/swarm-rebuild.js` 来自 [DhvanilPatel/swarm-cursors](https://github.com/DhvanilPatel/swarm-cursors)。许可切分与仍在等的事见 `NOTICE.md`。
+**中文**：首次打开网页的「进场特效」——页面被抹白，再由一群光标把方框、文字、图片一笔一笔画回来——**不是本项目自己的作品**。动效与编排出自 **Joel Califa** 的 [Swarm](https://github.com/califa/swarm-site)，他于 2026-11-08 书面同意本项目使用，唯一条件是**署名**，此节即为署名；代码取自 [DhvanilPatel/swarm-cursors](https://github.com/DhvanilPatel/swarm-cursors) 的 `assets/swarm-rebuild.js`（改过七处）。**从 0.8.0 起这份资产只在仓库里，不进 npm 包**，也默认关闭。许可切分与仍在等的事见 `NOTICE.md`。
 
 ## License
 
-MIT — **except `assets/swarm-rebuild.js`**, which is third-party work: see [Credits](#credits--the-intro-effect) above and [`NOTICE.md`](https://github.com/miqian-nomad/dsh-browser-playwright-codex/blob/main/NOTICE.md) §3. This project grants no rights in that file.
+MIT — **except `assets/swarm-rebuild.js`** (repository-only, not in the npm package as of 0.8.0), which is third-party work: see [Credits](#credits--the-intro-effect) above and [`NOTICE.md`](https://github.com/miqian-nomad/dsh-browser-playwright-codex/blob/main/NOTICE.md) §3. This project grants no rights in that file.
 
-**中文**：插件本体与随包文档是 MIT；**`assets/swarm-rebuild.js` 除外**，它是第三方作品，本项目不对它主张也不授予任何权利，详见上文 Credits 与 `NOTICE.md` §3。
+**中文**：插件本体与随包文档是 MIT；**`assets/swarm-rebuild.js` 除外**（它只在仓库里，0.8.0 起不进 npm 包），它是第三方作品，本项目不对它主张也不授予任何权利，详见上文 Credits 与 `NOTICE.md` §3。
 
 
 <!-- changelog:today -->
 ## 更新记录
 
 （此列表只记 **minor 里程碑**；每个补丁版本见 [CHANGELOG.md](https://github.com/miqian-nomad/dsh-browser-playwright-codex/blob/main/CHANGELOG.md)。）
+
+### 0.8.0（2026-11-10）
+
+- **动效资产移出发布包（破坏性）**：`assets/swarm-rebuild.js` 不再随 npm 包分发，`package.json` 的 `files` 移除了 `assets` 相关两条。原因是那套资产是第三方作品、授权状态不允许再分发 —— 与其在授权上纠缠，不如不让它进 tarball。仓库里文件仍在，`npm run swarm:check` 的 SHA 校验照旧有效。
+- **`swarm.enabled` 出厂默认改为 `false`（破坏性）**：包内没有资产的前提下默认开，等于让每个新用户开箱撞一个不存在的文件。所有开关、代码路径一律保留，不动一行行为逻辑。
+- **资产缺失改为静默降级**：`swarmBootScript()` 读资产包了 `try/catch`，读不到就注入一段空注释脚本。它挂在上下文创建的 `addInitScript` 上，裸抛会把"动效没了"放大成"浏览器打不开"，这条是本次改动的安全底线。
+- **想要动效的人**：把 `assets/swarm-rebuild.js` 放进包根 `assets/`，再在设置卡里打开 swarm 开关即可恢复，功能与 0.7.x 完全一致。
+- **0.7.9 一并交付**：该版只有本地 tag，npm 上一直停在 0.7.8，从 0.7.8 升级会一次拿到 0.7.9 + 0.8.0 的全部内容，细节见 CHANGELOG。
 
 ### 0.7.0（2026-10-19）
 

@@ -22,13 +22,13 @@
 
 整个文件是一个立即执行函数，里面只有四块东西：
 
-| 模块 | 位置 | 职责 |
-|---|---|---|
-| **采集** `captureModel(env, shot)` | 491–1450 | DOM → 蓝图（items / tasks / groups / guides） |
-| **渲染** `class View` | 1618–2096 | 影子树、样式、每帧把引擎状态画成 DOM |
-| **调度** `class Engine` | 2097–3066 | 任务队列、光标群、协程驱动、进度计算 |
-| **音效** `class Sound` | 3067–3461 | WebAudio 现场合成（没有音频文件） |
-| **编排** `class App` | 3462–3826 | 启动时序、帧循环、快捷键、进出场 |
+| 模块                               | 位置      | 职责                                          |
+| ---------------------------------- | --------- | --------------------------------------------- |
+| **采集** `captureModel(env, shot)` | 491–1450  | DOM → 蓝图（items / tasks / groups / guides） |
+| **渲染** `class View`              | 1618–2096 | 影子树、样式、每帧把引擎状态画成 DOM          |
+| **调度** `class Engine`            | 2097–3066 | 任务队列、光标群、协程驱动、进度计算          |
+| **音效** `class Sound`             | 3067–3461 | WebAudio 现场合成（没有音频文件）             |
+| **编排** `class App`               | 3462–3826 | 启动时序、帧循环、快捷键、进出场              |
 
 辅助函数都在 `captureModel` 前后：`cursorSVG`（画光标形状）、`prepClone/cloneStyled`（克隆节点并内联样式）、`pseudoClone`（把 `::before/::after` 变成真节点）、`cropShot`（从截图里裁一块）、`canvasPixels`（把 canvas 内容抠成图）。
 
@@ -76,6 +76,7 @@
   task, gen, ov,                // 手上的任务、生成器、覆盖层
   speed, force, spin, curl, orbit }
 ```
+
 它们的移动不是"动画曲线"，而是**每帧朝目标加速 + 一点随机扰动**（`follow` / `flock`），所以看起来像一群真人在乱飞。
 
 ### 6. 生成器协程：一个动作怎么写出来
@@ -206,11 +207,18 @@ start();           // 注入即开播
 
 ---
 
-## 十一、我们改了什么（4 处，见 `scripts/swarm-patch.mjs`）
+## 十一、我们改了什么（7 处，见 `scripts/swarm-patch.mjs`）
 
 1. 删掉它自带的底部控制条（速度 / Tour / Go live / ✕）；
 2. 控制条那四个字段（`hud/status/barFill/dots`）指向**离屏哑元素**，这样下游代码照写不误、屏幕上看不见；
 3. `updateHud()` 发现控制条不在文档里就整段跳过（省掉每 200ms 的白工）；
-4. 播完那一下原本要设置四个按钮的显示状态，改成"找到才设"，避免空指针。
+4. 播完那一下原本要设置四个按钮的显示状态，改成"找到才设"，避免空指针；
+5. 扫描前先等 `__dshSwarmGo`：扫描会滚一遍页面、和插件的"拍快照"抢，插件要先把快照拿到手再放行；
+6. 去掉白底 `.5s` 淡入：`document_start` 提前注入时，那半秒里原页面会透出来；
+7. 结尾自启动改成"等 `<html>` 出现再启动"：`document_start` 时 `scrollingElement` 还是 `null`，`detectEnv` 会抛错、白底全无。
 
-改动只碰这四处；蓝图层、引擎层、渲染层**一行没动**。原始文件留在 `assets/swarm-rebuild.upstream.js`，随时可 diff。
+改动只碰这七处；蓝图层、引擎层、渲染层**一行没动**。原始文件留在 `assets/swarm-rebuild.upstream.js`，随时可 diff。
+
+> 第 5–7 处是补丁扩写后加的，此段一度仍写"4 处"——现在由 `tests/swarm-contract.test.ts` 对着 `TRANSFORMS` 的长度核对，写错会红。
+>
+> 接口层面的东西（控制条 class、调速按钮选择器、停止函数挂在哪、上游改版怎么核对）另见 **[SWARM-CONTRACT.md](./SWARM-CONTRACT.md)**：那份讲"我们捏着上游的哪几个把手"，这份讲"上游内部是怎么转的"。
