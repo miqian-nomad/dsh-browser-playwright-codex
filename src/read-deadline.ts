@@ -65,7 +65,9 @@ export async function withDeadline<T>(
         ),
       )
     }, timeoutMs)
-    timer.unref?.()
+    // 不要 unref：期限是「到点必须断」的承诺，unref 之后若这是进程里最后一个句柄，
+    // 事件循环会判定无事可做直接退出，调用方永远等不到这条 ACTION_TIMEOUT
+    // （tests/read-deadline.test.ts 就是这么被打成 cancelledByParent 的）。
     if (signal !== undefined && typeof signal.addEventListener === 'function') {
       if (signal.aborted) onAbort()
       else signal.addEventListener('abort', onAbort, { once: true })
