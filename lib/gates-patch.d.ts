@@ -20,7 +20,46 @@ export declare function homePatchPath(env?: NodeJS.ProcessEnv): string;
  * @returns the YAML block, markers included
  */
 export declare function renderBrowserBlock(allowEvaluate: boolean, allowCdp: boolean, diagnostics: boolean): string;
-/** Merge the managed block into `original`, replacing an existing one in place. */
+/** The three gate keys, in the order a freshly created block writes them. */
+declare const GATE_KEYS: readonly ["allowEvaluate", "allowCdp", "diagnostics"];
+/** One of the three gate keys this writer owns. */
+type GateKey = (typeof GATE_KEYS)[number];
+/** The gate values as a record, for line-level rewriting. */
+type GateValues = Record<GateKey, boolean>;
+/**
+ * Rewrite ONLY the three gate shortcuts inside an existing block, keeping every
+ * other line byte for byte.
+ *
+ * Why not re-render the whole block: the loader replaces an entry's `config`
+ * wholesale, so the block has to carry every key the user cares about — and it
+ * cannot know all of them. Re-rendering the template silently reset whatever
+ * the template did not list: `profileDir` (which wiped the saved login), the
+ * launch channel, `snapshot.engine`, `toolPrefix`, `maxWaitMs`,
+ * `interactiveOnlyDefault`, `registerDisabledTools`, the swarm section. Measured
+ * 2026-11-10: toggling one switch in the settings card logged the user out of
+ * every site, because their block said profileDir: 'D:/dsh-profile' and the
+ * template does not.
+ *
+ * Documented consequence, deliberately kept: keys the user never wrote stay
+ * unwritten (the package default applies), which is exactly what the user chose
+ * by not writing them.
+ *
+ * @param body - the full block text, markers included
+ * @param gates - the three gate values to write
+ * @returns the block with only those lines changed or added
+ */
+export declare function patchBlockGates(body: string, gates: GateValues): string;
+/**
+ * Merge the gate values into `original`.
+ *
+ * - No managed block yet → append the full template (nothing to preserve).
+ * - Block present → rewrite ONLY the three gate lines (see patchBlockGates).
+ * - Block present but its structure defeats line editing (a flow-style
+ *   `tool: { ... }`, a truncated block) → fall back to the whole template, which
+ *   is the old behaviour: at least the switch the user just flipped takes
+ *   effect. Guarded by a read-back check so a half-edited block can never be
+ *   written out.
+ */
 export declare function mergeBrowserBlock(original: string, allowEvaluate: boolean, allowCdp: boolean, diagnostics: boolean): string;
 /** Read the current managed block, or undefined when there is none. */
 export declare function parseBrowserBlock(text: string): {
@@ -47,3 +86,4 @@ export declare function writeGates(allowEvaluate: boolean, allowCdp: boolean, di
     allowCdp: boolean;
     diagnostics: boolean;
 }>;
+export {};

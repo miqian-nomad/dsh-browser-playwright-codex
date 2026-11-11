@@ -11,6 +11,7 @@ import type { ActionResult } from './provider.ts'
 import type { LoadState } from './types.ts'
 import { assertAllowedUrl } from './url-policy.ts'
 import { asTimeoutError, isAbortError } from './page-diagnostics.ts'
+import { isReadTimeout } from './read-deadline.ts'
 import { clearLabelTargets, labelTargetProbe } from './page-probes.ts'
 import { createBackgroundPage, isWindowMinimized } from './window-focus.ts'
 import { maybePlaySwarm, stopSwarm, willPlaySwarm } from './swarm-intro.ts'
@@ -585,9 +586,54 @@ export function isCredentialField(spec: { tag: string; type?: string; autocomple
   const tag = spec.tag.toLowerCase()
   if (tag !== 'input' && tag !== 'textarea') return false
   if ((spec.type ?? '').toLowerCase() === 'password') return true
-  const tokens = (spec.autocomplete ?? '').toLowerCase().trim().split(/\s+/)
-  const token = tokens[tokens.length - 1] ?? ''
-  return CREDENTIAL_AUTOCOMPLETE.has(token)
+  // Every token, not just the last one. `autocomplete` is a space-separated
+  // token list ("section-a shipping new-password webauthn") and only its LAST
+  // token used to be checked, so any credential token that was not written last
+  // read as an ordinary field (measured 2026-11-10).
+  const tokens = (spec.autocomplete ?? '').toLowerCase().split(/\s+/)
+  return tokens.some((token) => CREDENTIAL_AUTOCOMPLETE.has(token))
+}
+
+/** What the live element says about itself, as far as the credential check needs. */
+export interface FieldSpec {
+  tag: string
+  type: string
+  autocomplete: string
+}
+
+/**
+ * Read tag/type/autocomplete from the live element — and refuse to guess.
+ *
+ * `browser_fill` promises it never types a secret. That promise used to depend
+ * on a read whose failure was swallowed (`.catch(() => ({tag:'input', type:'',
+ * autocomplete:''}))`): an unreadable field produced a spec that looks like a
+ * plain text box, the credential check said "not a credential", and the fill
+ * went ahead. Fail-open on a page whose attributes we cannot read is exactly
+ * the case where the answer is least certain, so it now fails closed: no spec,
+ * nothing typed, CREDENTIAL_FIELD with a clear next step.
+ *
+ * Cancel and deadline are NOT credential failures: they pass through untouched
+ * so the caller reports what actually happened.
+ *
+ * @param locator - the resolved target
+ * @returns the field spec read from the page
+ */
+export async function readFieldSpec(locator: Locator): Promise<FieldSpec> {
+  try {
+    return await locator.evaluate((el) => {
+      const tag = el.tagName.toLowerCase()
+      const type = tag === 'input' ? String((el as HTMLInputElement).type || '').toLowerCase() : ''
+      return { tag, type, autocomplete: el.getAttribute('autocomplete') ?? '' }
+    })
+  } catch (error) {
+    if (isAbortError(error) || isReadTimeout(error)) throw error
+    const detail = error instanceof Error ? error.message : String(error)
+    throw new BrowserError(
+      'CREDENTIAL_FIELD',
+      "browser_fill could not read this field's attributes, so it cannot rule out a password / one-time code / card field and typed nothing. Take a fresh snapshot (the element may have been replaced) and retry, or ask the user to fill it in the visible window. Underlying failure: " +
+        detail.slice(0, 200),
+    )
+  }
 }
 
 export async function fill(session: PlaywrightSession, ref: string, text: string, signal: AbortSignal | undefined) {
@@ -596,13 +642,7 @@ export async function fill(session: PlaywrightSession, ref: string, text: string
     const page = session.currentPageSync()
     await session.waitForElementStable(locator)
     await session.assertActionable(locator, { editable: true })
-    const spec = await locator
-      .evaluate((el) => {
-        const tag = el.tagName.toLowerCase()
-        const type = tag === 'input' ? String((el as HTMLInputElement).type || '').toLowerCase() : ''
-        return { tag, type, autocomplete: el.getAttribute('autocomplete') ?? '' }
-      })
-      .catch(() => ({ tag: 'input', type: '', autocomplete: '' }))
+    const spec = await readFieldSpec(locator)
     if (isCredentialField(spec)) {
       throw new BrowserError(
         'CREDENTIAL_FIELD',

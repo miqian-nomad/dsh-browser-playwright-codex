@@ -1,6 +1,6 @@
 # dsh-browser-playwright-codex
 
-[![npm 版本](https://img.shields.io/npm/v/dsh-browser-playwright-codex?label=npm)](https://www.npmjs.com/package/dsh-browser-playwright-codex) [![License](https://img.shields.io/npm/l/dsh-browser-playwright-codex)](LICENSE) [![Node](https://img.shields.io/node/v/dsh-browser-playwright-codex)](package.json) [![最新发布](https://img.shields.io/github/v/release/miqian-nomad/dsh-browser-playwright-codex)](https://github.com/miqian-nomad/dsh-browser-playwright-codex/releases)
+[![npm 版本](https://img.shields.io/npm/v/dsh-browser-playwright-codex?label=npm)](https://www.npmjs.com/package/dsh-browser-playwright-codex) [![License](https://img.shields.io/npm/l/dsh-browser-playwright-codex)](LICENSE) [![Node](https://img.shields.io/node/v/dsh-browser-playwright-codex)](package.json) [![最新发布](https://img.shields.io/github/v/release/miqian-nomad/dsh-browser-playwright-codex)](https://github.com/miqian-nomad/dsh-browser-playwright-codex/releases) [![](https://img.shields.io/badge/powered_by-dsh-4D6BFE?style=flat-square&logo=deepseek&logoColor=white)](https://github.com/deepseek-ai/deepseek-harness)
 
 > [![dsh.so 安装验证 · harness 0.2.0-rc.1](https://www.dsh.so/badge/install/dsh-browser-playwright-codex@0.2.0-rc.1.svg)](https://www.dsh.so/zh/artifact/dsh-browser-playwright-codex/) [![dsh.so 风险](https://www.dsh.so/badge/dsh-browser-playwright-codex.svg)](https://www.dsh.so/zh/artifact/dsh-browser-playwright-codex/)
 

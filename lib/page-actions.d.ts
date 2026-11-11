@@ -84,6 +84,30 @@ export declare function isCredentialField(spec: {
     type?: string;
     autocomplete?: string;
 }): boolean;
+/** What the live element says about itself, as far as the credential check needs. */
+export interface FieldSpec {
+    tag: string;
+    type: string;
+    autocomplete: string;
+}
+/**
+ * Read tag/type/autocomplete from the live element — and refuse to guess.
+ *
+ * `browser_fill` promises it never types a secret. That promise used to depend
+ * on a read whose failure was swallowed (`.catch(() => ({tag:'input', type:'',
+ * autocomplete:''}))`): an unreadable field produced a spec that looks like a
+ * plain text box, the credential check said "not a credential", and the fill
+ * went ahead. Fail-open on a page whose attributes we cannot read is exactly
+ * the case where the answer is least certain, so it now fails closed: no spec,
+ * nothing typed, CREDENTIAL_FIELD with a clear next step.
+ *
+ * Cancel and deadline are NOT credential failures: they pass through untouched
+ * so the caller reports what actually happened.
+ *
+ * @param locator - the resolved target
+ * @returns the field spec read from the page
+ */
+export declare function readFieldSpec(locator: Locator): Promise<FieldSpec>;
 export declare function fill(session: PlaywrightSession, ref: string, text: string, signal: AbortSignal | undefined): Promise<import("./types.ts").BrowserSnapshot>;
 /**
  * Normalize a field value before comparing. Two levels of forgiveness, both of them
