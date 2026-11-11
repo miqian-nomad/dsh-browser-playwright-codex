@@ -1,0 +1,53 @@
+name: Scorecard analysis workflow
+
+# OpenSSF Scorecard：按 18 项开源安全实践打分（分支保护、依赖更新、SAST、
+# 构建可复现、发布签名等）。publish_results 打开后，分数会发布到 OpenSSF
+# 公共数据集，徽章和 viewer 页面才能读到。
+#
+# 官方模板来源：ossf/scorecard 仓库的 starter workflow。
+
+on:
+  push:
+    branches:
+      - main
+  schedule:
+    # 每周六跑一次
+    - cron: '30 1 * * 6'
+
+permissions: read-all
+
+jobs:
+  analysis:
+    name: Scorecard analysis
+    runs-on: ubuntu-latest
+    permissions:
+      # 上传 SARIF 到代码扫描面板需要
+      security-events: write
+      # publish_results 需要 GitHub OIDC token
+      id-token: write
+
+    steps:
+      - name: "Checkout code"
+        uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+
+      - name: "Run analysis"
+        uses: ossf/scorecard-action@v2.4.1
+        with:
+          results_file: results.sarif
+          results_format: sarif
+          # 发布结果到 OpenSSF 公共数据集（免费）
+          publish_results: true
+
+      - name: "Upload artifact"
+        uses: actions/upload-artifact@v4
+        with:
+          name: SARIF file
+          path: results.sarif
+          retention-days: 5
+
+      - name: "Upload to code-scanning"
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: results.sarif
