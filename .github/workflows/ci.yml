@@ -26,6 +26,12 @@
 
 name: CI
 
+# 最小权限：这份工作流只读仓库、写不了任何东西。
+# OpenSSF Scorecard 的 Token-Permissions 项要求每个工作流显式声明最小权限，
+# 而不是靠默认的全权 token。
+permissions:
+  contents: read
+
 on:
   push:
     branches: [main]

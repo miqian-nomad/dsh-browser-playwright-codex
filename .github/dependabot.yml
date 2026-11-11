@@ -1,0 +1,24 @@
+version: 2
+
+# 依赖自动更新：OpenSSF Scorecard 的 Dependency-Update-Tool 项会检查这个文件
+# 是否存在、是否覆盖了 npm 与 GitHub Actions 两类依赖。
+updates:
+  - package-ecosystem: "npm"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "deps"
+    # DSH 相关的包钉死在特定版本（见 README 的 Compatibility 段），
+    # 大版本跳动会拉进别的 DSH 组合，这里只收补丁与次版本。
+    ignore:
+      - dependency-name: "@deepseek-ai/*"
+        update-types: ["version-update:semver-major"]
+
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    commit-message:
+      prefix: "ci"
