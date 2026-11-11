@@ -1,24 +1,40 @@
 version: 2
 
-# 依赖自动更新：OpenSSF Scorecard 的 Dependency-Update-Tool 项会检查这个文件
-# 是否存在、是否覆盖了 npm 与 GitHub Actions 两类依赖。
+# 只做「安全相关」的提醒，不做常规版本更新 —— 目的是配一次之后不再吵。
+#
+# 背景：OpenSSF Scorecard 的 Dependency-Update-Tool 项要求仓库里有这份配置；
+# 但常规版本更新会持续开 PR（尤其 typescript、playwright-core 这类跨大版本的
+# 升级不能自动合）。所以这里把范围压到最小：只收补丁级更新，其余全部忽略。
 updates:
   - package-ecosystem: "npm"
     directory: "/"
     schedule:
-      interval: "weekly"
-    open-pull-requests-limit: 5
+      interval: "monthly"
+    open-pull-requests-limit: 1
     commit-message:
       prefix: "deps"
-    # DSH 相关的包钉死在特定版本（见 README 的 Compatibility 段），
-    # 大版本跳动会拉进别的 DSH 组合，这里只收补丁与次版本。
+    # 只收 patch 级；minor / major 一律不主动提。
     ignore:
-      - dependency-name: "@deepseek-ai/*"
-        update-types: ["version-update:semver-major"]
+      - dependency-name: "*"
+        update-types:
+          - "version-update:semver-major"
+          - "version-update:semver-minor"
+      # 以下两个是「钉死在特定版本」的，任何升级都不要提：
+      #  - typescript：跨大版本会改类型检查规则，等于换了一整套门禁标准；
+      #  - playwright-core：FOCUS-STEALING.md 按 1.62.1 的内部实现和行号引用，
+      #    升级后文档与代码对不上（见 ci.yml 顶部注释与 README 的 Compatibility 段）。
+      - dependency-name: "typescript"
+      - dependency-name: "playwright-core"
 
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
-      interval: "weekly"
+      interval: "monthly"
+    open-pull-requests-limit: 1
     commit-message:
       prefix: "ci"
+    # GitHub Actions 的升级由 Dependabot 按 SHA 提；同样只收补丁级。
+    ignore:
+      - dependency-name: "*"
+        update-types:
+          - "version-update:semver-major"
