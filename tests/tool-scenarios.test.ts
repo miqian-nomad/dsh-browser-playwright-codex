@@ -13,6 +13,7 @@ import os from 'node:os'
 import path from 'node:path'
 import { Context } from '@deepseek-ai/cordis'
 import ToolRuntime, { type ToolExecutionResult } from '@deepseek-ai/dsh-tools'
+import * as nativeExecutor from '@deepseek-ai/dsh-tool-executor-native'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 // Boundary adapter: the harness renamed CallId to ToolCallId; this plugin owns
 // its own brand so a harness release cannot break the import (src/compat.ts).
@@ -85,22 +86,43 @@ async function assemble(overrides: Partial<ToolConfig> = {}): Promise<Context> {
   const ctx = new Context()
   await ctx.plugin(SystemPrompt)
   await ctx.plugin(ToolRuntime)
+  // 0.2.2 split execution out of the registry: the ToolRuntime plugin owns
+  // registration and scoped dispatch, but a batch only settles once an executor
+  // is mounted in the same composition — without one, ctx.tools.execute rejects
+  // with ToolExecutorUnavailableError before any tool runs.
+  nativeExecutor.apply(ctx)
   await ctx.plugin(BrowserRuntime)
   ctx.browser.registerProvider(provider)
   browserTool.apply(ctx, { ...toolConfig, ...overrides })
   return ctx
 }
 
-/** Execute one tool exactly like the agent loop does. */
+/**
+ * Execute one tool exactly like the agent loop does.
+ *
+ * 0.2.2 made `tools.execute` batch-shaped: it takes a list of `ToolCallBlock`
+ * (each carrying the provider-issued call id, the tool name and the arguments
+ * as a raw JSON string) and returns one settled `ToolCallResult` per call. This
+ * helper drives a single call through that path and unwraps its outcome, so the
+ * call sites below keep reading a plain `ToolExecutionResult`.
+ */
 async function call(ctx: Context, name: string, args: unknown, agentId = 'tool-agent-1'): Promise<ToolExecutionResult> {
   callCounter += 1
-  return ctx.tools.execute({
+  const batch = await ctx.tools.execute({
     signal: new AbortController().signal,
-    callId: CallId('call-' + String(callCounter)),
-    name,
-    arguments: args,
+    calls: [
+      {
+        type: 'tool-call',
+        id: CallId('call-' + String(callCounter)),
+        name,
+        arguments: JSON.stringify(args),
+      },
+    ],
     agent: agentFor(agentId),
   })
+  const settled = batch.results[0]
+  if (settled === undefined) throw new Error('tool batch returned no result for ' + name)
+  return settled.result
 }
 
 /** Poll a tool until its canonical value satisfies the condition. */
@@ -651,6 +673,8 @@ async function assembleWith(p: PlaywrightProvider, overrides: Partial<ToolConfig
   const ctx = new Context()
   await ctx.plugin(SystemPrompt)
   await ctx.plugin(ToolRuntime)
+  // Same reason as assemble(): 0.2.2 needs an executor mounted to settle a batch.
+  nativeExecutor.apply(ctx)
   await ctx.plugin(BrowserRuntime)
   ctx.browser.registerProvider(p)
   browserTool.apply(ctx, { ...toolConfig, ...overrides })

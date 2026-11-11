@@ -13,12 +13,12 @@ dsh plugin --profile <name> add dsh-browser-playwright-codex
 
 The bundle mounts three rows: the `ctx.browser` seam (`service`), the Playwright provider (`playwright`), and the model-facing tool family (`tool`).
 
-**Compatibility.** Built and tested against DSH `0.2.0-rc.1`. The dependency ranges are **floors, not
-wildcards**: peers `@deepseek-ai/cordis` `>=4.0.4`, `@deepseek-ai/dsh-llm` `>=0.2.0-rc.1`,
-`@deepseek-ai/dsh-tools` `>=0.2.0-rc.1`, and the direct dependency `@deepseek-ai/schemastery` `^3.18.4`. The
+**Compatibility.** Built and tested against DSH `0.2.2-rc.1`. The dependency ranges are **floors, not
+wildcards**: peers `@deepseek-ai/cordis` `>=4.1.0`, `@deepseek-ai/dsh-llm` `>=0.2.2-rc.1`,
+`@deepseek-ai/dsh-tools` `>=0.2.2-rc.1`, and the direct dependency `@deepseek-ai/schemastery` `^3.19.0`. The
 floors stop an empty project from resolving a very old `0.0.1-rc.*` build while still letting a newer harness
-install; a prerelease whose `[major, minor, patch]` tuple differs from `0.2.0` (for example `0.2.1-rc.*`) is
-outside a `>=0.2.0-rc.1` range and may draw a **peer warning** — a warning, not an install failure (pnpm does
+install; a prerelease whose `[major, minor, patch]` tuple differs from `0.2.2` (for example `0.2.3-rc.*`) is
+outside a `>=0.2.2-rc.1` range and may draw a **peer warning** — a warning, not an install failure (pnpm does
 not enforce peer ranges strictly by default). `npm run doctor` re-checks the harness exports after an upgrade.
 
 ### Your first task

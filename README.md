@@ -2,7 +2,7 @@
 
 [![npm 版本](https://img.shields.io/npm/v/dsh-browser-playwright-codex?label=npm)](https://www.npmjs.com/package/dsh-browser-playwright-codex) [![License](https://img.shields.io/npm/l/dsh-browser-playwright-codex)](LICENSE) [![Node](https://img.shields.io/node/v/dsh-browser-playwright-codex)](package.json) [![最新发布](https://img.shields.io/github/v/release/miqian-nomad/dsh-browser-playwright-codex)](https://github.com/miqian-nomad/dsh-browser-playwright-codex/releases) [![](https://img.shields.io/badge/powered_by-dsh-4D6BFE?style=flat-square&logo=deepseek&logoColor=white)](https://github.com/deepseek-ai/deepseek-harness)
 
-> [![dsh.so 安装验证 · harness 0.2.0-rc.1](https://www.dsh.so/badge/install/dsh-browser-playwright-codex@0.2.0-rc.1.svg)](https://www.dsh.so/zh/artifact/dsh-browser-playwright-codex/) [![dsh.so 风险](https://www.dsh.so/badge/dsh-browser-playwright-codex.svg)](https://www.dsh.so/zh/artifact/dsh-browser-playwright-codex/)
+> [![dsh.so 安装验证 · harness 0.2.2-rc.1](https://www.dsh.so/badge/install/dsh-browser-playwright-codex@0.2.2-rc.1.svg)](https://www.dsh.so/zh/artifact/dsh-browser-playwright-codex/) [![dsh.so 风险](https://www.dsh.so/badge/dsh-browser-playwright-codex.svg)](https://www.dsh.so/zh/artifact/dsh-browser-playwright-codex/)
 
 **一句话**：让 AI 用你**已经登录的账号**在真实网页上干活 —— 填表、抓取列表、多标签查后台；浏览器窗口就在你桌面上、你随时看得见。原生弹框会被挂起、**绝不替你点「确定」**（机制级）；验证码/挑战页会被识别出来，并以提示要求模型停下交给你（**提示不是阻断**）。登录/二次验证**没有探测器**，靠模型从快照看出来并停下；密码、一次性验证码、卡号字段 `browser_fill` **直接拒绝**——这类字由你本人在窗口里输。
 
@@ -70,12 +70,12 @@ dsh plugin --profile <name> add github:miqian-nomad/dsh-browser-playwright-codex
 dsh plugin --profile <name> add link:<absolute path to this directory>
 ```
 
-**Compatibility.** Built and tested against DSH `0.2.0-rc.1`. The dependency ranges are **floors, not
-wildcards**: peers `@deepseek-ai/cordis` `>=4.0.4`, `@deepseek-ai/dsh-llm` `>=0.2.0-rc.1`,
-`@deepseek-ai/dsh-tools` `>=0.2.0-rc.1`, and the direct dependency `@deepseek-ai/schemastery` `^3.18.4`. The
+**Compatibility.** Built and tested against DSH `0.2.2-rc.1`. The dependency ranges are **floors, not
+wildcards**: peers `@deepseek-ai/cordis` `>=4.1.0`, `@deepseek-ai/dsh-llm` `>=0.2.2-rc.1`,
+`@deepseek-ai/dsh-tools` `>=0.2.2-rc.1`, and the direct dependency `@deepseek-ai/schemastery` `^3.19.0`. The
 floors exist so an empty project cannot resolve a very old `0.0.1-rc.*` build, while a newer harness still
 installs. One cost of npm's prerelease rules: a prerelease whose `[major, minor, patch]` tuple differs from
-`0.2.0` (for example `0.2.1-rc.*`) is outside a `>=0.2.0-rc.1` range, so you may see a **peer warning** — a
+`0.2.2` (for example `0.2.3-rc.*`) is outside a `>=0.2.2-rc.1` range, so you may see a **peer warning** — a
 warning, not an install failure (pnpm does not enforce peer ranges strictly by default). After a harness
 upgrade, `npm run doctor` re-checks that every named export this plugin imports still exists — that is the
 fast way to tell "the harness moved" from "the plugin broke".
