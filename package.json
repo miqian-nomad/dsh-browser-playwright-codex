@@ -84,7 +84,7 @@
     "@deepseek-ai/dsh-tools": "0.2.2-rc.1",
     "@deepseek-ai/dsh-tool-executor-native": "0.2.2-rc.1",
     "@deepseek-ai/schemastery": "3.19.0",
-    "@types/node": "^24.13.3",
+    "@types/node": "^26.6.6",
     "prettier": "^3.9.9",
     "tsx": "^4.20.0",
     "typescript": "^5.9.0"
