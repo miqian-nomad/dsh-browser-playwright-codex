@@ -319,8 +319,12 @@ test('the backstop fires after an action that changed a nearly empty page', () =
   const note = detectNoProgress({ afterAction: true, unchangedStreak: 1, refs: 2 })
   assert.ok(note !== null)
   assert.match(note, /no visible change/)
-  // It must say it is a guess: this tier is for walls we cannot identify.
-  assert.match(note, /guess, not a diagnosis/)
+  // It names the recovery instead of guessing a wall: re-snapshot, then try
+  // another approach. It must NOT send the user to look at the window.
+  assert.match(note, /still be rendering/)
+  assert.match(note, /one more browser_snapshot/)
+  assert.doesNotMatch(note, /anti-bot/i)
+  assert.doesNotMatch(note, /look at the open window/i)
 })
 
 test('the backstop stays silent on a rich page after one unchanged action', () => {
@@ -470,6 +474,21 @@ test('the fingerprint changes when the title, the refs or a label change', () =>
   assert.notEqual(snapshotFingerprint({ ...base, refs: 3 }), hash)
   assert.notEqual(snapshotFingerprint({ ...base, nodes: [node('button', '取消')] }), hash)
   assert.notEqual(snapshotFingerprint({ ...base, url: 'https://example.test/next' }), hash)
+})
+
+test('the fingerprint changes when a checkbox toggles or a field is filled', () => {
+  // A normal fill or checkbox toggle used to leave the fingerprint identical —
+  // same URL, same title, same refs, same role=name pairs — so the no-progress
+  // backstop reported "no visible change" and guessed anti-bot wall. The state
+  // and value now ride in the fingerprint, so both register as change.
+  const unchecked = { url: 'https://example.test/', title: 'Form', refs: 2, nodes: [node('checkbox', ' Agree')] }
+  const hash = snapshotFingerprint(unchecked)
+  const checked = { ...unchecked, nodes: [{ role: 'checkbox', name: 'Agree', checked: true }] }
+  assert.notEqual(snapshotFingerprint(checked), hash, 'a checkbox toggle must register as change')
+
+  const empty = { url: 'https://example.test/', title: 'Form', refs: 2, nodes: [node('textbox', ' Name')] }
+  const filled = { ...empty, nodes: [{ role: 'textbox', name: 'Name', value: 'Annis' }] }
+  assert.notEqual(snapshotFingerprint(filled), snapshotFingerprint(empty), 'a fill must register as change')
 })
 
 test('the challenge hint tells the truth about the window mode', () => {

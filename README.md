@@ -384,7 +384,7 @@ Measured with ``npm run cost`` (per-turn, resident in the system prompt):
 |---|---|---|---|
 | Schema defaults (`Config({})`, no patch layer) | 16 | 11,283 | ≈ 3,134 |
 | Shipped bundle layer (this package's `cordis.patch.yml`: both power gates off) | 16 | 11,283 | ≈ 3,134 |
-| Everything registered (`registerDisabledTools: true`, plus `extract`) | 21 | 15,886 | ≈ 4,413 |
+| Everything registered (`registerDisabledTools: true`, plus `extract`) | 21 | 16,146 | ≈ 4,485 |
 
 This paragraph describes the 0.6.0 change; the table above is today's measurement. Three things changed
 there, and only one of them was about size. (1) The click family was rewritten so each rule is stated once
@@ -464,20 +464,20 @@ The scenario suites originally surfaced four hazards, now fixed and regression-t
 
 ## Credits — the intro effect
 
-The first-open effect (the page is wiped white, then a swarm of cursors draws the boxes, text and images back) is **not this project's work**, and its code is one third-party file — **repository-only since 0.8.0, no longer in the npm package**:
+The first-open effect (the page is wiped white, then a swarm of cursors draws the boxes, text and images back) is **not this project's work**, and its code is one third-party file — **shipped inside the npm package again as of 0.8.1, with the authors' written permission** (still off by default):
 
 - **The effect and its choreography** — [Swarm](https://github.com/califa/swarm-site) by **Joel Califa** ([swarm.joelcalifa.com](https://swarm.joelcalifa.com)). Used with his written permission (2026-11-08), on his one condition: **credit him** — this section is that credit.
-- **The code** — `assets/swarm-rebuild.js`, from [`DhvanilPatel/swarm-cursors`](https://github.com/DhvanilPatel/swarm-cursors) at commit `3d49e0ac` (2026-11-06, file `swarm-rebuild/swarm.js`), **with seven changes** (all in [`scripts/swarm-patch.mjs`](https://github.com/miqian-nomad/dsh-browser-playwright-codex/blob/main/scripts/swarm-patch.mjs): the vendor's own control bar removed, its four DOM fields retargeted at off-screen placeholders, the per-frame HUD refresh short-circuited, the end-of-playback updates null-guarded — that one fixes a crash the removal would otherwise cause — scanning gated on the plugin's go-ahead, the 0.5 s white fade-in dropped, and its self-start deferred until `<html>` exists. The pristine baseline stays in the repository as `assets/swarm-rebuild.upstream.js`, SHA-256 `6a30f19d…c7bfe`).
+- **The code** — `assets/swarm-rebuild.js`, from [`DhvanilPatel/swarm-cursors`](https://github.com/DhvanilPatel/swarm-cursors) at commit `3d49e0ac` (2026-11-06, file `swarm-rebuild/swarm.js`), **with seven changes** (all in [`scripts/swarm-patch.mjs`](https://github.com/miqian-nomad/dsh-browser-playwright-codex/blob/main/scripts/swarm-patch.mjs): the vendor's own control bar removed, its four DOM fields retargeted at off-screen placeholders, the per-frame HUD refresh short-circuited, the end-of-playback updates null-guarded — that one fixes a crash the removal would otherwise cause — scanning gated on the plugin's go-ahead, the 0.5 s white fade-in dropped, and its self-start deferred until `<html>` exists. **Dhvanil Patel granted written permission by email on 2026-11-11 to bundle and modify it**; that grant covers this plugin, not third-party re-use, and comes with no MIT licence text. The pristine baseline stays in the repository as `assets/swarm-rebuild.upstream.js`, SHA-256 `6a30f19d…c7bfe`).
 
 The exact licensing split, and what is still outstanding, is recorded in [`NOTICE.md`](https://github.com/miqian-nomad/dsh-browser-playwright-codex/blob/main/NOTICE.md).
 
-**中文**：首次打开网页的「进场特效」——页面被抹白，再由一群光标把方框、文字、图片一笔一笔画回来——**不是本项目自己的作品**。动效与编排出自 **Joel Califa** 的 [Swarm](https://github.com/califa/swarm-site)，他于 2026-11-08 书面同意本项目使用，唯一条件是**署名**，此节即为署名；代码取自 [DhvanilPatel/swarm-cursors](https://github.com/DhvanilPatel/swarm-cursors) 的 `assets/swarm-rebuild.js`（改过七处）。**从 0.8.0 起这份资产只在仓库里，不进 npm 包**，也默认关闭。许可切分与仍在等的事见 `NOTICE.md`。
+**中文**：首次打开网页的「进场特效」——页面被抹白，再由一群光标把方框、文字、图片一笔一笔画回来——**不是本项目自己的作品**。动效与编排出自 **Joel Califa** 的 [Swarm](https://github.com/califa/swarm-site)，他于 2026-11-08 书面同意本项目使用，唯一条件是**署名**，此节即为署名；代码取自 [DhvanilPatel/swarm-cursors](https://github.com/DhvanilPatel/swarm-cursors) 的 `assets/swarm-rebuild.js`（改过七处）。**Dhvanil Patel 于 2026-11-11 邮件书面许可本项目打包与修改**，所以从 **0.8.1 起这份资产重新随 npm 包分发**（仍默认关闭）；该许可只覆盖本插件，不附 MIT 许可文本。许可切分与仍在等的事见 `NOTICE.md`。
 
 ## License
 
-MIT — **except `assets/swarm-rebuild.js`** (repository-only, not in the npm package as of 0.8.0), which is third-party work: see [Credits](#credits--the-intro-effect) above and [`NOTICE.md`](https://github.com/miqian-nomad/dsh-browser-playwright-codex/blob/main/NOTICE.md) §3. This project grants no rights in that file.
+MIT — **except `assets/swarm-rebuild.js`** (third-party work, shipped in the package as of 0.8.1 under the authors' written permission — no MIT licence text), which is covered by [Credits](#credits--the-intro-effect) above and [`NOTICE.md`](https://github.com/miqian-nomad/dsh-browser-playwright-codex/blob/main/NOTICE.md) §3. This project grants no rights in that file.
 
-**中文**：插件本体与随包文档是 MIT；**`assets/swarm-rebuild.js` 除外**（它只在仓库里，0.8.0 起不进 npm 包），它是第三方作品，本项目不对它主张也不授予任何权利，详见上文 Credits 与 `NOTICE.md` §3。
+**中文**：插件本体与随包文档是 MIT；**`assets/swarm-rebuild.js` 除外**（第三方作品，**0.8.1 起在作者书面许可下重新随包分发**，无 MIT 许可文本），本项目不对它主张也不授予任何权利，详见上文 Credits 与 `NOTICE.md` §3。
 
 
 <!-- changelog:today -->

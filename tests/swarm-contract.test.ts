@@ -310,16 +310,44 @@ test('docs: every data-a selector named in the contract doc is declared in the c
 })
 
 test('docs: the contract doc still states the licence position it is built on', () => {
-  // 整份契约的前提是"上游无许可证、不能 fork、只能本地自用 + 默认关"。这个前提写在文档
-  // 显要处，是为了防止未来有人看到 `swarm-contract.ts` 就以为"我们已经 fork 了一份自己的"。
-  assert.equal(SWARM_UPSTREAM.license, 'none', '契约把授权标成了非 none —— 若上游真的加了许可证，先改上游事实再改这里')
+  // 契约的前提：上游仓库至今没有 LICENSE 文件（默认保留所有权利），但本项目拿到了
+  // 作者的邮件书面许可（打包 + 修改）。这两条必须同时写着，否则后来者会误以为
+  // ①这份资产可以随便被第三方复用，或 ②我们手里没有打包/修改的授权。
+  assert.equal(
+    SWARM_UPSTREAM.license,
+    'permission',
+    '契约把授权标成了非 permission —— 若上游真的加了正式许可证，先改上游事实再改这里',
+  )
   assert.ok(
     /没有\s*LICENSE|无许可证|保留所有权利/.test(contractDoc),
-    'SWARM-CONTRACT.md 没有写明"上游无 LICENSE"，后来者会误以为这份资产可以随包分发',
+    'SWARM-CONTRACT.md 没有写明"上游无 LICENSE"，后来者会误以为这是 MIT 之类的通用许可',
+  )
+  assert.ok(
+    /书面许可|邮件许可|permission/.test(contractDoc),
+    'SWARM-CONTRACT.md 没有写明"本项目持有作者书面许可"，后来者会误以为资产不能随包分发',
   )
   assert.ok(
     /不能\s*fork|不可\s*fork|fork 不改变/.test(contractDoc),
     'SWARM-CONTRACT.md 没有说明"fork 不改变授权"这一点 —— 这正是当初想 fork 时的误区',
+  )
+})
+
+test('packaging: the patched asset ships in the tarball, the baseline does not', () => {
+  const pkg = JSON.parse(read('package.json')) as { files?: unknown }
+  const files = Array.isArray(pkg.files) ? (pkg.files as string[]) : []
+  assert.ok(
+    files.includes('assets'),
+    'package.json#files 没列 assets/ —— 进场动画又被排除出 npm 包了（0.8.1 已获作者打包许可）',
+  )
+  assert.ok(
+    files.includes('!assets/swarm-rebuild.upstream.js'),
+    'package.json#files 没排除原始基线 —— 149 KB 的上游原版会跟着发布包走',
+  )
+  // 打包的前提是书面许可；许可撤了就先把这两条改回去。
+  assert.match(
+    read('NOTICE.md'),
+    /bundle and modify/i,
+    'NOTICE.md 没写 Dhvanil 的打包/修改许可 —— 这条是 assets 能随包分发的前提',
   )
 })
 

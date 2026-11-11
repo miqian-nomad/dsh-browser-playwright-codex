@@ -242,7 +242,7 @@ Measured with ``npm run cost`` (per-turn, resident in the system prompt):
 |---|---|---|---|
 | Schema defaults (`Config({})`, no patch layer) | 16 | 11,283 | ≈ 3,134 |
 | Shipped bundle layer (this package's `cordis.patch.yml`: both power gates off) | 16 | 11,283 | ≈ 3,134 |
-| Everything registered (`registerDisabledTools: true`, plus `extract`) | 21 | 15,886 | ≈ 4,413 |
+| Everything registered (`registerDisabledTools: true`, plus `extract`) | 21 | 16,146 | ≈ 4,485 |
 
 This paragraph describes the 0.6.0 change; the table above is today's measurement. Three things changed
 there, and only one of them was about size. (1) The click family was rewritten so each rule is stated once
@@ -307,4 +307,6 @@ The scenario suites originally surfaced four hazards, now fixed and regression-t
 
 ## License
 
-MIT
+MIT — **except `assets/swarm-rebuild.js`**, the third-party intro-effect asset (from [`DhvanilPatel/swarm-cursors`](https://github.com/DhvanilPatel/swarm-cursors), with the effect by [`Joel Califa`](https://github.com/califa/swarm-site)). It ships in the package as of 0.8.1 under the authors' **written permission** (bundle + modify, 2026-11-11; credit, 2026-11-08) — no MIT licence text, and not a general licence for third-party re-use. See [`NOTICE.md`](NOTICE.md) §3.
+
+**中文**：MIT，但 **`assets/swarm-rebuild.js` 除外**——第三方进场特效资产，作者书面许可本项目随包分发与修改（不是 MIT 许可，也不给第三方通用许可），详见 `NOTICE.md` §3。

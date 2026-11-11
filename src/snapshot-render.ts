@@ -47,6 +47,22 @@ const TRACKING_PARAMS = new Set([
 /** Default cap for a rendered href, in characters. */
 export const MAX_HREF_LENGTH = 160
 
+/**
+ * Path shapes that mark a redirect-wrapping URL — a link that does not point at
+ * its destination but at the site's own click-tracking endpoint, which forwards
+ * there. Search engines wrap every organic result this way (Bing `/ck/a?...`,
+ * Google `/url?q=...`, Facebook `l.php?u=...`). The real destination is encoded
+ * in a long query parameter, so the rendered href is 160 characters of base64
+ * that says nothing the link's own name does not — and it repeats for every
+ * result on the page.
+ *
+ * This is a generic category (a tracking endpoint on the same origin as the
+ * page), not a per-site special case. When one matches we render a short marker
+ * instead of the wrapped URL: the ref is what clicks, and the link's name plus
+ * any destination node already carry the meaning.
+ */
+const REDIRECT_WRAPPERS = [/\/ck\/a\?/i, /\/url\?q=/i, /l\.php\?u=/i]
+
 /** Clip a string to a display budget, marking the cut. */
 function clip(value: string, maxLength: number): string {
   return value.length <= maxLength ? value : value.slice(0, maxLength - 1) + '…'
@@ -62,6 +78,13 @@ function clip(value: string, maxLength: number): string {
  * @returns the shortened href
  */
 export function trimUrlForDisplay(href: string, maxLength: number = MAX_HREF_LENGTH): string {
+  // A redirect-wrapping href (search-engine click tracker) is 160 characters of
+  // encoded destination that says nothing the link's name does not. Render a
+  // short marker instead; the ref is what clicks, so this never changes where a
+  // click lands — only what the model reads.
+  if (REDIRECT_WRAPPERS.some((re) => re.test(href))) {
+    return '→ (redirect wrapper)'
+  }
   const hashAt = href.indexOf('#')
   const hash = hashAt >= 0 ? href.slice(hashAt) : ''
   const head = hashAt >= 0 ? href.slice(0, hashAt) : href
@@ -100,14 +123,15 @@ function isTransparentWrapper(node: BrowserNode): boolean {
     node.level === undefined &&
     node.checked === undefined &&
     node.selected === undefined &&
-    node.disabled === undefined
+    node.disabled === undefined &&
+    node.value === undefined
   )
 }
 
 /** Render one node line into the accumulating line list. */
-function renderNode(node: BrowserNode, depth: number, lines: string[]): void {
+function renderNode(node: BrowserNode, depth: number, lines: string[], seenHrefs: Map<string, string>): void {
   if (isTransparentWrapper(node)) {
-    for (const child of node.children) renderNode(child, depth, lines)
+    for (const child of node.children) renderNode(child, depth, lines, seenHrefs)
     return
   }
   const indent = '  '.repeat(depth)
@@ -118,11 +142,27 @@ function renderNode(node: BrowserNode, depth: number, lines: string[]): void {
   if (node.checked === true) flags.push('checked')
   if (node.selected === true) flags.push('selected')
   if (node.disabled === true) flags.push('disabled')
+  // The current value of a text entry field: without it the model cannot see
+  // what a fill actually left behind, which read as "no visible change".
+  if (node.value !== undefined && node.value !== '') flags.push('value=' + node.value)
   if (node.ref !== undefined) flags.push('ref=' + node.ref)
   if (flags.length > 0) line += ' [' + flags.join(', ') + ']'
-  if (node.href !== undefined) line += ' -> ' + trimUrlForDisplay(node.href)
+  if (node.href !== undefined) {
+    // Same href, second and later occurrence within ONE snapshot: the URL is
+    // already printed at its first occurrence, so repeat only a pointer to it.
+    // Every ref and element stays — this trims bytes, never click targets. Only
+    // absolute URLs are deduped (a bare "/docs" can name different pages).
+    const abs = /^https?:\/\//i.test(node.href)
+    const firstRef = abs ? seenHrefs.get(node.href) : undefined
+    if (firstRef !== undefined && firstRef !== node.ref) {
+      line += ' -> (same as ' + firstRef + ')'
+    } else {
+      line += ' -> ' + trimUrlForDisplay(node.href)
+      if (abs && node.ref !== undefined) seenHrefs.set(node.href, node.ref)
+    }
+  }
   lines.push(line)
-  for (const child of node.children) renderNode(child, depth + 1, lines)
+  for (const child of node.children) renderNode(child, depth + 1, lines, seenHrefs)
 }
 
 /**
@@ -132,7 +172,11 @@ function renderNode(node: BrowserNode, depth: number, lines: string[]): void {
  */
 export function renderSnapshotTree(nodes: readonly BrowserNode[]): string {
   const lines: string[] = []
-  for (const node of nodes) renderNode(node, 0, lines)
+  // href -> ref of its first occurrence in THIS snapshot. Same href second and
+  // later renders as "(same as <ref>)" instead of repeating the URL. Scoped to
+  // one snapshot on purpose: a fresh snapshot after navigation re-prints URLs.
+  const seenHrefs = new Map<string, string>()
+  for (const node of nodes) renderNode(node, 0, lines, seenHrefs)
   return lines.join('\n')
 }
 

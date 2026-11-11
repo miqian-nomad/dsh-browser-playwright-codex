@@ -1,3 +1,31 @@
+## 0.8.1 — 2026-11-11
+
+一句话摘要：**快照第一次真正"看得见状态"**——填进去的值、勾选状态进快照也进页面指纹，正常的填字和勾选不再被误报成"疑似反爬墙"；密码 / 验证码 / 卡号即使有值也绝不进快照。顺带削掉真实站点快照里最贵的一类垃圾（跳转包裹 URL、同一 href 的重复打印），并让 `browser_evaluate` 返回非标量时给出能照着改的错误。**另外：进场动画重新随包分发——作者 Dhvanil Patel 于 2026-11-11 邮件书面许可打包与修改，默认仍然关闭。**
+
+### Restored
+
+- **`assets/swarm-rebuild.js` 回到 npm 包**：Dhvanil Patel 于 2026-11-11 邮件书面许可本项目**打包 + 修改**（原话 "you are welcome to bundle and modify it as needed"），`package.json#files` 重新列入 `assets/`（原始基线 `assets/swarm-rebuild.upstream.js` 仍只留在仓库）。**功能保持默认关闭**（`swarm.enabled: false`），在设置卡里打开才播。署名与许可切分见 `README.md` 的 Credits 与 `NOTICE.md` §3。
+- **许可不是 MIT**：邮件许可只覆盖本项目随插件分发，没有附 MIT 许可文本，也不给第三方通用许可。第三方想复用得自己去问两位作者（Joel Califa / Dhvanil Patel）。
+
+### Fixed
+
+- **填字 / 勾选不再被误报成"疑似反爬墙"**：`snapshotFingerprint` 原来只比 url / title / refs / role=name，`checked` / `selected` / 值的变化都不算"页面变了"，正常的填字、勾选会触发 no-progress 兜底并劝用户去看窗口。现在 `scan` 收集这些状态、指纹纳入，填字和勾选算成真实变化。
+- **快照显示输入框 / 文本域里的值**：`BrowserNode` / `ChallengeNode` 新增 `value`，模型填完能看见填了什么；`<textarea>`（角色是 `textarea`，不是 `textbox`）也覆盖；`<select>` 不打印 value（它的名字已经显示当前选项）；`<option>` 只在 value 属性与文本不同时才带。
+- **`role="combobox"` 的输入框按标签判定**：排除 value 只针对真正的 `<select>`，不再按 role 排除——自动补全搜索框常带显式 `role="combobox"`，按 role 判会把它们的值也一起藏掉。
+- **密码 / 一次性验证码 / 卡号绝不进快照**：读取 value 前先过 `isCredentialEl`（`type=password`，或 autocomplete 含 `current-password` / `new-password` / `one-time-code` / `cc-*`），与 `browser_fill` 的凭据判据一致。
+- **`<option>` 的名字不再被整段 select 文本污染**：`closest('label')` 会把外层 label 的全部文字塞进每个 option，下拉里所有选项名字原来看起来一模一样。
+- **no-progress 文案改成实话**：不再猜"反爬墙"、不再要求用户去看窗口，改成"这次动作没有带来可见变化；如果是提交 / 搜索 / 跳转，页面可能还在渲染，再拍一次快照确认"。
+
+### Performance
+
+- **跳转包裹 URL 不再打印 160 字符**：`/ck/a?`、`/url?q=`、`l.php?u=` 这类知名跳转端点渲染成 `-> (redirect wrapper)`。实测 Bing 搜索结果页每次快照省约 6,080 字符（约 1,520 token）。
+- **同一快照内重复 href 只打印第一次**：第二次起渲染 `-> (same as e1)`，只去重显示、不合并 ref，点击行为完全不变。实测百度结果页 552 → 263 字节，ref 4 → 4 一个不少。
+
+### Changed
+
+- **`browser_evaluate` 返回非标量时归一化**：数组转 JSON 字符串，`undefined` / 函数转成说明文字并附改法；对象 / 字符串 / 数字 / 布尔 / null 原样返回。DSH 执行器那层的 `value is not lossless JSON` 不再让人靠猜。
+- **新增测试**：`tests/normalize-evaluate.test.ts`、`tests/value-privacy.test.ts`、`tests/combobox-value.test.ts`，分别钉住归一化、凭据不泄漏（有牙齿：去掉守卫立刻红）、`role=combobox` 与 `<textarea>` 的 value 显示。
+
 ## 0.8.0 — 2026-11-10
 
 一句话摘要：**动效资产被移出 npm 发布包，swarm 默认关掉**——这是主动选的合规路径，不是修 bug：那套资产的授权状态不允许再分发，与其在授权上纠缠，不如不让它随包出去。代码一行没删，本地开发者把资产放回 `assets/` 打开开关就还是完整功能；代价是 npm 用户升级后默认看不到这个效果。顺带把 0.7.9 那批修复一起封进来——npm 上的 `latest` 一直停在 0.7.8，`v0.7.9` 只是本地 tag，所以从 0.7.8 直接升上来的用户会一次拿到两个版本的全部内容。

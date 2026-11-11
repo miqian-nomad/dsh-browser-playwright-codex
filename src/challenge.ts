@@ -50,10 +50,12 @@ const MAX_FINGERPRINT_NAMES = 200
  */
 const FINGERPRINT_DEPTH = 4
 
-/** One accessible name and its role, as the scan saw it. */
+/** One accessible name, its role, and any interactive state, as the scan saw it. */
 interface ScannedNode {
   readonly role: string
   readonly name: string
+  /** Compact state signature ('checked'/'selected'/value) or '' when the node has none. */
+  readonly state: string
 }
 
 /** Collect accessible names breadth-first, bounded by depth and count. */
@@ -68,9 +70,23 @@ function scan(
   for (const node of nodes) {
     if (out.length >= cap) return
     const name = node.name ?? ''
-    if (name !== '') out.push({ role: (node.role ?? '').toLowerCase(), name })
+    if (name !== '') out.push({ role: (node.role ?? '').toLowerCase(), name, state: stateOf(node) })
     if (depth < maxDepth) scan(node.children, depth + 1, maxDepth, out, cap)
   }
+}
+
+/**
+ * Compact interactive-state signature of one node. A fill or a toggle changes
+ * this without changing the role or name, so the no-progress fingerprint has to
+ * include it — otherwise a normal fill or checkbox toggle looks like "no visible
+ * change" and trips the anti-bot guess.
+ */
+function stateOf(node: ChallengeNode): string {
+  const parts: string[] = []
+  if (node.checked !== undefined) parts.push(node.checked ? 'checked' : 'unchecked')
+  if (node.selected !== undefined) parts.push(node.selected ? 'selected' : 'unselected')
+  if (node.value !== undefined && node.value !== '') parts.push('v=' + node.value)
+  return parts.join(',')
 }
 
 /** Evidence string when one header rule holds, else null. */
@@ -257,12 +273,15 @@ export const CHALLENGE_NOTE =
 
 /**
  * Appended after an action that left the page byte-for-byte unchanged on a page
- * with almost nothing else to interact with. Worded as a guess, because that is
- * what it is: it is the shape an unrecognised wall has, and the whole point of
- * this tier is to cover the vendors we have no signature for.
+ * with almost nothing else to interact with. It states the observation and the
+ * recovery — re-snapshot in case the page is still rendering, then try another
+ * approach — and deliberately does NOT guess "anti-bot wall" or send the user to
+ * look at the window: a normal fill or checkbox toggle also lands here when the
+ * page state it changed is not in the compared subset, and scaring the user off
+ * on a successful action is worse than saying less.
  */
 export const NO_PROGRESS_NOTE =
-  '[no visible change] that action left the page identical — same URL, same title, same elements — and the page offers almost nothing else to click. This is a guess, not a diagnosis: it is what an unrecognised anti-bot wall looks like. Take one browser_snapshot to confirm; if the page still looks unchanged, stop and tell the user what you were trying to do and ask them to look at the open window, instead of retrying the same action.'
+  '[no visible change] this action did not produce a visible change. If what you just did was a submit, a search or a navigation, the page may still be rendering — take one more browser_snapshot to confirm. If it still looks the same, try a different approach (for example another entry point on the page).'
 
 /** A page with at most this many actionable elements counts as "nearly empty". */
 export const NO_PROGRESS_MAX_REFS = 3
@@ -295,7 +314,10 @@ export function snapshotFingerprint(input: {
     input.url ?? '',
     input.title ?? '',
     String(input.refs ?? 0),
-    names.map((node) => node.role + '=' + node.name).join('\u0001'),
+    // Include interactive state (checked/selected/value) so a fill or a toggle
+    // registers as change — otherwise a normal fill looks like "no visible
+    // change" and trips the anti-bot guess.
+    names.map((node) => node.role + '=' + node.name + (node.state ? '[' + node.state + ']' : '')).join('\u0001'),
   ].join('\u0000')
   return hash(material)
 }

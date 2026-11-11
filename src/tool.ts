@@ -15,7 +15,7 @@ import { BlockAssembler, createUserMessage } from '@deepseek-ai/dsh-llm'
 // Type-only: makes the ctx.browser declaration merge visible to this module.
 import type {} from './service.ts'
 import type { BrowserSession, DiagnosticsValue, WaitCondition, WaitOutcome } from './types.ts'
-import { BrowserError, cdpDisabled, evaluateDisabled } from './errors.ts'
+import { BrowserError, cdpDisabled, evaluateDisabled, normalizeEvaluateResult } from './errors.ts'
 import { registeredSuffixes, type ToolSuffix, type ToolSurfaceConfig } from './contract.ts'
 import { getEnabled, publishGates, publishLoginSites } from './runtime-state.ts'
 import { summarizeLoginSites } from './login-sites.ts'
@@ -687,6 +687,9 @@ export function apply(ctx: Context, config: ToolConfig): void {
       name: p('evaluate'),
       description:
         'Evaluate one JavaScript expression in the page and return its JSON-serializable result. ' +
+        'Return value rules: an object, string, number, boolean or null comes back as-is; ' +
+        'a top-level ARRAY, undefined or a function is returned as a JSON string with a note saying it was converted ' +
+        '(wrap it yourself, e.g. {items: [...]} , if you need the array shape). ' +
         'Disabled by default; the deployment must enable allowEvaluate. ' +
         'IRON RULE: prefer read-only expressions to INSPECT state (value, outerHTML, checked, textContent) before ' +
         'concluding an interaction failed. If you write to the DOM directly (setting value/textContent), ' +
@@ -715,7 +718,8 @@ export function apply(ctx: Context, config: ToolConfig): void {
           throw evaluateDisabled()
         }
         const session = await acquire(exec)
-        return (await session.evaluate(args.expression, exec.signal)) as JsonValue
+        const raw = await session.evaluate(args.expression, exec.signal)
+        return normalizeEvaluateResult(raw) as JsonValue
       },
     }),
   )

@@ -17,9 +17,9 @@
 | 上游改版会让我这边突然失效 | **不会**。脚本是 vendored 进来的，`scripts/swarm-patch.mjs` 用 SHA-256 锁死基线。上游在 GitHub 上改成什么样，本地这份一个字节都不会动。换文件是**人的主动动作** |
 | 所以需要一份文档来兜       | **这一条成立**，而且是唯一成立的那条。真正的风险不是上游改版，是插件对上游内部结构的二十多处依赖**没有任何声明**，坏的时候不会报错，只会"某个页面某天不播了"    |
 
-所以这份文档做的是第三件事：**把接口分层声明、把核对流程固定下来、把每一步交给测试**。资产本身继续留在仓库自用、默认关闭、不随包分发 —— 到 0.8.0 已全部落地：`package.json#files` 不再列 `assets/`，`src/config.ts` 里 `swarm.enabled` 默认 `false`。
+所以这份文档做的是第三件事：**把接口分层声明、把核对流程固定下来、把每一步交给测试**。资产在 0.8.1 起重新随包分发（已获作者书面许可），`src/config.ts` 里 `swarm.enabled` 仍然默认 `false`。
 
-上游 issue #12（询问授权）2026-11-08 提出，至今零回复。**这条约束现在已经由构建方式本身保证**：0.8.0 起 tarball 里没有 `assets/`。要守住的是别把它加回去 —— 想恢复随包分发，先拿到书面许可，再动 `package.json#files`。
+上游 issue #12（询问授权）2026-11-08 提出；2026-11-11 Dhvanil Patel 邮件书面许可本项目**打包与修改**，所以 tarball 里重新有 `assets/swarm-rebuild.js`（原始基线仍只留在仓库）。许可不是 MIT，也没有 MIT 许可文本：它只覆盖本项目，第三方不能据此复用。要改分发状态，先看这页的授权记录，再动 `package.json#files`。
 
 ---
 
@@ -30,9 +30,9 @@
 | 上游仓库                 | `DhvanilPatel/swarm-cursors`                                       |
 | 入仓基准（**未打补丁**） | `assets/swarm-rebuild.upstream.js`                                 |
 | 基准 SHA-256             | `6a30f19daaa182d52673035feaeae775c398fa426655cc71a87a451fe00c7bfe` |
-| 仓库内产物（已打补丁，**不随包**） | `assets/swarm-rebuild.js`                                          |
+| 随包产物（已打补丁）     | `assets/swarm-rebuild.js`                                          |
 | 补丁脚本                 | `scripts/swarm-patch.mjs`                                          |
-| 授权                     | **无 LICENSE**（保留所有权利）                                     |
+| 授权                     | **上游无 LICENSE**（保留所有权利）；本项目持有 Dhvanil Patel 2026-11-11 邮件书面许可（打包 + 修改）与 Joel Califa 2026-11-08 书面许可（效果 + 署名）。不是 MIT，第三方不能据此复用 |
 
 `swarm-patch.mjs` 里的 `UPSTREAM_SHA256` 必须与上表逐字符相同。**两处各写一份哈希，是这个仓库最典型的漂移点**，所以测试会直接比对（`fingerprint: the patch script and the contract agree on the upstream hash`）。
 

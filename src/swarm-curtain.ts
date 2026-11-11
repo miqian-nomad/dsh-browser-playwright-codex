@@ -38,11 +38,11 @@ export function swarmBootScript(): string {
   try {
     asset = fs.readFileSync(fileURLToPath(new URL('../assets/swarm-rebuild.js', import.meta.url)), 'utf8')
   } catch {
-    // 资产不在（0.8.0 起 assets/ 不再随 npm 包分发）。这里**绝不能往外抛**：
+    // 资产读不到（0.8.1 起随包分发，理论上不会发生；手工删包时会）。这里**绝不能往外抛**：
     // 两个调用点都是 `await ctx.addInitScript({ content: swarmBootScript() })`，
     // 抛出去就是上下文创建失败、浏览器直接打不开 —— 把"动效没了"放大成"插件挂了"。
     // 返回一段空注释脚本，等于这次启动不注入任何东西，行为与"没开这个功能"一致。
-    return '/* dsh: swarm asset not shipped (0.8.0+) — nothing injected */\n'
+    return '/* dsh: swarm asset missing — nothing injected */\n'
   }
   return (
     'if (window.top === window && typeof window.name === "string" &&\n' +

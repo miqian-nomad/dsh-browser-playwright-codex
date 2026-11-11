@@ -46,6 +46,16 @@ export interface ChallengeNode {
     readonly name?: string;
     /** Accessible role. Both built-in engines provide one; it gates the wording tier. */
     readonly role?: string;
+    /** Whether a checkbox/radio is checked; present on toggles. */
+    readonly checked?: boolean;
+    /** Whether an option is selected; present on options. */
+    readonly selected?: boolean;
+    /**
+     * Current value of a textbox/textarea/select. The no-progress fingerprint
+     * includes it so that filling a field registers as change — otherwise a
+     * normal fill looks like "no visible change" and trips the anti-bot guess.
+     */
+    readonly value?: string;
     readonly children?: readonly ChallengeNode[];
 }
 /** The slice of a snapshot the challenge detector reads. */

@@ -47,7 +47,7 @@ export interface PlaywrightConfig {
    * 测试配置、以及旧部署的 patch 层都能直接通过类型检查。
    */
   swarm?: {
-    /** 出厂默认关（0.8.0 起）：动效资产不再随 npm 包分发，打开了也读不到。把资产放回 assets/ 再开。 */
+    /** 出厂默认关：动效资产随包分发（0.8.1 起已获作者授权），但默认不播；想要的人在设置卡里打开。 */
     enabled: boolean
     /** 只在某个网站第一次打开时播；false = 每次导航都播（不建议）。 */
     oncePerSite: boolean
@@ -128,8 +128,7 @@ export const Config: z<PlaywrightConfig> = z.object({
     .default({ engine: 'legacy', maxNodes: 500, maxNameLength: 120, maxTextLength: 300, diff: false }),
   swarm: z
     .object({
-      // 出厂关：动效资产不再随 npm 包分发（0.8.0 起），默认开会让每个新用户
-      // 在"文件根本不存在"的状态下开箱报错。想要的人把资产放回 assets/ 再打开。
+      // 出厂关：资产在包里（0.8.1 起已获作者授权），但默认不播，避免每次开新站先把页面盖住。
       enabled: z.boolean().default(false),
       // 只在每个网站第一次打开时播，避免每次导航都把页面盖住。
       oncePerSite: z.boolean().default(true),

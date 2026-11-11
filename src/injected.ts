@@ -97,6 +97,22 @@ export const SNAPSHOT_SCRIPT = String.raw`
     return text.length > max ? text.slice(0, max) + '…' : text
   }
 
+  // Autocomplete tokens that mark a credential field. Mirrors CREDENTIAL_AUTOCOMPLETE
+  // in page-actions.ts so the snapshot never reads back what the user typed into one.
+  const CREDENTIAL_AUTOCOMPLETE = ['current-password', 'new-password', 'one-time-code', 'cc-number', 'cc-csc', 'cc-exp', 'cc-exp-month', 'cc-exp-year']
+
+  // Whether an element holds a secret (password, one-time code, card number).
+  // Same judgement as isCredentialField in page-actions.ts: type=password, or an
+  // autocomplete token list containing a credential token (not just the last one).
+  function isCredentialEl(el) {
+    const tag = el.tagName.toLowerCase()
+    if (tag !== 'input' && tag !== 'textarea') return false
+    const type = tag === 'input' ? (el.getAttribute('type') || '').toLowerCase() : ''
+    if (type === 'password') return true
+    const tokens = (el.getAttribute('autocomplete') || '').toLowerCase().split(/\s+/)
+    return tokens.some((token) => CREDENTIAL_AUTOCOMPLETE.indexOf(token) !== -1)
+  }
+
   function ownText(el, maxText) {
     let out = ''
     for (const node of el.childNodes) {
@@ -108,6 +124,13 @@ export const SNAPSHOT_SCRIPT = String.raw`
   }
 
   function nameOf(el, maxName, maxText, actionable) {
+    // An <option> names itself with its own text — never the enclosing <label> or
+    // <select>, whose textContent contains every option. Without this every option
+    // in one <select> shares the same long name and the model cannot tell them
+    // apart (measured 2026-11-11 on selenium.dev's web-form).
+    if (el.tagName.toLowerCase() === 'option') {
+      return clip((el.textContent || '').replace(/\s+/g, ' ').trim(), maxName)
+    }
     const aria = el.getAttribute('aria-label')
     if (aria && aria.trim()) return clip(aria.trim(), maxName)
     if (el.id) {
@@ -287,6 +310,28 @@ export const SNAPSHOT_SCRIPT = String.raw`
     if (el.tagName.toLowerCase() === 'input' && (role === 'checkbox' || role === 'radio')) node.checked = !!el.checked
     if (role === 'option') node.selected = !!el.selected
     if (el.disabled) node.disabled = true
+    // Expose the current value of a text entry field so the model can see what a
+    // fill actually left behind, and so a value change registers as page change.
+    // Credential fields (password, one-time code, card number) are excluded: the
+    // user typed those in the visible window, and reading them back into the
+    // snapshot would send the secret to the model API. Mirrors isCredentialField
+    // in page-actions.ts.
+    //
+    // A real <select> is left out on purpose: its NAME already shows the chosen
+    // option (the branch above), so a value flag would print the same fact twice.
+    // Excluding by TAG, not by role, matters: autocomplete search boxes routinely
+    // carry an explicit role="combobox" and their value must still be visible.
+    // An <option> carries its value attribute only when it differs from its text.
+    const isSelectEl = el.tagName.toLowerCase() === 'select'
+    const textEntry =
+      role === 'textbox' || role === 'textarea' || role === 'searchbox' || role === 'combobox'
+    if (textEntry && !isSelectEl && !isCredentialEl(el)) {
+      const v = (el.value !== undefined ? String(el.value) : '').replace(/\s+/g, ' ').trim()
+      if (v !== '') node.value = clip(v, opts.maxTextLength)
+    } else if (role === 'option') {
+      const ov = (el.getAttribute('value') || '').trim()
+      if (ov !== '' && ov !== nodeName) node.value = clip(ov, opts.maxNameLength)
+    }
     if (role === 'link') {
       const href = el.getAttribute('href')
       if (href && href.trim() && href.indexOf('javascript:') !== 0) node.href = href

@@ -49,7 +49,7 @@ export interface PlaywrightConfig {
      * 测试配置、以及旧部署的 patch 层都能直接通过类型检查。
      */
     swarm?: {
-        /** 出厂默认关（0.8.0 起）：动效资产不再随 npm 包分发，打开了也读不到。把资产放回 assets/ 再开。 */
+        /** 出厂默认关：动效资产随包分发（0.8.1 起已获作者授权），但默认不播；想要的人在设置卡里打开。 */
         enabled: boolean;
         /** 只在某个网站第一次打开时播；false = 每次导航都播（不建议）。 */
         oncePerSite: boolean;

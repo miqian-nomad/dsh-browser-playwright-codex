@@ -32,11 +32,14 @@ export declare function challengeNote(headless: boolean): string;
 export declare const CHALLENGE_NOTE = "[human verification] The page triggered an anti-bot challenge; it is NOT solvable by automation and must NOT be retried blindly. The browser window is open on the user's desktop \u2014 tell the user a verification appeared, wait for them to finish it (a few seconds), then call browser_snapshot again. The clearance cookie is saved to the profile automatically and keeps working for the session.";
 /**
  * Appended after an action that left the page byte-for-byte unchanged on a page
- * with almost nothing else to interact with. Worded as a guess, because that is
- * what it is: it is the shape an unrecognised wall has, and the whole point of
- * this tier is to cover the vendors we have no signature for.
+ * with almost nothing else to interact with. It states the observation and the
+ * recovery — re-snapshot in case the page is still rendering, then try another
+ * approach — and deliberately does NOT guess "anti-bot wall" or send the user to
+ * look at the window: a normal fill or checkbox toggle also lands here when the
+ * page state it changed is not in the compared subset, and scaring the user off
+ * on a successful action is worse than saying less.
  */
-export declare const NO_PROGRESS_NOTE = "[no visible change] that action left the page identical \u2014 same URL, same title, same elements \u2014 and the page offers almost nothing else to click. This is a guess, not a diagnosis: it is what an unrecognised anti-bot wall looks like. Take one browser_snapshot to confirm; if the page still looks unchanged, stop and tell the user what you were trying to do and ask them to look at the open window, instead of retrying the same action.";
+export declare const NO_PROGRESS_NOTE = "[no visible change] this action did not produce a visible change. If what you just did was a submit, a search or a navigation, the page may still be rendering \u2014 take one more browser_snapshot to confirm. If it still looks the same, try a different approach (for example another entry point on the page).";
 /** A page with at most this many actionable elements counts as "nearly empty". */
 export declare const NO_PROGRESS_MAX_REFS = 3;
 /**

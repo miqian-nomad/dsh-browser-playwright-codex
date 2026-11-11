@@ -35,3 +35,20 @@ export declare function evaluateDisabled(): BrowserError;
  * @returns the denial, ready to throw.
  */
 export declare function cdpDisabled(): BrowserError;
+/**
+ * Normalize a `browser_evaluate` result so it survives the harness's
+ * lossless-JSON output boundary.
+ *
+ * The harness (dsh-tools) rejects a tool result that is not losslessly
+ * JSON-serializable, and it is strictest about *top-level* shape: a bare array
+ * or `undefined` at the root fails its check with an opaque
+ * "value is not lossless JSON" that does not tell the model how to fix it. This
+ * wraps only those shapes — arrays, `undefined` and functions — into a JSON
+ * string plus a marker note, and leaves every other value (objects, strings,
+ * numbers, booleans, null) untouched so callers get back what their expression
+ * actually returned.
+ *
+ * @param value - the raw value the page expression evaluated to.
+ * @returns a lossless-JSON-safe value, with a note when it had to be stringified.
+ */
+export declare function normalizeEvaluateResult(value: unknown): unknown;

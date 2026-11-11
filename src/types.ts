@@ -24,6 +24,12 @@ export interface BrowserNode {
   readonly selected?: boolean
   /** Whether the element is disabled. */
   readonly disabled?: boolean
+  /**
+   * Current value of a textbox, textarea or select, clipped to the snapshot's
+   * text budget. Present so the model can see what a fill actually left behind
+   * and so the no-progress fingerprint registers a value change as change.
+   */
+  readonly value?: string
   /** Href for links; present when the page is same-origin. */
   readonly href?: string
   readonly children: readonly BrowserNode[]
