@@ -48,26 +48,6 @@ export interface AriaParseResult {
     /** Content lines that could not be parsed — non-empty means format drift. */
     readonly unparsed: string[];
 }
-/**
- * Parse Playwright's official ariaSnapshot YAML into a semantic node tree.
- *
- * The real format (verified against playwright-core 1.62, 2026-09-30) is:
- *
- *   - generic [active] [ref=e1]:          ← trailing ':' = the node has children
- *     - link "One" [ref=e6] [cursor=pointer]:
- *       - /url: /one                       ← href rides a deeper child line
- *     - text: Name                         ← text content uses 'text: <value>'
- *
- * The first version of this parser assumed a hand-rolled dialect
- * (`- role "name" [flags] -> href`, nothing after the flags) that real output
- * never produces. Every container line ends in ':', so that regex matched none
- * of them: the whole hierarchy was dropped, links and their hrefs vanished, and
- * `captureAriaSnapshot` still reported success. Unreadable lines are now
- * collected in `unparsed` so the capture layer can refuse the tree and let the
- * provider fall back to the legacy engine.
- * @param yaml - the ariaSnapshot text.
- * @returns parsed roots plus any unreadable content lines.
- */
 export declare function parseAriaSnapshotWithStats(yaml: string): AriaParseResult;
 /**
  * Parse Playwright's ariaSnapshot YAML into a semantic node tree.

@@ -21,6 +21,7 @@ import { execFileSync } from 'node:child_process'
 import { existsSync, readFileSync, readdirSync } from 'node:fs'
 import { dirname, join, relative, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { checkSuiteSummary } from './preflight-suite.mjs'
 
 const root = resolve(process.argv[2] ?? join(dirname(fileURLToPath(import.meta.url)), '..'))
 const problems = []
@@ -72,13 +73,59 @@ const tokens = Number((cost.match(/粗估 token[:：]\s*~?(\d+)/) ?? [])[1])
 if (!toolCount || !chars || !tokens) problems.push('拿不到 npm run cost 的数字')
 else ok.push('成本基线：' + toolCount + ' 工具 / ' + chars + ' 字符 / ~' + tokens + ' token/轮')
 
-const suite = execFileSync('node', ['--test', 'tests/*.test.ts'], { cwd: root, encoding: 'utf8', shell: true })
-const n = (re) => Number((suite.match(re) ?? [])[1])
-if (n(/ℹ fail (\d+)/) > 0) problems.push('测试有失败：' + n(/ℹ fail (\d+)/) + ' 条')
-else
-  ok.push(
-    '测试：' + n(/ℹ tests (\d+)/) + ' / pass ' + n(/ℹ pass (\d+)/) + ' / fail 0 / skipped ' + n(/ℹ skipped (\d+)/),
+// 「跑完了没有」交给 scripts/preflight-suite.mjs —— 旧版本在这里犯过一个真错：只解析
+// `ℹ fail N`，而摘要里的 `fail 0` 是写死的字符串，`cancelled` / `todo` 一次都没读。
+// 结果是"被取消 7 条、fail 0"会判绿（0.7.8 就这么把 271 条说成 278 条）。
+// 现在读全部计数，并且恒等式对不上、命令非零退出都算硬错误。
+let suiteOut = ''
+let suiteExit = 0
+try {
+  suiteOut = execFileSync('node', ['--test', 'tests/*.test.ts'], { cwd: root, encoding: 'utf8', shell: true })
+} catch (error) {
+  const failed = /** @type {{ stdout?: unknown, stderr?: unknown, status?: unknown }} */ (error)
+  suiteOut = String(failed.stdout ?? '') + String(failed.stderr ?? '')
+  suiteExit = typeof failed.status === 'number' ? failed.status : 1
+}
+const suiteCheck = checkSuiteSummary(suiteOut, suiteExit)
+problems.push(...suiteCheck.problems)
+if (suiteCheck.problems.length === 0) ok.push(suiteCheck.okLine)
+
+// ── B2. 配套件跨仓库检查：跑了就是通过/失败，没跑就明写「未验证」 ─────────────────
+// 这条不放进默认套件（`tests/*.test.ts` 只匹配一层）。原因：它要读邻座仓库，而 CI 只 checkout
+// 这一个仓库；放在默认套件里就只能"跳过"，而**跳过在摘要里跟通过看起来一样**，等于把一条
+// 没验的检查藏进数字里（2026-11-12 MOSS 复核）。所以：默认套件计数永远一致；这里显式报告。
+const TOGGLE_SUITE = 'tests/cross-repo/toggle-docs.test.ts'
+const toggleDir = process.env.DSH_TOGGLE_DIR
+if (existsSync(join(root, TOGGLE_SUITE))) {
+  if (toggleDir === undefined || toggleDir === '') {
+    confirm.push(
+      '未验证：配套件跨仓库检查（' +
+        TOGGLE_SUITE +
+        '）本次未运行 —— 设 DSH_TOGGLE_DIR=<dsh-browser-toggle 路径> 后重跑；它不在默认套件里，不计入上面的测试数字',
+    )
+  } else {
+    try {
+      execFileSync('node', ['--test', TOGGLE_SUITE], { cwd: root, encoding: 'utf8', shell: true })
+      ok.push('配套件跨仓库检查：通过（DSH_TOGGLE_DIR=' + toggleDir + '）')
+    } catch (error) {
+      const failed = /** @type {{ stdout?: unknown, stderr?: unknown }} */ (error)
+      problems.push(
+        '配套件跨仓库检查失败（DSH_TOGGLE_DIR=' + toggleDir + '）：\n' + String(failed.stdout ?? '').slice(-800),
+      )
+    }
+  }
+}
+
+// ── B3. 真碰互联网的 live 三条：不进发版钩子（CI 没网会不稳），但每次发版都要看见它 ──────
+// 2026-11-12 MOSS 复核：`tests/live-smoke.test.ts` 那三条要 DSH_BROWSER_LIVE=1 才跑，而发版
+// 钩子里没有它 —— 于是**每次发版，真碰互联网的测试一条都没跑，却没人说**。这里不替人跑，
+// 只把它摆到"未验证"里：发版清单要求手动跑一次，结论写进 Release；没跑就在 CHANGELOG 里明写。
+if (existsSync(join(root, 'tests/live-smoke.test.ts'))) {
+  confirm.push(
+    '未验证：真碰互联网的 live 三条（`npm run test:live`，需 DSH_BROWSER_LIVE=1）—— 发版前手动跑一次，' +
+      '结论写进 Release 正文；没跑就在 CHANGELOG 里写「本次未跑 live」。它不在 prepublishOnly 里，所以不会自动跑',
   )
+}
 
 // ── C. 文档断言 ───────────────────────────────────────────────────────────────
 const docFiles = []
@@ -91,7 +138,15 @@ const walk = (dir) => {
   }
 }
 walk(root)
-const HISTORY = new Set(['CHANGELOG.md'])
+/**
+ * 历史文档：它们本来就该提到旧版本、旧包名，不该按"当前版本"去核对。
+ *
+ * `docs/releases/` 整个目录都算历史 —— 那里放的是**当时**的发布说明与合并进度记录
+ * （2026-11-12 从仓库根目录搬进去的：根目录每次发版都固定贡献"待确认"噪声）。
+ * 这些文件不删：里面有回退命令（`git checkout v0.6.6`）这类只此一份的信息。
+ */
+const HISTORY = new Set(['CHANGELOG.md', 'docs/releases/RELEASE-0.7.0.md', 'docs/releases/MERGE-PROGRESS.md'])
+const isHistory = (f) => HISTORY.has(f) || f.startsWith('docs/releases/')
 /** 上游项目（被借鉴的那个插件）自己的文档：里面出现旧包名/旧版本是对的。 */
 const UPSTREAM_DOCS = new Set([
   'PLUGIN-README.md',
@@ -99,7 +154,7 @@ const UPSTREAM_DOCS = new Set([
   'patches/README.md',
   'docs/articles/focus-stealing.md',
 ])
-const current = docFiles.filter((f) => !HISTORY.has(f))
+const current = docFiles.filter((f) => !isHistory(f))
 
 const basenames = new Set()
 for (const dir of ['', 'src', 'lib', 'scripts', 'tests', 'locale', 'patches', 'docs', 'docs/articles']) {

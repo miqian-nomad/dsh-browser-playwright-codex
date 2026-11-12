@@ -59,12 +59,19 @@ export const ARIA_REF_SCRIPT = String.raw`
   window.__dshAriaRefsV = 2
   const INTERACTIVE = new Set(['button','link','checkbox','radio','menuitem','menuitemcheckbox','menuitemradio','tab','switch','combobox','listbox','option','textbox','searchbox','slider','spinbutton','row','gridcell'])
   const TAGS = new Set(['a','button','select','textarea','option','summary'])
-  const INPUT_ROLE = { checkbox:'checkbox', radio:'radio', button:'button', submit:'button', reset:'button', image:'button', range:'slider', search:'searchbox', hidden:'null' }
+  const INPUT_ROLE = { checkbox:'checkbox', radio:'radio', button:'button', submit:'button', reset:'button', image:'button', range:'slider', number:'spinbutton', search:'searchbox', hidden:'null' }
   const DOC_NONCE = String(Math.floor(Math.random() * 1e9)).padStart(9, '0')
   let refSeq = 0
   const roleOf = (el) => {
     const explicit = el.getAttribute && el.getAttribute('role')
-    if (explicit && explicit.trim()) return explicit.trim().toLowerCase()
+    const explicitRole = explicit && explicit.trim() ? explicit.trim().toLowerCase() : ''
+    // aria: an explicit role="presentation"/"none" is IGNORED on a focusable
+    // element — the tree still exposes its native role. jQuery-UI tabs do exactly
+    // this: <a href="#tabs-1" role="presentation"> shows up as a link in the aria
+    // tree (measured 2026-11-12 on MiniWoB click-tab).
+    const presentational = explicitRole === 'presentation' || explicitRole === 'none'
+    const focusableLink = el.tagName.toLowerCase() === 'a' && el.hasAttribute('href')
+    if (explicitRole !== '' && !(presentational && focusableLink)) return explicitRole
     const tag = el.tagName.toLowerCase()
     if (tag === 'input') return INPUT_ROLE[(el.getAttribute('type') || 'text').toLowerCase()] || 'textbox'
     if (tag === 'a') return 'link'
@@ -73,10 +80,34 @@ export const ARIA_REF_SCRIPT = String.raw`
     if (tag === 'textarea') return 'textarea'
     if (tag === 'option') return 'option'
     if (tag === 'summary') return 'summary'
+    // Implicit roles for the elements the accessibility tree annotates anyway.
+    // Without these the DOM side said "generic" for a <tr> while the tree said
+    // "row" (an actionable role), so the minted ref list and the tree disagreed
+    // and the whole page fell back (measured 2026-11-12: 6 of the 18 fallback
+    // MiniWoB pages were table/row tasks).
+    if (tag === 'tr') return 'row'
+    if (tag === 'td') return 'cell'
+    if (tag === 'th') return 'columnheader'
+    if (tag === 'li') return 'listitem'
+    if (tag === 'table') return 'table'
+    if (tag === 'ul' || tag === 'ol') return 'list'
+    if (tag === 'p') return 'paragraph'
+    if (tag === 'h1' || tag === 'h2' || tag === 'h3' || tag === 'h4' || tag === 'h5' || tag === 'h6') return 'heading'
+    if (tag === 'img') return 'img'
     return 'generic'
   }
   const isActionable = (el) => {
     if (!(el instanceof Element)) return false
+    // An explicit role of presentation / none tells the accessibility tree to drop
+    // the element's own semantics — EXCEPT on a focusable link, where the spec says
+    // the role is ignored (see roleOf). Skipping those here would mint one ref too
+    // few and put the lists out of step (measured 2026-11-12: the MiniWoB tab strips
+    // wrap each tab in <a href role="presentation">; 4 pages fell back).
+    const explicit = el.getAttribute('role')
+    const explicitRole = explicit && explicit.trim() ? explicit.trim().toLowerCase() : ''
+    const presentational = explicitRole === 'presentation' || explicitRole === 'none'
+    const focusableLink = el.tagName.toLowerCase() === 'a' && el.hasAttribute('href')
+    if (presentational && !focusableLink) return false
     const tag = el.tagName.toLowerCase()
     if (TAGS.has(tag)) return true
     const role = roleOf(el)
@@ -94,6 +125,17 @@ export const ARIA_REF_SCRIPT = String.raw`
       if (el.getAttribute('hidden') !== null || el.getAttribute('aria-hidden') === 'true') return false
       const style = getComputedStyle(el)
       if (style.display === 'none' || style.visibility === 'hidden') return false
+      // <option> has no layout box of its own inside a closed <select>, yet the
+      // accessibility tree lists it — so it must keep its slot here, or the two
+      // lists drift (measured 2026-11-12: choose-list minted 2 refs while the tree
+      // had 7 actionable nodes). Its <select> is the visibility signal: options of
+      // a display:none select are absent from the tree too.
+      if (el.tagName.toLowerCase() === 'option') {
+        const select = el.closest('select')
+        if (select === null) return false
+        const selectStyle = getComputedStyle(select)
+        return selectStyle.display !== 'none' && selectStyle.visibility !== 'hidden'
+      }
       // A 'display: contents' box has no rect of its own but lays its children
       // out normally — it belongs to the tree, so it keeps its slot.
       if (style.display === 'contents') return true
@@ -220,6 +262,27 @@ function readQuoted(text: string): { name: string; rest: string } | undefined {
  * @param yaml - the ariaSnapshot text.
  * @returns parsed roots plus any unreadable content lines.
  */
+/**
+ * Playwright quotes a whole node line when the name itself contains a double quote:
+ *   - 'tab "Section #1" [ref=e5]'
+ *   - 'link "Tab #1" [ref=e7] [cursor=pointer]':
+ * Strip the outer single quotes (and the optional trailing ':' that marks children),
+ * then parse the inner text like any other line. Measured 2026-11-12: 8 of 130
+ * MiniWoB pages fell back to the legacy engine purely over this shape (tab strips,
+ * collapsible sections), while the pages themselves read perfectly.
+ */
+function unwrapQuotedNodeBody(body: string): string {
+  if (body.length < 3 || body[0] !== "'") return body
+  const close = body.lastIndexOf("'")
+  if (close <= 0) return body
+  const inside = body.slice(1, close)
+  const after = body.slice(close + 1).trim()
+  // Anything else after the closing quote is not the shape we know; leave it to
+  // the normal path so an unknown line is reported rather than silently accepted.
+  if (after !== '' && after !== ':') return body
+  return inside
+}
+
 export function parseAriaSnapshotWithStats(yaml: string): AriaParseResult {
   const roots: MutableAriaNode[] = []
   const stack: { indent: number; node: MutableAriaNode }[] = []
@@ -245,7 +308,7 @@ export function parseAriaSnapshotWithStats(yaml: string): AriaParseResult {
       continue
     }
     const indent = Math.floor((m[1] ?? '').length / 2)
-    const body = m[2] ?? ''
+    const body = unwrapQuotedNodeBody(m[2] ?? '')
     // Attribute child lines describe the node declared above: '- /url: /one',
     // '- /placeholder: Search'. Playwright adds facts over time, and an attribute
     // line carries no tree structure — so an unknown one is safe to ignore.

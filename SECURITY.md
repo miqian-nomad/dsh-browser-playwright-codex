@@ -37,10 +37,18 @@ call — a click that raises `confirm()` returns the parked dialog instead of ac
 
 **Which hosts it may touch is policy, not goodwill.** `allowedDomains` is enforced on every path that
 can navigate: `browser_navigate`, `browser_open_tab`, every click variant (ref, text, geometric,
-raw coordinates) and `browser_switch_tab`. It is **not** a sandbox: a page's own JavaScript
-(`location.href = …`) can still leave the list, and a tab already sitting on a disallowed host stays
-open (the agent simply refuses to drive it). For hard isolation, put an external network guard around
-it.
+raw coordinates) and `browser_switch_tab`. **The list is also installed on the browser context itself**
+(`src/navigation-guard.ts`), so the browser — not just the tool layer — refuses a document request to a
+host outside it. A page's own JavaScript (`location.href = …`), a `meta refresh`, a `<form>` posting
+off-list and a page-opened popup all stop at the request; `fetch` / `xhr` / `EventSource` to an
+off-list host are refused too, while rendering assets are left alone so a page does not look broken.
+
+Two limits remain, and they are the honest part of this section. (1) Chromium follows a redirect inside
+its own network stack, where request interception never sees the hop: after every action the page's
+final URL is checked, an off-list landing is refused with `URL_NOT_ALLOWED`, and the tab is reset to
+`about:blank`. (2) A tab that was **already** sitting on a disallowed host when this session took it over
+(a profile written by an older version) stays open — the agent simply refuses to drive it. For hard
+isolation from the whole host stack, still put an external network guard around it.
 
 **`browser_cdp` is CDP with an allow-list.** Nineteen methods pass, matched by **exact name with no
 family prefixes**: DOM reads (geometry, node lookup, attributes, markup), one focus action, the four

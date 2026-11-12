@@ -378,6 +378,19 @@ The tool schemas join the system-prompt assembly through `ctx.tools.register()`;
 
 One tool schema block per tool (small, fixed), plus per-call result text proportional to the visible page, capped by ``snapshot.maxNodes`` and name/text limits. Actions return a fresh snapshot, so interactive flows cost roughly one snapshot per step.
 
+The merged tools carry their own allowance rather than the default 1,650 characters. `browser_click` (
+which absorbed the old separate point-click and hover tools) measures **2,165 characters** against a
+budget of **2,400** — about **235 characters** of headroom left. `npm run cost` prints that per-tool
+figure on every run, so it is measured, not estimated.
+
+**The size knob is `snapshot.maxNodes`, not the reading mode.** The node cap decides how many
+characters a snapshot can spend: at the default 500 the engine stops once 500 nodes are in the tree.
+On a very large page whose snapshot is re-sent at every step, lowering it is the lever — the price is
+fewer elements visible. `interactiveOnly` does **not** shrink the total: it spends the same node
+budget on actionable elements only, so the same page can carry *more* refs that way. Measured on one
+real page (a GitHub repository page, 2026-11-12): full snapshot **20,780 characters / 134 refs**; the
+same page with `interactiveOnly: true` **18,351 characters / 239 refs**.
+
 Measured with ``npm run cost`` (per-turn, resident in the system prompt):
 
 | Surface | Tools | Schema characters | ≈ tokens/turn |

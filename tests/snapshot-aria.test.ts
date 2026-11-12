@@ -239,3 +239,52 @@ test('interactiveOnly still keeps an iframe, whose name is the embedded widget t
     false,
   )
 })
+
+// ---------------------------------------------------------------------------
+// 2026-11-12: the two shapes that made 18 of 130 MiniWoB pages fall back
+// ---------------------------------------------------------------------------
+
+test(`parseAriaSnapshot reads a node line wrapped in quotes (Playwright name-as-key form)`, () => {
+  // Measured on MiniWoB tab strips: Playwright quotes the WHOLE node line when the
+  // name contains a double quote. The parser saw a line starting with `'`, called it
+  // format drift, and the capture layer refused the entire tree — so smart mode
+  // silently fell back on every tab/collapsible task (8 of 130 pages).
+  const yaml = [
+    `- 'tab "Section #1" [ref=e5]'`,
+    `- 'link "Tab #1" [ref=e7] [cursor=pointer]':`,
+    '  - text: Tab #1',
+  ].join('\n')
+  const stats = parseAriaSnapshotWithStats(yaml)
+  assert.deepEqual(stats.unparsed, [], 'the quoted form must parse, not count as drift')
+  assert.equal(stats.roots.length, 2)
+  const first = stats.roots[0] as { role: string; name: string; ariaRef?: string }
+  const second = stats.roots[1] as { role: string; name: string; ariaRef?: string }
+  assert.equal(first.role, 'tab')
+  assert.equal(first.name, 'Section #1')
+  assert.equal(first.ariaRef, 'e5')
+  // Trailing ':' after the closing quote marks children and must not become a name.
+  assert.equal(second.role, 'link')
+  assert.equal(second.name, 'Tab #1')
+  assert.equal(second.ariaRef, 'e7')
+})
+
+test('unwrapping quotes never changes a line that already parsed', () => {
+  // The guard against overreach: normal lines, and names that themselves contain an
+  // apostrophe, must parse exactly as before.
+  const real = parseAriaSnapshotWithStats(REAL_YAML)
+  assert.deepEqual(real.unparsed, [], 'the real-format fixture must stay fully readable')
+  assert.equal(real.roots.length, parseAriaSnapshot(REAL_YAML).length)
+
+  const apostrophe = parseAriaSnapshotWithStats('- button "Don\'t panic" [ref=e1]')
+  assert.deepEqual(apostrophe.unparsed, [])
+  assert.equal((apostrophe.roots[0] as { name: string }).name, "Don't panic")
+})
+
+test('ariaTreeToBrowserNodes refuses when the tree has MORE actionable nodes than refs', () => {
+  // This is the other direction from `refuses leftover ref slots`: the DOM minted
+  // fewer refs than the tree has actionable nodes. Both directions must stay
+  // guarded — the guard is what stops a ref from naming the wrong element.
+  const refs = ['e7120738041']
+  const built = ariaTreeToBrowserNodes(parseAriaSnapshot(REAL_YAML), OPTS, refs, ['generic'])
+  assert.equal(built.misaligned, true)
+})

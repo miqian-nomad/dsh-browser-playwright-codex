@@ -1,6 +1,6 @@
 {
   "name": "dsh-browser-playwright-codex",
-  "version": "0.8.1",
+  "version": "0.8.2",
   "description": "Browser automation for DeepSeek Harness, one plugin: fill in forms, scrape lists and work across tabs in real pages, using the logins you already have. Runs in a visible window that stays quiet when minimised; native dialogs are parked instead of confirmed, CAPTCHA pages are flagged with a note that says stop and hand the page back, password / one-time-code / card fields are refused by browser_fill, and the Settings card (enable/disable, page-reading mode, capability gates) now lives inside this package.",
   "license": "MIT",
   "type": "module",
@@ -65,7 +65,9 @@
     "format": "node node_modules/prettier/bin/prettier.cjs --write \"src/**/*.ts\" \"tests/**/*.ts\" \"scripts/**/*.mjs\"",
     "format:check": "node node_modules/prettier/bin/prettier.cjs --check \"src/**/*.ts\" \"tests/**/*.ts\" \"scripts/**/*.mjs\"",
     "prepublishOnly": "npm run build && npm run typecheck && npm test && npm run swarm:check && npm run verify && npm run preflight",
-    "preflight": "node scripts/preflight.mjs ."
+    "preflight": "node scripts/preflight.mjs .",
+    "test:toggle": "node --test tests/cross-repo/*.test.ts",
+    "coverage": "node scripts/coverage.mjs"
   },
   "dependencies": {
     "@deepseek-ai/schemastery": "^3.18.4",

@@ -766,7 +766,7 @@ export async function showWelcome(
     return // 页面还没准备好：留一张空白页也不影响任何事
   }
   const userChoice = runtimeState.getSwarm()
-  const enabled = userChoice ?? config?.swarm?.enabled ?? true
+  const enabled = userChoice ?? config?.swarm?.enabled ?? false
   if (!enabled) return
   const tuning = runtimeState.getSwarmTuning()
   const speed = clamp(tuning.speed ?? config?.swarm?.speed, 1, 3, 3)
@@ -794,7 +794,7 @@ export function willPlaySwarm(
     const host = new URL(targetUrl).hostname
     if (host === '') return false
     const userChoice = runtimeState.getSwarm()
-    const enabled = userChoice ?? config?.swarm?.enabled ?? true
+    const enabled = userChoice ?? config?.swarm?.enabled ?? false
     if (!enabled) return false
     const tuning = runtimeState.getSwarmTuning()
     const oncePerSite = tuning.oncePerSite ?? config?.swarm?.oncePerSite ?? true
@@ -832,9 +832,9 @@ export function maybePlaySwarm(
       const host = new URL(url).hostname
       if (host === '') return
 
-      // 用户的开关优先；没表态就用配置里的默认值（出厂是开）。
+      // 用户的开关优先；没表态就用配置里的默认值（出厂是关，与 config.ts 的 schema 一致）。
       const userChoice = runtimeState.getSwarm()
-      const enabled = userChoice ?? config?.swarm?.enabled ?? true
+      const enabled = userChoice ?? config?.swarm?.enabled ?? false
       if (!enabled) {
         // 关着也要把可能已提前启动的引擎撤掉：标记可能是上一次导航残留的，
         // 不清就会白屏卡住（2026-11-09 复核 find B）。

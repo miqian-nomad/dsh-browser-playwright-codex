@@ -1,3 +1,39 @@
+## 0.8.2 — 2026-11-12
+
+一句话摘要：**发版门禁不再会"假绿"，快照引擎第一次在真实网站上被量过**——preflight 过去只读 `ℹ fail`（而且"fail 0"是写死的字符串），被取消的用例看不出、也不报；设置页这个全仓最大的零测试模块补上了走真实 HTTP 的测试，顺手修掉"已有未标记装载行时写出第二行"的坏文件路径；智能模式（aria）的解析器与可交互集对齐后，130 个任务页的降级从 18 页降到 3 页。
+
+### Fixed — 门禁与默认值
+
+- **preflight 的假绿通道（最要紧）**：旧实现只解析 `ℹ fail N`，摘要里的 `fail 0` 是硬编码字符串，`cancelled` / `todo` 一次都没读。0.7.8 有 7 条用例被打成 `cancelledByParent`，对外仍说"278 通过"，实际只跑了 271 条。现在判读抽成 `scripts/preflight-suite.mjs`，读全部六个计数，并把下列情形都判成硬错误：`fail > 0`、`cancelled > 0`、`todo > 0`、恒等式 `tests ≠ pass + fail + cancelled + skipped + todo`、任一计数读不到、命令非零退出、出现 `cancelledByParent > 0`。**生产脚本里不允许任何外部注入测试结果的入口**（第一版加过、被复核否掉，并留了守卫测试防止再加回来）。
+- **`swarm.enabled` 的默认方向反了**：`config.ts` 的 schema 是 `default(false)`，而 `swarm-intro.ts` 的三个入口写成 `?? true` —— 配置整体缺失时会播。改成 `?? false`，并补测试：`config` 为 `undefined` / `{}` / `{ swarm: {} }` 三种形状都不播，另有一条 `enabled: true` 的对照防止测试空转。
+- **设置页写出重复装载行**：补丁层里已有未标记的 `- id: browser` 行时，旧实现会再追加一次模板，同一个 id 被挂两行（与 issue #4 同一类"保存写出坏文件"）。现在改为**收编**那一行（保留用户键、外面套标记、只改三个闸门）；若那一行属于别的包，**拒绝写入并报错**，文件一个字节不动。
+- **SECURITY.md 与真实行为不符**：旧文写着"页面自己的 JS 仍能离开白名单"，实际名单装在浏览器 context 上、请求层就会拒。按真实行为重写，并保留两条诚实的限制（Chromium 自家网络栈里的跳转靠动作后校验最终 URL；已经停在不允许域名上的标签页仍打开、只是不驱动）。
+
+### Fixed — 快照引擎（aria / smart 模式）
+
+- **解析器读不懂"整行被引号包住"的节点**：Playwright 在名字含双引号时会写成 `- 'tab "Section #1" [ref=e5]'`（可能带尾冒号）。旧解析器把它算格式漂移，整页降级——MiniWoB 的标签页/折叠题共 8 页因此读不了。现在容忍外层引号 + 可选尾冒号，并加了"原来能读的行不许读坏"的守卫测试。
+- **两套"可交互"定义对不齐**：DOM 铸造集与 aria 树的可交互集不一致，会触发对齐守卫、整页回退。对齐了这几处：`tr→row`、`td→cell`、`th→columnheader`、`li→listitem`、`table/list/p/h1-6/img` 的隐式角色；`<option>` 的可见性看它的 `<select>`；`role="presentation"/"none"` 在可聚焦链接上忽略（ARIA 规范，jQuery-UI 标签页就是这样）；`<input type=number>` → `spinbutton`。
+- **实测**：MiniWoB++ 130 个任务页里，智能模式降级 **18 → 3**；`ref` 落不到 DOM 元素 **0 页 / 0 个**；130/130 有效、0 失败。真实网站 7 页 5 站（含 GitHub 仓库页、runoob 表格页、w3school 表单页、element-plus 组件页）全部 `unresolved = 0`，点击落点逐个核对。
+- **代价与旋钮**：GitHub 仓库页从此前的"读不了、回退 legacy（81 refs / 8,517 字符）"变成"智能模式可读（134 refs / 20,780 字符）"——结构更全、也更贵。真正决定体积的是 `snapshot.maxNodes`（默认 500），不是 `interactiveOnly`：同一页 `interactiveOnly` 是 18,351 字符 / 239 refs，**只省 12% 且 ref 反而更多**（预算重新分配，不减少总量）。README 与 PLUGIN-README 已写明这个旋钮。
+
+### Added — 测试与流程
+
+- **设置卡端到端测试**（`tests/settings-card.test.ts`）：全仓最大的零测试模块（537 行）补上 10 条，走**真实 HTTP**（`node:http` 起服务、把设置卡注册的 handler 原样接上：方法/请求头/请求体/状态码都走真实栈）。钉住 issue #4（保存后 YAML 可重新解析、无重复键、只有一个装载行）、切开关不抹 `profileDir` 等用户配置、六个路由的 `x-dsh-plugin` 防伪头、被拒请求不动文件。其中"重复装载行"与"拒绝写入"两条做过变异验证（把修复改回去，测试立刻红）。
+- **覆盖率**：`npm run coverage`（`scripts/coverage.mjs`）。用 Node 自带的 `--experimental-test-coverage`，不引入新依赖（本机 `@deepseek-ai/*` 是指向活运行时的软链接，不能 `npm install`）。自带报告只列被加载过的文件，脚本额外把 `src/**` 全清单求差集，**把 0 覆盖模块明着列出来**。首测：43 个模块、41 个被加载、2 个 0 覆盖（纯类型文件）。**不是门禁**。
+- **跨仓库检查显式化**：配套件文档检查移出默认套件（`tests/cross-repo/`），默认套件的数字在任何机器上一致；没设 `DSH_TOGGLE_DIR` 时 preflight 明写**「未验证」**，不再以"跳过"冒充通过。
+- **live 三条接进发版清单**：`docs/RELEASING.md` 新增发版清单，要求发版前手动跑 `DSH_BROWSER_LIVE=1 npm run test:live`，结论写进 Release；没跑就在 CHANGELOG 明写「本次未跑 live」。preflight 每次固定打一行「未验证：live 三条」，不再悄悄消失。
+- **一次性发布文档挪位**：`RELEASE-0.7.0.md` / `MERGE-PROGRESS.md` 移到 `docs/releases/`（**不删**，里面有回退命令），preflight 把整个目录当历史豁免——根目录发版噪声从 5 处降到 3 处。
+
+### live 三条：本次跑过，2/3 通过
+
+按 `docs/RELEASING.md` 手动跑了一次 `DSH_BROWSER_LIVE=1 npm run test:live`（2026-11-12）：
+
+- ✔ `example.com renders, snapshots, and screenshots`（1.3s）
+- ✔ `example.com rejects disallowed schemes consistently`（0.03s）
+- ✖ `wikipedia REST summary parses through evaluate` —— **本机网络到不了 wikipedia**：`page.goto` 在 30 秒后 `NAVIGATION_TIMEOUT`（这条不经过插件的新代码，属环境不可达）
+
+所以本次 live **未全绿**，原因记录在此；它不在 `prepublishOnly` 里，不影响发布门禁。preflight 的「未验证：live 三条」行同样保留。
+
 ## 0.8.1 — 2026-11-11
 
 一句话摘要：**快照第一次真正"看得见状态"**——填进去的值、勾选状态进快照也进页面指纹，正常的填字和勾选不再被误报成"疑似反爬墙"；密码 / 验证码 / 卡号即使有值也绝不进快照。顺带削掉真实站点快照里最贵的一类垃圾（跳转包裹 URL、同一 href 的重复打印），并让 `browser_evaluate` 返回非标量时给出能照着改的错误。**另外：进场动画重新随包分发——作者 Dhvanil Patel 于 2026-11-11 邮件书面许可打包与修改，默认仍然关闭。**
