@@ -8,6 +8,7 @@ import path from 'node:path'
 import fs from 'node:fs'
 import type { PlaywrightProvider } from './provider.ts'
 import { AUTO_CHANNELS, HUMANIZED_LAUNCH } from './config.ts'
+import { proxyLaunchOption } from './proxy.ts'
 import { SNAPSHOT_SCRIPT } from './injected.ts'
 import { BrowserError, launchFailed } from './errors.ts'
 import { forgetOnBrowserClose, showWelcome } from './swarm-intro.ts'
@@ -71,6 +72,9 @@ async function launchContext(provider: PlaywrightProvider) {
     // Headless mode keeps the fixed viewport (no window to track).
     ...(headless ? { viewport: provider.config.launch.viewport } : { viewport: null }),
     ignoreHTTPSErrors: provider.config.launch.ignoreHTTPSErrors,
+    // Proxy at the browser level (launchOptions.proxy): request headers cannot route a whole
+    // browser. Empty proxy yields {} so the default stays a direct connection.
+    ...proxyLaunchOption(provider.config.launch.proxy),
     ...HUMANIZED_LAUNCH,
     args: [
       '--no-first-run',
@@ -219,7 +223,12 @@ async function launchBrowser(provider: PlaywrightProvider) {
   const attempts = []
   if (executablePath !== undefined) {
     try {
-      provider.browser = await chromium.launch({ executablePath, headless, ...HUMANIZED_LAUNCH })
+      provider.browser = await chromium.launch({
+        executablePath,
+        headless,
+        ...HUMANIZED_LAUNCH,
+        ...proxyLaunchOption(provider.config.launch.proxy),
+      })
       provider.launchedHeadless = headless
       return provider.browser
     } catch (error) {
@@ -230,7 +239,12 @@ async function launchBrowser(provider: PlaywrightProvider) {
     const channels = channel !== undefined && channel !== '' ? [channel] : [...AUTO_CHANNELS]
     for (const candidate of channels) {
       try {
-        provider.browser = await chromium.launch({ channel: candidate, headless, ...HUMANIZED_LAUNCH })
+        provider.browser = await chromium.launch({
+          channel: candidate,
+          headless,
+          ...HUMANIZED_LAUNCH,
+          ...proxyLaunchOption(provider.config.launch.proxy),
+        })
         provider.launchedHeadless = headless
         return provider.browser
       } catch (error) {

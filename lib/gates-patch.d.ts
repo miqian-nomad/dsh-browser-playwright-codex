@@ -86,4 +86,33 @@ export declare function writeGates(allowEvaluate: boolean, allowCdp: boolean, di
     allowCdp: boolean;
     diagnostics: boolean;
 }>;
+/**
+ * 改写块里的 proxy 行：有就改、没有就插、空字符串就删。其它行逐字节保留。
+ *
+ * @param body - 托管块全文（含标记）
+ * @param proxy - 已经过 normalizeProxy 校验的地址；'' 表示删掉这一行
+ * @returns 改好的块
+ */
+export declare function patchBlockProxy(body: string, proxy: string): string;
+/** 读托管块里的 proxy 值；没有就是 ''（= 直连）。 */
+export declare function parseBrowserBlockProxy(text: string): string;
+/**
+ * 把 proxy 合并进文件内容：没有托管块就先按模板建一个，再改这一行。
+ *
+ * @param original - 原文件内容
+ * @param proxy - 已校验的地址；'' = 删掉
+ * @returns 新文件内容
+ */
+export declare function mergeBrowserBlockProxy(original: string, proxy: string): string;
+/**
+ * 写 proxy：备份 → 原子替换 → 读回校验；校验失败恢复原文件。
+ *
+ * @param proxy - 已校验的地址；'' 表示删掉这一行（= 直连）
+ * @param env - 环境（测试用 DSH_HOME 覆盖）
+ * @returns 写到的文件与现在的值
+ */
+export declare function writeProxy(proxy: string, env?: NodeJS.ProcessEnv): Promise<{
+    patch: string;
+    proxy: string;
+}>;
 export {};

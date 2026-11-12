@@ -352,3 +352,168 @@ export async function writeGates(
   }
   return { patch: file, allowEvaluate, allowCdp, diagnostics }
 }
+
+// ---------------------------------------------------------------------------
+// launch.proxy —— 设置页里的「代理」输入框
+// ---------------------------------------------------------------------------
+// 只增改 `playwright.launch` 下的 proxy 这一行：与三个闸门是同一个模式（已知键、按行改），
+// 不是"能写任意键"。空字符串 = 删掉那一行（留空=直连必须是干净的，不能留个空值在文件里）。
+// 结构认不出来时**拒绝写入**（文件一个字节不动），绝不整块重渲染 —— 那会抹掉 profileDir。
+
+/** 托管块里 `playwright.launch` 的定位结果。 */
+interface LaunchSection {
+  /** `launch:` 那一行的下标 */
+  readonly at: number
+  /** `launch:` 的缩进 */
+  readonly indent: number
+  /** 子键该用的缩进（从现有兄弟行推断，推断不出就用 indent + 2 空格） */
+  readonly childIndent: string
+  /** 现有 proxy 行：下标与缩进 */
+  readonly proxy?: { readonly at: number; readonly indent: string }
+}
+
+/** 在块的文本里找 `launch:` 与它的 `proxy:` 子行。认不出结构就抛错（拒绝写入）。 */
+function findLaunchSection(lines: readonly string[]): LaunchSection {
+  let launchAt = -1
+  let launchIndent = ''
+  for (let i = 0; i < lines.length; i += 1) {
+    const m = /^(\s*)launch\s*:\s*(#.*)?$/.exec(lines[i] ?? '')
+    if (m !== null) {
+      launchAt = i
+      launchIndent = m[1] ?? ''
+      break
+    }
+  }
+  if (launchAt === -1) {
+    throw new Error(
+      'the managed block has no `playwright.launch:` section, so launch.proxy cannot be edited safely; ' +
+        'nothing was written. Fix the block by hand (or remove it and save a gate once to rebuild it).',
+    )
+  }
+  const baseIndent = launchIndent.length
+  let childIndent = ''
+  let proxy
+  for (let i = launchAt + 1; i < lines.length; i += 1) {
+    const line = lines[i] ?? ''
+    const trimmed = line.trim()
+    if (trimmed === '') continue
+    const indent = (/^\s*/.exec(line)?.[0] ?? '').length
+    if (indent <= baseIndent) break // 出了 launch 这一节
+    if (trimmed.startsWith('#')) continue
+    if (childIndent === '') childIndent = ' '.repeat(indent)
+    const p = /^(\s*)proxy\s*:/.exec(line)
+    if (p !== null) proxy = { at: i, indent: p[1] ?? '' }
+  }
+  return {
+    at: launchAt,
+    indent: baseIndent,
+    childIndent: childIndent === '' ? ' '.repeat(baseIndent + 2) : childIndent,
+    ...(proxy === undefined ? {} : { proxy }),
+  }
+}
+
+/**
+ * 改写块里的 proxy 行：有就改、没有就插、空字符串就删。其它行逐字节保留。
+ *
+ * @param body - 托管块全文（含标记）
+ * @param proxy - 已经过 normalizeProxy 校验的地址；'' 表示删掉这一行
+ * @returns 改好的块
+ */
+export function patchBlockProxy(body: string, proxy: string): string {
+  const nl = body.includes('\r\n') ? '\r\n' : '\n'
+  const lines = body.split(/\r?\n/)
+  const section = findLaunchSection(lines)
+  const value = proxy.trim()
+  const rendered = section.childIndent + 'proxy: ' + JSON.stringify(value)
+  if (section.proxy !== undefined) {
+    if (value === '') lines.splice(section.proxy.at, 1)
+    else lines[section.proxy.at] = rendered
+    return lines.join(nl)
+  }
+  if (value === '') return lines.join(nl) // 本来就没有，删空是幂等的
+  lines.splice(section.at + 1, 0, rendered)
+  return lines.join(nl)
+}
+
+/** 读托管块里的 proxy 值；没有就是 ''（= 直连）。 */
+export function parseBrowserBlockProxy(text: string): string {
+  const found = findBlock(text)
+  if (found === undefined) return ''
+  const body = text.slice(found.start, found.after)
+  const lines = body.split(/\r?\n/)
+  let section: LaunchSection | undefined
+  try {
+    section = findLaunchSection(lines)
+  } catch {
+    return ''
+  }
+  if (section?.proxy === undefined) return ''
+  const raw = (lines[section.proxy.at] ?? '').replace(/^\s*proxy\s*:\s*/, '')
+  const withoutComment = raw.replace(/\s+#.*$/, '').trim()
+  if (withoutComment === '') return ''
+  if (
+    (withoutComment.startsWith('"') && withoutComment.endsWith('"')) ||
+    (withoutComment.startsWith("'") && withoutComment.endsWith("'"))
+  ) {
+    return withoutComment.slice(1, -1)
+  }
+  return withoutComment
+}
+
+/**
+ * 把 proxy 合并进文件内容：没有托管块就先按模板建一个，再改这一行。
+ *
+ * @param original - 原文件内容
+ * @param proxy - 已校验的地址；'' = 删掉
+ * @returns 新文件内容
+ */
+export function mergeBrowserBlockProxy(original: string, proxy: string): string {
+  const value = proxy.trim()
+  let base = original
+  let found = findBlock(base)
+  if (found === undefined) {
+    base = (base === '' || base.endsWith('\n') ? base : base + '\n') + '\n' + renderBrowserBlock(false, false, false)
+    found = findBlock(base)
+  }
+  if (found === undefined) throw new Error('could not create the managed block; nothing was written')
+  const edited = patchBlockProxy(base.slice(found.start, found.after), value)
+  if (parseBrowserBlockProxy(edited) !== value) {
+    throw new Error('proxy line self-check failed; nothing was written')
+  }
+  return base.slice(0, found.start) + edited + base.slice(found.after)
+}
+
+/**
+ * 写 proxy：备份 → 原子替换 → 读回校验；校验失败恢复原文件。
+ *
+ * @param proxy - 已校验的地址；'' 表示删掉这一行（= 直连）
+ * @param env - 环境（测试用 DSH_HOME 覆盖）
+ * @returns 写到的文件与现在的值
+ */
+export async function writeProxy(
+  proxy: string,
+  env: NodeJS.ProcessEnv = process.env,
+): Promise<{ patch: string; proxy: string }> {
+  const file = homePatchPath(env)
+  const value = proxy.trim()
+  let original = ''
+  try {
+    original = await readFile(file, 'utf8')
+  } catch {
+    original = ''
+  }
+  const next = mergeBrowserBlockProxy(original, value)
+  if (original !== '') await copyFile(file, file + '.bak-browser-toggle').catch(() => {})
+  const tmp = file + '.tmp-browser-toggle'
+  await writeFile(tmp, next, 'utf8')
+  await rename(tmp, file)
+  const check = await readFile(file, 'utf8')
+  if (parseBrowserBlockProxy(check) !== value) {
+    if (original !== '') {
+      await writeFile(file, original, 'utf8')
+      throw new Error('proxy self-check failed after write; previous content restored')
+    }
+    throw new Error('proxy self-check failed after write')
+  }
+  return { patch: file, proxy: value }
+}

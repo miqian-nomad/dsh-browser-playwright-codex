@@ -23,6 +23,11 @@ export interface PlaywrightConfig {
     navigationTimeoutMs: number
     /** Ignore HTTPS certificate errors. */
     ignoreHTTPSErrors: boolean
+    /**
+     * Proxy for the whole browser, e.g. `http://proxy.example:8080` (http / https / socks5).
+     * Empty = connect directly — the default, and the previous behaviour.
+     */
+    proxy?: string
   }
   /** Host suffixes the browser may visit. Empty = any http(s) host. */
   allowedDomains?: string[]
@@ -108,6 +113,11 @@ export const Config: z<PlaywrightConfig> = z.object({
     // one second; the default stays 30s.
     navigationTimeoutMs: z.number().min(1000).default(30000),
     ignoreHTTPSErrors: z.boolean().default(false),
+    // Proxy for the whole browser (launchOptions.proxy), e.g. http://proxy.example:8080.
+    // Empty = direct, which is the default and keeps every existing deployment unchanged.
+    // Validation lives in src/proxy.ts so a bad address fails loudly instead of silently
+    // connecting directly (which would look like "the site is down").
+    proxy: z.string().default(''),
   }),
   allowedDomains: z.array(z.string()),
   idleTimeoutMs: z.number().default(600000),

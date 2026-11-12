@@ -70,9 +70,9 @@ npm pack --dry-run
 ```powershell
 git add -A
 git commit -m "chore(release): X.Y.Z —— 一句话说这次修了什么"
-git -c http.proxy=http://127.0.0.1:10808 push gh main
+git -c http.proxy=<你的代理地址> push gh main
 git tag -a vX.Y.Z -m "vX.Y.Z — 一句话"
-git -c http.proxy=http://127.0.0.1:10808 push gh vX.Y.Z
+git -c http.proxy=<你的代理地址> push gh vX.Y.Z
 ```
 
 推完核对：`git ls-remote gh refs/heads/main` 的 SHA 必须等于本地 `git rev-parse HEAD`。

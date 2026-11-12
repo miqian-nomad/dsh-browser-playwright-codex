@@ -50,7 +50,7 @@ loader **整体替换 config**，迁移时三节都要写全（设置卡会自�
 - `node scripts/preflight.mjs .`：**0 处硬错误**（2 处待确认均为 CHANGELOG 里的历史包名）
 - `npm run cost`：16 工具 / 11,179 字符 / ~3,105 token/轮（全量 21 ≈ 4,384）
 
-## 发布步骤（需要代理 127.0.0.1:10808 重新开启）
+## 发布步骤（需要代理重新开启）
 
 1. `git checkout main && git merge --ff-only merge-toggle-into-codex`（或 PR 合并）
 2. `git tag -a v0.7.0 -m "v0.7.0 — 一个插件：设置卡并入 + 成本/快照瘦身 + 凭据字段机制级拒绝"`

@@ -1,3 +1,32 @@
+## 0.8.3 — 2026-11-12
+
+一句话摘要：**插件可以走代理了**——以前它启动的浏览器只能直连，凡是要代理的站点（维基、GitHub 网页、大量国外站）一律打不开。现在多一个 `launch.proxy` 配置项和设置页里的「代理」输入框；**默认留空 = 直连，行为与之前完全一样**。实测同一台机器：维基直连 31 秒超时，走代理 1 秒返回。
+
+### Added
+
+- **`launch.proxy`**：填 `http://host:port`、`https://host:port` 或 `socks5://host:port`，只写 `host:port` 会按 Playwright 的规则补成 `http://`。代理交给**浏览器启动参数**（`launchOptions.proxy`），整个浏览器走代理——不是在某个请求上加头。
+- **设置页「代理」输入框**：放在「已登录的站点」正前方（这张卡的最后一块），不再散落在中间。占位提示 `http://host:port`，示例用保留域名 `http://proxy.example:8080`，**不写任何本机真实地址**；默认值为空。
+- **强制绕过本机地址**：配置代理时自动带上 `bypass: localhost,127.0.0.1`。不加这个，插件自己的本地页面（verify、本地普查、任何本地服务）会被塞进代理而连不上。
+- **地址写错当场报错，绝不静默回退直连**：缺 scheme 时按 `host:port` 补 http；端口必须 1–65535；带路径/查询/片段、未知 scheme 都拒绝，并给出「写成 `scheme://host:port`」这句人话。静默回退会把"代理没生效"伪装成"网站打不开"，比报错更难查。
+- **不支持需要账号密码的代理**：带账号密码的地址在校验阶段就拒。两个理由——密码会明文落在用户的 `cordis.patch.yml` 里；而且 Chromium/Playwright 本身不支持 SOCKS5 认证（`Browser does not support socks5 proxy authentication`）。宁可少一个能力，不埋一个明文密码。
+
+### Changed
+
+- **保存代理只改一行**：`playwright.launch` 下的 `proxy:` 这一行，与三个能力闸门同一个模式（已知键、按行改）。其它键（`profileDir` / `channel` / `viewport` / `maxSessions` / `toolPrefix` / `maxWaitMs` 等）**逐字节不动**；清空 = 删掉那一行（留空=直连必须是干净的，不能留空值）；结构认不出就**拒绝写入**，绝不整块重渲染。
+- **生效时机**：代理是浏览器启动参数，插件在加载时读配置，所以**改完要重启 DSH 才生效**；设置页保存成功后会直接提示这一点。
+
+### Tests
+
+- 新增 `tests/proxy.test.ts`（9 条）：空配置不带 proxy；填了带 server + bypass；`host:port` 短写补 http；端口缺失/非数字/0/65536；认证代理拒绝；未知 scheme 与带路径拒绝；启动路径静态守卫（防止只加配置没接上）；**代理不影响 `allowedDomains` 判定**。
+- `tests/settings-card.test.ts` 新增 4 条：保存后 `launch.proxy` 出现且其它键完全不变（含 `profileDir`）；清空后那一行被删；非法地址 400 且文件不变；重复保存同一值幂等无重复键。
+- 全套现在 **390 条 / 387 过 / 0 失败 / cancelled 0 / skipped 3 / todo 0**。
+
+### Verified
+
+- **走代理真跑 live 三条：3/3 通过**。`example.com` 两条照常；`wikipedia REST summary` 在直连时 31 秒 `NAVIGATION_TIMEOUT` 失败，配代理后 **1.0 秒通过**——这就是这次改动的直接证据（此前 0.8.2 发布时这条是 2/3）。
+- verify 60 项全过、preflight 0 硬错误、打包 101 个文件（新增 `lib/proxy.js` / `lib/proxy.d.ts`）。
+- 已知限制：设置页里没有"测试代理连通性"的按钮；填错端口但格式合法时，要到实际启动浏览器才会发现连不上。
+
 ## 0.8.2 — 2026-11-12
 
 一句话摘要：**发版门禁不再会"假绿"，快照引擎第一次在真实网站上被量过**——preflight 过去只读 `ℹ fail`（而且"fail 0"是写死的字符串），被取消的用例看不出、也不报；设置页这个全仓最大的零测试模块补上了走真实 HTTP 的测试，顺手修掉"已有未标记装载行时写出第二行"的坏文件路径；智能模式（aria）的解析器与可交互集对齐后，130 个任务页的降级从 18 页降到 3 页。

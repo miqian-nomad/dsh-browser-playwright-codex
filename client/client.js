@@ -403,6 +403,13 @@ window.__ModuleLoader__.load({
       const [logins, setLogins] = useState(null)
       const [headless, setHeadless] = useState(null)
       const [headlessUserChosen, setHeadlessUserChosen] = useState(false)
+      // 代理（浏览器启动参数）：'' = 直连。
+      const [proxy, setProxy] = useState('')
+      const [proxyDraft, setProxyDraft] = useState('')
+      const [proxyBusy, setProxyBusy] = useState(false)
+      const [proxyMsg, setProxyMsg] = useState(null)
+      // 输入框有焦点时，5 秒一次的轮询不许覆盖用户正在打的字。
+      const proxyFocusedRef = useRef(false)
       const [showAll, setShowAll] = useState(false)
       const [openGroups, setOpenGroups] = useState([])
       const [hiddenDomains, setHiddenDomains] = useState(readHiddenDomains())
@@ -436,6 +443,10 @@ window.__ModuleLoader__.load({
           if (typeof s.swarmPersistPlayed === 'boolean') setSwarmPersist(s.swarmPersistPlayed)
           if (typeof s.headless === 'boolean') setHeadless(s.headless)
           setHeadlessUserChosen(s.headlessUserChosen === true)
+          if (typeof s.proxy === 'string') {
+            setProxy(s.proxy)
+            if (!proxyFocusedRef.current) setProxyDraft(s.proxy)
+          }
           setGates({
             allowEvaluate: typeof s.allowEvaluate === 'boolean' ? s.allowEvaluate : null,
             allowCdp: typeof s.allowCdp === 'boolean' ? s.allowCdp : null,
@@ -573,6 +584,30 @@ window.__ModuleLoader__.load({
         }
       }
 
+      // 保存代理：只改 cordis.patch.yml 里 launch.proxy 那一行；空 = 删掉（直连）。
+      const saveProxy = async () => {
+        if (proxyBusy) return
+        setProxyBusy(true)
+        setProxyMsg(null)
+        try {
+          const r = await api('/proxy', 'POST', { proxy: proxyDraft })
+          if (r && r.error) {
+            setProxyMsg({ kind: 'error', text: r.error.message || r.error.code || '保存失败' })
+            return
+          }
+          const saved = typeof r.proxy === 'string' ? r.proxy : ''
+          setProxy(saved)
+          setProxyDraft(saved)
+          setProxyMsg({
+            kind: 'ok',
+            text: (saved === '' ? '已保存：留空 = 直连。' : '已保存：' + saved + '。') + '重启 DSH 后生效。',
+          })
+        } catch (error) {
+          setProxyMsg({ kind: 'error', text: '保存失败：' + (error?.message ?? String(error)) })
+        } finally {
+          setProxyBusy(false)
+        }
+      }
       const chooseWindow = async (nextHeadless) => {
         if (headless === null || busy || nextHeadless === headless) return
         setBusy(true)
@@ -1153,6 +1188,68 @@ window.__ModuleLoader__.load({
             )
           : null,
 
+        // ---- 代理（浏览器启动参数）----
+        // 放在「已登录的站点」正前方（用户要求的最后一块），样式与其它分组一致：
+        // 标题行 + 一整块内容。留空 = 直连；改了要重启 DSH 才生效（保存成功时会说明）。
+        h('div', { key: 'proxyGroup', style: S.group }, ['代理']),
+        h('div', { key: 'proxyBody', style: { ...S.list, marginTop: 8 } }, [
+          h('div', { key: 'row', style: { display: 'flex', alignItems: 'center', gap: 8 } }, [
+            h('input', {
+              key: 'input',
+              type: 'text',
+              value: proxyDraft,
+              placeholder: 'http://host:port',
+              disabled: proxyBusy,
+              spellCheck: false,
+              onFocus: () => {
+                proxyFocusedRef.current = true
+              },
+              onBlur: () => {
+                proxyFocusedRef.current = false
+              },
+              onChange: (e) => {
+                setProxyDraft(e.target.value)
+                setProxyMsg(null)
+              },
+              style: {
+                flex: '1 1 auto',
+                minWidth: 160,
+                height: 28,
+                padding: '0 10px',
+                border: '0.5px solid ' + T.borderL3,
+                borderRadius: 14,
+                background: 'transparent',
+                font: 'inherit',
+                fontSize: 12,
+                lineHeight: '18px',
+                color: T.primary,
+              },
+            }),
+            h(
+              Btn,
+              {
+                key: 'save',
+                disabled: proxyBusy || proxyDraft === proxy,
+              },
+              proxyBusy ? '保存中…' : '保存',
+            ),
+          ]),
+          h(
+            'p',
+            { key: 'hint', style: S.note },
+            '留空 = 直连。要填的话写成 http://主机:端口 或 socks5://主机:端口，例如 http://proxy.example:8080；本机页面不走代理。不支持需要账号密码的代理。',
+          ),
+          proxyMsg
+            ? h(
+                'p',
+                {
+                  key: 'msg',
+                  style: { ...S.note, color: proxyMsg.kind === 'error' ? T.error : T.success },
+                },
+                proxyMsg.text,
+              )
+            : null,
+        ]),
         // ---- 已登录站点（默认收起） ----
         h(
           'div',

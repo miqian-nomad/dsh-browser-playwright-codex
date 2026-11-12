@@ -23,6 +23,10 @@ process.env.DSH_BROWSER_STATE_FILE = path.join(os.tmpdir(), 'dsh-browser-tests-s
 
 const LIVE = process.env.DSH_BROWSER_LIVE === '1'
 
+// 代理只在显式给出 DSH_BROWSER_LIVE_PROXY 时启用；不设 = 直连，和以前完全一样。
+// 用来验证「代理真的接在浏览器启动上」：设了它，wikipedia 那条应当由失败变通过。
+const LIVE_PROXY = (process.env.DSH_BROWSER_LIVE_PROXY ?? '').trim()
+
 const config: PlaywrightConfig = {
   launch: {
     channel: 'chrome',
@@ -32,6 +36,7 @@ const config: PlaywrightConfig = {
     viewport: { width: 1280, height: 800 },
     navigationTimeoutMs: 30000,
     ignoreHTTPSErrors: false,
+    ...(LIVE_PROXY === '' ? {} : { proxy: LIVE_PROXY }),
   },
   idleTimeoutMs: 0,
   maxSessions: 2,

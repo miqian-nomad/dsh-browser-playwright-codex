@@ -18,6 +18,7 @@ import { swarmBootScript } from './swarm-curtain.ts'
 import { forgetOnBrowserClose } from './swarm-intro.ts'
 import { isWindowMinimized } from './window-focus.ts'
 import { installHostGuard, type BlockedRequest } from './navigation-guard.ts'
+import { normalizeProxy } from './proxy.ts'
 
 /**
  * Playwright-backed {@link BrowserProvider}: one shared browser, one context
@@ -93,6 +94,9 @@ export class PlaywrightProvider {
   blockedNavigation: BlockedRequest | undefined = undefined
   constructor(config: PlaywrightConfig) {
     this.config = config
+    // Fail at load time, not at launch time: a bad proxy address must produce the one
+    // message that explains it (src/proxy.ts), not a wrapped "tried channel …" failure.
+    normalizeProxy(config.launch.proxy)
     // Tell the settings card which page-reading mode this deployment was
     // configured with, so it can show "当前：X（默认）" truthfully instead of
     // assuming the built-in default.

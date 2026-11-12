@@ -439,3 +439,78 @@ test('the baseline fixture itself is valid YAML (so the assertions above mean so
   const audit = auditYaml(originalPatch === '' ? userPatch() : originalPatch)
   assert.deepEqual(audit.issues, [], 'the fixture must be valid, otherwise the duplicate checks are vacuous')
 })
+
+// ---------------------------------------------------------------------------
+// 6. 代理输入框：只改 launch.proxy 一行，别的不许动
+// ---------------------------------------------------------------------------
+
+test('saving a proxy writes launch.proxy and leaves every other key untouched', async () => {
+  writePatch(userPatch())
+  const before = readPatch()
+  const reply = await request('POST', '/api/browser-playwright/proxy', { body: { proxy: 'proxy.example:8080' } })
+  assert.equal(reply.status, 200, 'saving a valid proxy must succeed: ' + JSON.stringify(reply.body))
+  assert.equal(
+    reply.body.proxy,
+    'http://proxy.example:8080',
+    'a bare host:port is stored as http, like Playwright reads it',
+  )
+  assert.equal(reply.body.appliedOn, 'restart', 'the card must be able to say "takes effect after a restart"')
+
+  const written = readPatch()
+  const proxyLines = written.split('\n').filter((line) => /^\s*proxy:/.test(line))
+  assert.equal(proxyLines.length, 1, 'exactly one proxy line: ' + proxyLines.join(' | '))
+  assert.match(proxyLines[0] as string, /proxy: "http:\/\/proxy\.example:8080"/)
+
+  // Every other key must survive byte for byte (profileDir is the one that once logged
+  // the user out of every site when a writer rebuilt the block).
+  for (const key of [
+    "profileDir: 'D:/dsh-profile'",
+    'channel: chrome',
+    'maxSessions: 3',
+    'toolPrefix: "my_"',
+    'maxWaitMs: 90000',
+    'rules: []',
+  ]) {
+    assert.ok(written.includes(key), 'the proxy write must not touch ' + key)
+  }
+  assert.equal(written.replace(/\n\s*proxy: "[^"]*"/, ''), before, 'only the proxy line may change')
+  assert.deepEqual(auditYaml(written).issues, [], 'the file must stay valid YAML')
+})
+
+test('clearing the proxy deletes the line (leave-empty really means direct)', async () => {
+  writePatch(userPatch())
+  await request('POST', '/api/browser-playwright/proxy', { body: { proxy: 'http://proxy.example:8080' } })
+  assert.match(readPatch(), /^\s*proxy:/m)
+
+  const reply = await request('POST', '/api/browser-playwright/proxy', { body: { proxy: '' } })
+  assert.equal(reply.status, 200)
+  assert.equal(reply.body.proxy, '', 'empty means direct')
+  const written = readPatch()
+  assert.doesNotMatch(written, /^\s*proxy:/m, 'the line must be gone, not left as an empty value: ' + written)
+  assert.match(written, /profileDir: 'D:\/dsh-profile'/, 'clearing must not touch the other keys')
+})
+
+test('an invalid proxy is refused with the readable message and the file is untouched', async () => {
+  writePatch(userPatch())
+  const before = readPatch()
+  const reply = await request('POST', '/api/browser-playwright/proxy', { body: { proxy: '127.0.0.1:abc' } })
+  assert.equal(reply.status, 400)
+  const error = reply.body.error as { code?: string; message?: string }
+  assert.equal(error.code, 'INVALID_PROXY')
+  assert.match(String(error.message), /port is not a number/, 'the message must be the one normalizeProxy produces')
+  assert.equal(readPatch(), before, 'a refused save must not touch the file')
+})
+
+test('saving the same proxy twice is idempotent (no duplicate key)', async () => {
+  writePatch(userPatch())
+  await request('POST', '/api/browser-playwright/proxy', { body: { proxy: 'socks5://proxy.example:1080' } })
+  const once = readPatch()
+  const reply = await request('POST', '/api/browser-playwright/proxy', {
+    body: { proxy: 'socks5://proxy.example:1080' },
+  })
+  assert.equal(reply.status, 200)
+  assert.equal(readPatch(), once, 'the second identical save must be byte-identical')
+  const proxyLines = once.split('\n').filter((line) => /^\s*proxy:/.test(line))
+  assert.equal(proxyLines.length, 1, 'no duplicate proxy key')
+  assert.deepEqual(auditYaml(once).issues, [])
+})

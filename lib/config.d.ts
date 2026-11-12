@@ -25,6 +25,11 @@ export interface PlaywrightConfig {
         navigationTimeoutMs: number;
         /** Ignore HTTPS certificate errors. */
         ignoreHTTPSErrors: boolean;
+        /**
+         * Proxy for the whole browser, e.g. `http://proxy.example:8080` (http / https / socks5).
+         * Empty = connect directly — the default, and the previous behaviour.
+         */
+        proxy?: string;
     };
     /** Host suffixes the browser may visit. Empty = any http(s) host. */
     allowedDomains?: string[];
