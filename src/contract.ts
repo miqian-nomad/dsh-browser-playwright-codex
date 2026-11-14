@@ -21,6 +21,8 @@ export const TOOL_SUFFIXES = [
   'back',
   'forward',
   'wait',
+  'run_script',
+  'save_script',
   'tabs',
   'switch_tab',
   'open_tab',
@@ -52,6 +54,8 @@ export const ALWAYS_ON_SUFFIXES = [
   'back',
   'forward',
   'wait',
+  'run_script',
+  'save_script',
   'tabs',
   'switch_tab',
   'open_tab',
@@ -140,6 +144,10 @@ export const ERROR_CODES = {
   CDP_DISABLED: 'CDP_DISABLED',
   CDP_DENIED: 'CDP_DENIED',
   CDP_ERROR: 'CDP_ERROR',
+  SCRIPT_INVALID: 'SCRIPT_INVALID',
+  SCRIPT_NOT_FOUND: 'SCRIPT_NOT_FOUND',
+  SCRIPT_TARGET_NOT_FOUND: 'SCRIPT_TARGET_NOT_FOUND',
+  SCRIPT_STEP_FAILED: 'SCRIPT_STEP_FAILED',
 } as const
 
 /** One machine-readable failure code. */

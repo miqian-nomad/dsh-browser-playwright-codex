@@ -25,6 +25,9 @@ import { SCREENSHOT_SCHEMA, SNAPSHOT_SCHEMA, TABS_SCHEMA } from './tool-schemas.
 import { parseJsonText, extractionPrompt } from './extract.ts'
 import { detectChallenge } from './challenge.ts'
 import { describeWait, normalizeWaitCondition } from './wait-conditions.ts'
+import { MAX_SCRIPT_STEPS, ScriptStepError, parseScriptSteps, type ScriptStep } from './script-steps.ts'
+import { runScript, type ScriptRunOutcome } from './script-runner.ts'
+import { listScripts, loadScript, saveScript, validName } from './script-store.ts'
 import {
   renderDiagnostics,
   renderScreenshotValue,
@@ -829,6 +832,160 @@ export function apply(ctx: Context, config: ToolConfig): void {
       }),
     )
   }
+  ctx.tools.register(
+    defineTool({
+      name: p('run_script'),
+      description:
+        'Run several browser steps in ONE call — the deterministic repeat of a flow the model already worked out. ' +
+        'Pass either a saved script by name or the steps inline. Steps: navigate, snapshot, click, fill, press, ' +
+        'hover, scroll, back, forward, wait. ' +
+        'A step names its element by `ref` (from the snapshot the previous step returned) or by a visible `text` label ' +
+        '(resolved against the freshest snapshot right before the action, so a label survives a re-render that would stale a ref). ' +
+        'IRON RULE: the run stops at the FIRST failing step and returns its index, its action, the failure text and the last good snapshot — ' +
+        'take over from there with the single-step tools; do NOT replay the whole script blind. ' +
+        'Use it for flows whose shape is known (login → open page → fill form → read result), not to explore: ' +
+        'explore with the single tools first, then save what worked. ' +
+        'Every step still passes the same URL policy, ref validation and credential refusal as its own tool.',
+      parameters: {
+        name: {
+          type: 'string',
+          description: 'Saved script to run (see ' + p('save_script') + '). Omit when passing `steps` inline.',
+        },
+        steps: {
+          type: 'array',
+          items: { type: 'object', additionalProperties: true },
+          description:
+            'Inline steps, used when `name` is omitted. Each: {action:"navigate",url} | {action:"snapshot"} | ' +
+            '{action:"click",ref?|text?} | {action:"fill",ref?|text?,value} | {action:"press",ref?|text?,key} | ' +
+            '{action:"hover",ref?|text?} | {action:"scroll",direction,amount?,ref?|text?} | {action:"back"} | ' +
+            '{action:"forward"} | {action:"wait",ms?|text?|selector?|networkIdle?|urlContains?}. ' +
+            'A step naming its element by `text` is retried once against a fresh snapshot before the run fails; ' +
+            'a step naming it by `ref` is not (a ref belongs to the document that produced it). ' +
+            'Max ' +
+            String(MAX_SCRIPT_STEPS) +
+            ' steps.',
+        },
+      },
+      output: {
+        schema: { type: 'json' },
+        render: (_args: unknown, value: unknown) => {
+          const outcome = value as unknown as ScriptRunOutcome
+          const lines: string[] = []
+          lines.push(String(outcome.ran) + '/' + String(outcome.total) + ' steps ran')
+          for (const entry of outcome.outcomes) {
+            lines.push(
+              (entry.ok ? '✔ ' : '✖ ') +
+                String(entry.index) +
+                '. ' +
+                entry.step +
+                (entry.note === undefined ? '' : ' — ' + entry.note),
+            )
+          }
+          if (outcome.failedAt !== undefined) {
+            lines.push(
+              'Stopped at step ' +
+                String(outcome.failedAt) +
+                ' (' +
+                String(outcome.failedAction) +
+                '): ' +
+                String(outcome.failure) +
+                (outcome.failureCode === undefined ? '' : ' [' + outcome.failureCode + ']'),
+            )
+            lines.push('Fix that step and run again, or take over with the single-step tools from the snapshot below.')
+          }
+          if (outcome.snapshot !== undefined) {
+            lines.push('Page: ' + outcome.snapshot.title + ' — ' + outcome.snapshot.url)
+          }
+          return [{ type: 'text', text: lines.join('\n') }]
+        },
+      },
+      async execute(args, exec) {
+        let steps: readonly ScriptStep[]
+        try {
+          if (args.steps !== undefined && String(args.name ?? '').trim() !== '') {
+            throw new ScriptStepError(1, 'pass steps, or a saved name, not both')
+          }
+          steps =
+            args.steps !== undefined
+              ? parseScriptSteps(args.steps, MAX_SCRIPT_STEPS)
+              : loadScript(validName(args.name), MAX_SCRIPT_STEPS).steps
+        } catch (error) {
+          const message = String((error as { message?: unknown }).message ?? error)
+          throw new BrowserError('SCRIPT_INVALID', message)
+        }
+        const session = await acquire(exec)
+        const outcome = await runScript(session, steps, { signal: exec.signal })
+        return outcome as unknown as JsonValue
+      },
+    }),
+  )
+  ctx.tools.register(
+    defineTool({
+      name: p('save_script'),
+      description:
+        'Save a working step list under a name, so a later run costs one call instead of one call per action. ' +
+        'Save what actually worked in this session — the flow you just did with the single tools — not what you hope works. ' +
+        'Prefer `text` labels over refs in a saved script: refs belong to one snapshot and go stale on the next page load, ' +
+        'while a label is resolved fresh on every run. ' +
+        'Refuses to overwrite an existing name unless `overwrite` is true. ' +
+        'Scripts live in ~/.dsh/browser-scripts (one JSON file each) and never leave this machine.',
+      parameters: {
+        name: {
+          type: 'string',
+          required: true,
+          description: 'Script name: 1-64 letters, digits, dash or underscore (e.g. "login-and-read-orders").',
+        },
+        steps: {
+          type: 'array',
+          items: { type: 'object', additionalProperties: true },
+          required: true,
+          description:
+            'Steps to save, same shape as ' + p('run_script') + ' accepts. Max ' + String(MAX_SCRIPT_STEPS) + '.',
+        },
+        overwrite: { type: 'boolean', description: 'Replace an existing script of the same name. Defaults to false.' },
+      },
+      output: {
+        schema: { type: 'json' },
+        render: (_args: unknown, value: unknown) => {
+          const saved = value as unknown as { name: string; path: string; steps: number }
+          return [
+            {
+              type: 'text',
+              text:
+                'Saved "' +
+                saved.name +
+                '" (' +
+                String(saved.steps) +
+                ' steps) → ' +
+                saved.path +
+                '. Run it with ' +
+                p('run_script') +
+                '({ name: "' +
+                saved.name +
+                '" }).',
+            },
+          ]
+        },
+      },
+      async execute(args) {
+        try {
+          const name = validName(args.name)
+          if (args.overwrite !== true && listScripts().includes(name)) {
+            throw new ScriptStepError(
+              1,
+              'a script named "' + name + '" already exists; pass overwrite:true to replace it',
+            )
+          }
+          const steps = parseScriptSteps(args.steps, MAX_SCRIPT_STEPS)
+          const written = saveScript(name, steps)
+          return { name, path: written.path, steps: written.steps } as unknown as JsonValue
+        } catch (error) {
+          const message = String((error as { message?: unknown }).message ?? error)
+          throw new BrowserError('SCRIPT_INVALID', message)
+        }
+      },
+    }),
+  )
   ctx.tools.register(
     defineTool({
       name: p('close'),

@@ -104,6 +104,12 @@ export declare const AUTO_CHANNELS: string[];
  * a plain real Chrome, which it is. No fingerprint spoofing is added: real
  * Chrome's own values are consistent by construction (spoofing would invent
  * a device that never existed and draw MORE suspicion).
+ *
+ * `--test-type` is Chrome's own switch for "this window is not a normal user
+ * session": it suppresses the yellow bar Chrome draws across the top of every
+ * tab for each command-line flag it dislikes ("您使用的是不受支持的命令行标记：…").
+ * That bar names whatever flag it saw, so dropping the flag that triggered it
+ * only makes Chrome complain about the next one — the bar itself has to go.
  */
 export declare const HUMANIZED_LAUNCH: {
     ignoreDefaultArgs: string[];

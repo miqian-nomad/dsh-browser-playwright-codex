@@ -123,7 +123,7 @@ Or pin a binary: `launch.executablePath` / `launch.channel` in the plugin config
 
 ## Tools
 
-The default `toolPrefix` is `browser_`. Every action returns a fresh snapshot, so refs always come from the latest result. The registered set is capability-gated: `browser_evaluate`, `browser_cdp` and `browser_extract` appear only when their capability is switched on (their schemas are resident in the system prompt on every turn, so a tool that could only answer "disabled" would be pure prompt cost). Count the live surface with `npm run cost` — the shipped `cordis.patch.yml` keeps **both power gates off** (since 0.4.7), so a profile mounting this bundle sees **16 tools**; 17 or 18 once your deployment opts into `evaluate` / `cdp`, 19 with `diagnostics: true`, 21 once `extract` is configured. How to opt in: paste the snippet under Known Limitations below, or use the built-in Settings card.
+The default `toolPrefix` is `browser_`. Every action returns a fresh snapshot, so refs always come from the latest result. The registered set is capability-gated: `browser_evaluate`, `browser_cdp` and `browser_extract` appear only when their capability is switched on (their schemas are resident in the system prompt on every turn, so a tool that could only answer "disabled" would be pure prompt cost). Count the live surface with `npm run cost` — the shipped `cordis.patch.yml` keeps **both power gates off** (since 0.4.7), so a profile mounting this bundle sees **18 tools**; 19 or 20 once your deployment opts into `evaluate` / `cdp`, 22 with `diagnostics: true`, 23 once `extract` is configured. How to opt in: paste the snippet under Known Limitations below, or use the built-in Settings card.
 
 | Tool | Purpose |
 |---|---|
@@ -166,6 +166,8 @@ parameter or a wrong required flag fails the test, so it cannot drift from the c
 - `browser_network_requests` — `urlContains`?, `failedOnly`?, `limit`?
 - `browser_open_tab` — `url`*, `waitFor`?
 - `browser_press` — `ref`*, `key`*
+- `browser_run_script` — `name`?, `steps`?
+- `browser_save_script` — `name`*, `steps`*, `overwrite`?
 - `browser_screenshot` — `fullPage`?, `ref`?
 - `browser_scroll` — `direction`*, `amount`?, `ref`?
 - `browser_snapshot` — `interactiveOnly`?
@@ -395,9 +397,9 @@ Measured with ``npm run cost`` (per-turn, resident in the system prompt):
 
 | Surface | Tools | Schema characters | ≈ tokens/turn |
 |---|---|---|---|
-| Schema defaults (`Config({})`, no patch layer) | 16 | 11,283 | ≈ 3,134 |
-| Shipped bundle layer (this package's `cordis.patch.yml`: both power gates off) | 16 | 11,283 | ≈ 3,134 |
-| Everything registered (`registerDisabledTools: true`, plus `extract`) | 21 | 16,146 | ≈ 4,485 |
+| Schema defaults (`Config({})`, no patch layer) | 18 | 14,192 | ≈ 3,942 |
+| Shipped bundle layer (this package's `cordis.patch.yml`: both power gates off) | 18 | 14,192 | ≈ 3,942 |
+| Everything registered (`registerDisabledTools: true`, plus `extract`) | 23 | 19,055 | ≈ 5,293 |
 
 This paragraph describes the 0.6.0 change; the table above is today's measurement. Three things changed
 there, and only one of them was about size. (1) The click family was rewritten so each rule is stated once
@@ -497,6 +499,16 @@ MIT — **except `assets/swarm-rebuild.js`** (third-party work, shipped in the p
 ## 更新记录
 
 （此列表只记 **minor 里程碑**；每个补丁版本见 [CHANGELOG.md](https://github.com/miqian-nomad/dsh-browser-playwright-codex/blob/main/CHANGELOG.md)。）
+
+### 0.9.0（2026-11-14）
+
+- **一次调用跑一串步骤（新增两个工具）**：`browser_run_script` 按步骤列表（navigate / snapshot / click / fill / press / hover / scroll / back / forward / wait，最多 40 步）一次执行完；`browser_save_script` 把跑通过的流程存成命名脚本（`~/.dsh/browser-scripts/*.json`），下次一个调用复跑。以前一套「打开 → 登录 → 填表 → 等结果」要七八次调用，现在一次。
+- **失败即停并交回现场**：任一步失败就停在那一 step，返回索引、动作、错误码和最后可用的快照，模型接着手工做；不是整条脚本报废。
+- **失败自愈只重试一次**：按可见文字定位不到元素时重拍一次快照再找；给 `ref` 的步骤不重试（ref 属于产出它的那份文档）。
+- **`wait` 支持 `urlContains`**：等 URL 出现某个片段，最多 15 秒——唯一能兜住「点了但没跳转」的条件，按文字等会被脚本自己刚填进去的字满足，从而假成功。
+- **文字定位**：步骤可以按可见文字 `text` 找元素，在动作执行前按最新快照解析，页面重渲染把 ref 弄失效也不影响；同名多个元素时拒绝猜，直接报「有 N 个同名，改用 ref」。
+- **Chrome 顶部那条「不受支持的命令行标记」警告条不再出现**：显式开启渲染进程沙箱并加 Chrome 自带的 `--test-type`。只去掉 `--no-sandbox` 不够——Chrome 会接着警告下一个参数。宿主拒绝沙箱时自动退回一次，不会因此打不开浏览器。
+- **为什么不做「让模型拼代码」**：成熟实现都切成「探索一次 → 确定性回放」（Stagehand 缓存解析出的动作、browser-use 的 workflow-use 录制后生成工作流、Playwright MCP 唯一批量入口直接叫 `run_code_unsafe`）。步骤列表能保住单步工具原有的 URL 白名单、ref 校验和密码拒填，生成代码会绕过去。
 
 ### 0.8.0（2026-11-10）
 

@@ -116,11 +116,12 @@ test('proxyLaunchOption is exactly what Playwright expects', () => {
 test('every launch path actually spreads the proxy option (static guard)', () => {
   // The config being right is not enough: if a launch call forgets the spread, the
   // browser silently connects directly — the exact failure this change exists to fix.
-  // The check reads each `chromium.launch(` call through its closing `})`, because
-  // prettier splits the argument object across lines.
+  // Two shapes exist now: the persistent context reads `baseOptions` (which carries
+  // the proxy), and the legacy direct launches go through the sandbox-fallback
+  // wrapper, so the spread has to be on each of ITS call sites.
   const lifecycle = read('src/browser-lifecycle.ts')
   const launches: string[] = []
-  const marker = 'chromium.launch('
+  const marker = 'launchWithSandboxFallback({'
   for (let at = lifecycle.indexOf(marker); at !== -1; at = lifecycle.indexOf(marker, at + 1)) {
     const end = lifecycle.indexOf('})', at)
     launches.push(lifecycle.slice(at, end === -1 ? at + 200 : end + 2))
@@ -129,7 +130,7 @@ test('every launch path actually spreads the proxy option (static guard)', () =>
   for (const call of launches) {
     assert.ok(
       call.includes('proxyLaunchOption('),
-      'a chromium.launch() call does not pass the proxy option: ' + call.replace(/\s+/g, ' '),
+      'a launch call does not pass the proxy option: ' + call.replace(/\s+/g, ' '),
     )
   }
   assert.ok(

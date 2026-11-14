@@ -1,3 +1,54 @@
+## 0.9.0 — 2026-11-14
+
+一句话摘要：**一次调用跑一串步骤**——以前一套「打开 → 点登录 → 填表 → 等结果」要走七八次工具调用，每次都要模型想一遍、看一遍快照；现在多两个工具：`browser_run_script` 按步骤列表一次执行完，`browser_save_script` 把跑通过的流程存成命名脚本，下次一个调用就能复跑。**任一步失败就停在那一step**，把索引、动作、错误码和最后的页面状态交回来，让模型接着手工做——不是整条脚本报废。
+
+为什么是"步骤列表"而不是"让模型临时拼代码"：成熟实现都这么分（Stagehand 缓存解析出的动作再确定性回放；browser-use 的 workflow-use 先录制再生成确定性工作流，失败回退给 agent；Playwright MCP 唯一能跑批量的入口直接叫 `browser_run_code_unsafe`，默认不当普通工具）。步骤列表能保住单步工具原有的校验——URL 白名单、ref 校验、密码字段拒填——而生成代码会把这些绕过去。
+
+### Added
+
+- **`browser_run_script`**：一次执行 `navigate` / `snapshot` / `click` / `fill` / `press` / `hover` / `scroll` / `back` / `forward` / `wait` 十种步骤，最多 40 步；可以传内联 `steps`，也可以传已存脚本的 `name`（两个同时给直接报错，不猜）。
+- **`browser_save_script`**：把步骤存成命名脚本（`~/.dsh/browser-scripts/<name>.json`，一个脚本一个文件），同名默认拒绝覆盖，要覆盖得显式 `overwrite: true`。
+- **补齐的五个动作**：`press`（回车提交表单、Esc 关浮层）、`hover`（悬停出菜单/预览）、`scroll`（整页或指定滚动区；不给 `amount` 默认 600px，上限 20000px）、`back` / `forward`（历史前进后退）。少了这几样，真实流程很容易在「回车提交」或「滚到底加载更多」这一步断掉，只能退回逐步调用。
+- **`wait` 支持 `urlContains`**：等 URL 里出现某个片段，最多 15 秒。这是唯一能兜住「点了但没跳转」的等待条件——按文字等会被脚本自己刚填进去的字满足，从而假成功（2026-11-14 在 npmjs 真实站点上抓到过）。
+- **失败自愈（只重试一次）**：按可见文字定位不到元素时，重新拍一次快照再找一遍，找到就继续；给 `ref` 的步骤**不重试**（ref 属于产出它的那份文档，重拍只会得到新 ref）。重拍后仍找不到才判失败。
+- **重渲染自愈（只重试一次）**：按文字解析出的 ref 在动作前被页面换掉时（`REF_NOT_FOUND`），重新拍快照、重新定位、把这一步再执行一次，并在结果里注明 `re-pointed after the page re-rendered`。触发条件是「文字定位 + `REF_NOT_FOUND`」两条同时成立：`REF_NOT_FOUND` 证明那一下没执行过，重试不会点两次；其它失败（超时等）一律不重试。给 `ref` 的步骤同样不重试。这条是**云服务器 Linux 上第一次跑真实脚本时抓出来的**——维基百科顶栏搜索框一获得焦点就被换成新节点，`fill` 返回的 ref 到下一步 `press` 就失效了；同一套脚本在 Windows 上没暴露。
+- **文字定位**：步骤里的元素可以写 `ref`，也可以写可见文字 `text`；文字在**动作执行前**按最新快照解析（先精确匹配，再唯一子串），页面重渲染把 ref 弄失效也不影响。同名多个元素时**拒绝猜**，直接报「有 N 个同名元素，请改用 ref」。
+- **失败即停并交接**：运行结果带 `failedAt` / `failedAction` / `failure` / `failureCode` 和最后可用的快照；模型从那里接手工，不用重放整条脚本。
+- **取消可中断**：调用方中断后不再继续跑后面的步骤。
+
+### Changed
+
+- **开场快照改成懒加载**：脚本第一步是 `navigate` 时不再先拍一次马上要被换掉的页面；只有真需要按文字定位时才拍。
+- **脚本名与文件落盘**：名字只允许字母数字下划线短横（最长 64），落盘走「先写 `.tmp` 再 rename」，避免崩在中间留下半截脚本；读取时会**重新校验**步骤，手工改坏的文件当场报错而不是带病跑。
+- **Chrome 顶部那条黄色警告条没了**：Playwright 默认给 Chromium 传 `--no-sandbox`，Chrome 就为它画出「您使用的是不受支持的命令行标记：--no-sandbox」横贯每个标签页。去掉这个参数**不够**——Chrome 会接着警告下一个参数（`--disable-blink-features`）——所以两件事一起做：显式开启渲染进程沙箱（`chromiumSandbox: true`）并加上 Chrome 自带的 `--test-type`。顺带是真安全改善：渲染进程沙箱从此真正生效，而不是一直关着。
+- **沙箱被宿主拒绝时退回一次**：某些环境（没有桌面令牌的会话、受限容器、拦住 broker 的安全软件）不认沙箱，直接失败就等于「浏览器打不开」。现在会退回无沙箱再试一次，并在 provider 上记下 `sandboxFallback`——把「一条警告」升级成「硬故障」是不可接受的取舍。分类匹配刻意收窄，找不到可执行文件这类配置错误仍然立刻失败，不会白白多等一次 30 秒。
+
+### Tests
+
+- 新增 `tests/script-steps.test.ts`（14 条）：动作白名单、必填参数、`ref`/`text` 二选一、`wait` 只收一个条件、超长脚本、报错带步骤序号；新增动作的归一化形状（`press`/`hover`/`scroll`/`back`/`forward`）、`scroll` 默认值与上限、`describeStep` 逐条措辞。
+- 新增 `tests/script-runner.test.ts`（16 条）：全跑完、文字定位命中、同名歧义拒绝、找不到就停、`ref` 直达、中途失败带索引与快照且后续步骤不执行、条件等待走 `waitForCondition`、中断即停、`urlContains` 正反两向、五个新动作落到 session、定位自愈（成功 / 只重试一次 / 不碰 ref / 对 fill·press·hover 同样生效）、**重渲染自愈（失效后重指、显式 ref 不重试、动作超时不重试）**。
+- 新增 `tests/script-store.test.ts`（7 条）：存取往返、覆盖不留 `.tmp`、坏文件重校验、名字不许带路径、列表排序、目录不存在返回空。
+- 新增 `tests/launch-flags.test.ts`（5 条）：`--test-type` 必在、我们自己不加 `--no-sandbox`、三条启动路径都要开沙箱（静态守卫）、沙箱退回兜底存在且记在 provider 上、错误分类不越界（找不到可执行文件不触发重试）。
+- 全套现在 **434 条 / 431 过 / 0 失败 / cancelled 0 / skipped 3 / todo 0**。
+
+### Verified
+
+- `npm run build`、`npm run typecheck` 均为 0。
+- `npm run cost` 复测：出厂 bundle 层仍是 **18 个工具**，全量注册仍是 **23 个**（工具数没变，只有描述变长）；字符与 token 请以 `npm run cost` 的当场输出为准，README / PLUGIN-README / 中文说明里的表格已同步，由 `docs-consistency` 测试钉住。
+- **真实站点端到端（2026-11-14，非单测）**：
+  - npmjs 搜索：`fill` → `click Search` → `wait urlContains="/search?q="`，4/4 落在 `/search?q=dsh-browser-playwright-codex`；同一条把等待条件改成永不出现时**停在第 4 步并报 `ACTION_TIMEOUT`**，不再假成功。
+  - GitHub 仓库页 → 点 `Actions` → 等 `/actions`：3/3，落在 All Workflow Runs。
+  - 百度首页（直连，不需要代理）：`fill` ref → **`press Enter` 提交** → `wait urlContains="wd="` → `scroll down 600` → `scroll up 400` → `back` → `forward`：**7/7**，result 页 URL 带 `rsv_dl=tb_enter` 证明是回车提交；随后 `hover` 两个导航链接 3/3。
+  - httpbin 表单走已存脚本 `httpbin-form-submit` 复跑：5/5，落 `/post`，服务端回显 `custname` 与 `custtel` 对得上。
+  - Chrome 顶部警告条：改前浏览器进程带 `--no-sandbox`、每页顶部一条黄色警告；改后进程 `--no-sandbox` 消失、带 `--test-type`，截图里只剩 npm 网站自己的通知条。
+  - 失败即停的现场交接在真实站点上复现过：某步指向不存在的按钮时停在那一步，后续步骤未执行。
+- **云服务器（Linux）端到端，2026-11-14**：在 Ubuntu 24.04 + Node 24 + Chrome 157 的云主机上，装好本包依赖后用 `PlaywrightProvider` 直接驱动真实 Chrome 跑脚本（不经过 DSH、不需要模型 key）：
+  - 启动参数现场核对：`--no-sandbox` **没有**、`--test-type` **有**、`--disable-blink-features` 有，`sandboxFallback` 为 false —— 说明在这台 Linux 上沙箱本来就可用，兜底没有被触发（兜底本身由单元测试钉住）。
+  - 维基百科：`navigate → fill "Search Wikipedia" → press Enter → wait urlContains "/wiki/DeepSeek" → scroll down 400`，**5/5**，其中 press 那步打出 `re-pointed after the page re-rendered`。
+  - 反向用例：`wait urlContains "/never-here"` 在 15 秒后**如实超时失败**，没有假装成功。
+  - 历史：`navigate → snapshot → scroll → back` **4/4**。
+  - **这一趟抓到一个真 bug**：维基百科顶栏搜索框获得焦点即被替换，`fill` 返回快照里的 ref 到下一步 `press` 已失效，Windows 上没暴露、Linux 上必现。已按上面的「重渲染自愈」修好，并补了 3 条单元测试（失效后重指成功、显式 ref 不重试、动作超时不重试）。
+
 ## 0.8.3 — 2026-11-12
 
 一句话摘要：**插件可以走代理了**——以前它启动的浏览器只能直连，凡是要代理的站点（维基、GitHub 网页、大量国外站）一律打不开。现在多一个 `launch.proxy` 配置项和设置页里的「代理」输入框；**默认留空 = 直连，行为与之前完全一样**。实测同一台机器：维基直连 31 秒超时，走代理 1 秒返回。

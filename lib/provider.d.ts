@@ -35,6 +35,12 @@ export declare class PlaywrightProvider {
     browser: Browser | undefined;
     /** Window mode the live process was launched with (undefined = nothing running). */
     launchedHeadless: boolean | undefined;
+    /**
+     * True when this host refused the renderer sandbox and the browser had to be
+     * launched without it. Kept as state rather than a log line so a later
+     * "why is Chrome showing that warning bar" question has an answer on disk.
+     */
+    sandboxFallback: boolean;
     /** Persistent-mode shared profile-backed context (the personal window). */
     context: BrowserContext | undefined;
     entries: Map<string, OwnerEntry>;
